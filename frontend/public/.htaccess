@@ -1,0 +1,31 @@
+# HorizonPlan — Apache rewrite rules for React Router (client-side routing).
+#
+# Without this, navigating directly to /goals or /goals/42 returns a 404
+# because Apache looks for a literal file at that path and finds nothing.
+# These rules tell Apache: if the request isn't for a real file and isn't
+# under /api, serve index.html and let React Router take over.
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Don't rewrite requests for actual files (JS/CSS/images in /assets, favicon, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Don't rewrite /api — PHP handles those directly
+    RewriteCond %{REQUEST_URI} ^/api/ [NC]
+    RewriteRule ^ - [L]
+
+    # Everything else → index.html, React Router handles the route
+    RewriteRule ^ /index.html [L]
+</IfModule>
+
+# Security headers — belt-and-suspenders alongside sameSite=Strict cookie flags
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
