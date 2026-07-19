@@ -6,11 +6,11 @@ B2B2C retirement planning platform for Indian MFDs/IFAs and SEBI-RIA firms. Full
 PHP (no framework) + PDO + MySQL, hosted on Hostinger Premium. React SPA (Tailwind, shadcn/ui), pre-compiled — Hostinger serves static files, it does not run a Node build step, so the frontend is always built before deploy (see `.github/workflows/`).
 
 ## Docs — read before touching the matching area
-- `docs/01_architecture_review.md` — original security/architecture audit. Read before touching auth or the data-access layer.
-- `docs/02_project_instructions.md` — the actual build spec: schema, security rules, tenant model. **Read this before writing any backend code.**
-- `docs/03_roadmap_and_prompts.md` — Phase 1 (MVP) build order. Follow this sequence; don't build Phase 2+ items without checking `04` first.
-- `docs/04_feature_roadmap.md` — what belongs in MVP vs. later, and why. Check the "explicitly out of scope" list before adding anything not asked for.
-- `docs/05_practitioner_validation_review.md` — why certain features exist (e.g. India-specific withdrawal rates, sequence-of-returns chart).
+- `docs/01_HorizonPlan_Architecture_Review.md` — original security/architecture audit. Read before touching auth or the data-access layer.
+- `docs/02_HorizonPlan_Project_Instructions.md` — the actual build spec: schema, security rules, tenant model. **Read this before writing any backend code.**
+- `docs/03_HorizonPlan_Roadmap_and_Prompts.md` — Phase 1 (MVP) build order. Follow this sequence; don't build Phase 2+ items without checking `04` first.
+- `docs/04_HorizonPlan_Feature_Roadmap.md` — what belongs in MVP vs. later, and why. Check the "explicitly out of scope" list before adding anything not asked for.
+- `docs/05_HorizonPlan_Practitioner_Validation_Review.md` — why certain features exist (e.g. India-specific withdrawal rates, sequence-of-returns chart).
 
 ## Non-negotiable rules (always apply, every session)
 1. **Tenant isolation:** every query on tenant-scoped data goes through `api/lib/TenantScopedDb.php`. Never write a raw `WHERE tenant_id = :tenant_id` inline in an endpoint file — if the helper doesn't exist yet, build it first (see `docs/02`, Section 3.1).
