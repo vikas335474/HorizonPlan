@@ -84,20 +84,17 @@ function issueSession(PDO $db, int $userId, int $tenantId, string $role): void
 }
 
 /**
- * Verify the current request's session cookie, enforce role, and return the
- * session record (user_id, tenant_id, role) on success. Exits with a JSON
- * error response on any failure — callers don't need to handle a false/null
- * return, execution simply stops here on auth failure.
+ * Look up the current request's session without enforcing a role or exiting
+ * on failure — returns the session array or null. Use this when an endpoint
+ * needs to know "who is logged in, if anyone" (e.g. a session-check or
+ * logout endpoint) rather than requiring a specific role. verifyAccess()
+ * builds on this for the common case where a role IS required.
  */
-function verifyAccess(PDO $db, string $requiredRole): array
+function getCurrentSession(PDO $db): ?array
 {
-    header('Content-Type: application/json; charset=UTF-8');
-
     $token = $_COOKIE[SESSION_COOKIE_NAME] ?? '';
     if ($token === '') {
-        http_response_code(401);
-        echo json_encode(['status' => 'error', 'message' => 'No active session.']);
-        exit();
+        return null;
     }
 
     $stmt = $db->prepare(
@@ -107,7 +104,22 @@ function verifyAccess(PDO $db, string $requiredRole): array
     $stmt->execute([':token' => $token]);
     $session = $stmt->fetch();
 
-    if (!$session) {
+    return $session ?: null;
+}
+
+/**
+ * Verify the current request's session cookie, enforce role, and return the
+ * session record (user_id, tenant_id, role) on success. Exits with a JSON
+ * error response on any failure — callers don't need to handle a false/null
+ * return, execution simply stops here on auth failure.
+ */
+function verifyAccess(PDO $db, string $requiredRole): array
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $session = getCurrentSession($db);
+
+    if ($session === null) {
         http_response_code(401);
         echo json_encode(['status' => 'error', 'message' => 'Invalid or expired session context.']);
         exit();
