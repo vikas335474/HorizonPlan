@@ -135,6 +135,37 @@ function verifyAccess(PDO $db, string $requiredRole): array
 }
 
 /**
+ * Same contract as verifyAccess(), but for endpoints reachable by more than
+ * one role — e.g. base_plans/sub_scenarios reads are legitimate for both
+ * 'advisor' and 'client' sessions, just with different write permissions
+ * enforced by the calling endpoint. super_admin is always allowed, same as
+ * verifyAccess(). Exits with a JSON error response on failure, same as
+ * verifyAccess() — callers don't need to handle a null return.
+ *
+ * @param string[] $allowedRoles
+ */
+function verifyAccessAny(PDO $db, array $allowedRoles): array
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $session = getCurrentSession($db);
+
+    if ($session === null) {
+        http_response_code(401);
+        echo json_encode(['status' => 'error', 'message' => 'Invalid or expired session context.']);
+        exit();
+    }
+
+    if (!in_array($session['role'], $allowedRoles, true) && $session['role'] !== 'super_admin') {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'Privilege escalation blocked.']);
+        exit();
+    }
+
+    return $session;
+}
+
+/**
  * Destroy the current session on logout: removes the active_sessions row
  * and clears the cookie.
  */

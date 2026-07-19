@@ -23,5 +23,7 @@ PHP (no framework) + PDO + MySQL, hosted on Hostinger Premium. React SPA (Tailwi
 ## Current phase
 Phase 1 (MVP) — see `docs/03` for build order. Work through it in sequence; each phase there is meant to be a separate, focused session rather than one long continuous one.
 
+Phases 0–4 are built: schema, `TenantScopedDb`/`security_gatekeeper` helpers, auth endpoints, and the `base_plans`/`sub_scenarios` CRUD + Global Inheritance Engine cascade + decumulation projection endpoints (`api/goals_*.php`, `api/subscenarios_*.php`, `api/lib/PlanMath.php`). Next up is Phase 5 (frontend shell). One addition beyond the original Phase 2 helper: `security_gatekeeper.php` now also has `verifyAccessAny(array $roles)`, since Phase 4 endpoints need "advisor OR client" access checks that the single-role `verifyAccess()` doesn't support — same fail-closed contract, just a role list instead of one role.
+
 ## Deploy
 Hostinger's native Git deployment (hPanel → Advanced → Git) watches a `deploy` branch and auto-deploys on push — no SSH needed for this path. GitHub Actions builds the React app and pushes the compiled output to `deploy`; `main` stays the working branch. SQL migrations in `/sql` are **not** run automatically by Hostinger's git-deploy — run new migrations manually via hPanel's database tool after each deploy that includes one.
