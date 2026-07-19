@@ -19,7 +19,7 @@ final class TenantScopedDb
     private int $tenantId;
 
     /** @var string[] tables this class is allowed to touch — guards against typos silently querying an unscoped table */
-    private const ALLOWED_TABLES = ['base_plans', 'sub_scenarios', 'change_log'];
+    private const ALLOWED_TABLES = ['base_plans', 'sub_scenarios', 'change_log', 'users'];
 
     public function __construct(PDO $db, int $tenantId)
     {

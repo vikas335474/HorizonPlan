@@ -39,11 +39,8 @@ if ($clientId <= 0 || $goalLabel === '' || !in_array($goalType, $allowedGoalType
 // a goal under them — client_id is caller-supplied, so this is the one place
 // that boundary has to be checked explicitly (base_plans itself has no FK
 // enforcing tenant_id/client_id/users.tenant_id agreement at the DB level).
-$clientCheck = $db->prepare(
-    "SELECT id FROM users WHERE id = :id AND tenant_id = :tenant_id AND role = 'client' LIMIT 1"
-);
-$clientCheck->execute([':id' => $clientId, ':tenant_id' => $tenantId]);
-if (!$clientCheck->fetch()) {
+$clientMatches = $scopedDb->select('users', ['id' => $clientId, 'role' => 'client']);
+if (empty($clientMatches)) {
     http_response_code(404);
     echo json_encode(['status' => 'error', 'message' => 'No client with that ID in this tenant.']);
     exit();
@@ -53,6 +50,13 @@ if (!$clientCheck->fetch()) {
 // (docs/02 Section 4.2, 4.3) — silently ignore them for non-retirement goals
 // rather than storing values that don't apply.
 $isRetirement = $goalType === 'retirement';
+
+$projectionHorizonYears = (int) ($input['projection_horizon_years'] ?? 30);
+if ($projectionHorizonYears < 1 || $projectionHorizonYears > 100) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'projection_horizon_years must be between 1 and 100.']);
+    exit();
+}
 
 $data = [
     'client_id'                => $clientId,
@@ -64,7 +68,7 @@ $data = [
     'inflation_rate'           => $inflationRate,
     'withdrawal_rate'          => $isRetirement ? ($input['withdrawal_rate'] ?? 3.5) : null,
     'drawdown_return_rate'     => $isRetirement ? ($input['drawdown_return_rate'] ?? null) : null,
-    'projection_horizon_years' => (int) ($input['projection_horizon_years'] ?? 30),
+    'projection_horizon_years' => $projectionHorizonYears,
 ];
 
 $goalId = $scopedDb->insert('base_plans', $data);

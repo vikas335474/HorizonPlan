@@ -62,6 +62,19 @@ if (empty($changes)) {
     exit();
 }
 
+// Only field with a hard range check today — see CLAUDE.md Phase 8 notes:
+// the rest of $updatableFields (initial_net_worth, inflation_rate, etc.) has
+// no type/range validation at all in this endpoint, which is a real gap
+// flagged there but not fixed here, to avoid quietly widening this change.
+if (array_key_exists('projection_horizon_years', $changes)) {
+    $newHorizon = (int) $changes['projection_horizon_years'][1];
+    if ($newHorizon < 1 || $newHorizon > 100) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'projection_horizon_years must be between 1 and 100.']);
+        exit();
+    }
+}
+
 $updateData = array_combine(array_keys($changes), array_map(static fn($c) => $c[1], $changes));
 $scopedDb->update('base_plans', $updateData, ['id' => $goalId]);
 
