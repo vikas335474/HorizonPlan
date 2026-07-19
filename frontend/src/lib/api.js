@@ -60,6 +60,35 @@ export const api = {
 
   listSubScenarios: (basePlanId) =>
     request(`subscenarios_list.php?base_plan_id=${encodeURIComponent(basePlanId)}`),
+
+  createSubScenario: (basePlanId) =>
+    request('subscenarios_create.php', {
+      method: 'POST',
+      body: JSON.stringify({ base_plan_id: basePlanId }),
+    }),
+
+  // fields is a subset of { custom_inflation, custom_withdrawal_rate,
+  // custom_drawdown_return_rate } — subscenarios_update.php only touches
+  // keys actually present in the body, and flips is_overridden=1 as soon as
+  // any of them differ from the stored value (single shared flag, see
+  // docs/02 4.2 — not per-field).
+  updateSubScenario: (id, fields) =>
+    request('subscenarios_update.php', {
+      method: 'POST',
+      body: JSON.stringify({ id, ...fields }),
+    }),
+
+  resetSubScenario: (id) =>
+    request('subscenarios_reset.php', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  // Retirement-type goals only — goals_projection.php 400s otherwise.
+  // subScenarioId is optional: omit it to project the parent goal's own
+  // values, pass it to project a specific (possibly overridden) scenario.
+  getProjection: (goalId, subScenarioId) => {
+    const params = new URLSearchParams({ id: String(goalId) });
+    if (subScenarioId) params.set('sub_scenario_id', String(subScenarioId));
+    return request(`goals_projection.php?${params.toString()}`);
+  },
 };
 
 export { ApiError };

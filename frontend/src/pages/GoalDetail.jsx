@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import DisclosureBanner from '../components/DisclosureBanner';
 import AppHeader from '../components/AppHeader';
+import ScenarioPanel from '../components/ScenarioPanel';
 
 const GOAL_TYPE_LABELS = {
   retirement: 'Retirement',
@@ -33,6 +34,9 @@ export default function GoalDetail() {
   const [subScenarios, setSubScenarios] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +58,25 @@ export default function GoalDetail() {
       cancelled = true;
     };
   }, [id]);
+
+  function handleScenarioChanged(updated) {
+    setSubScenarios((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+  }
+
+  async function handleCreateScenario() {
+    setCreating(true);
+    setCreateError('');
+    try {
+      const res = await api.createSubScenario(goal.id);
+      const fresh = await api.listSubScenarios(goal.id);
+      setSubScenarios(fresh.sub_scenarios);
+      setExpandedId(res.sub_scenario_id);
+    } catch (err) {
+      setCreateError(err.message || 'Could not create a new scenario.');
+    } finally {
+      setCreating(false);
+    }
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-paper)' }}>
@@ -114,45 +137,85 @@ export default function GoalDetail() {
               />
             </section>
 
-            <h2 className="mb-2 text-sm font-medium" style={{ color: 'var(--color-ink)' }}>
-              Sub-scenarios
-            </h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-medium" style={{ color: 'var(--color-ink)' }}>
+                Sub-scenarios
+              </h2>
+              <button
+                type="button"
+                onClick={handleCreateScenario}
+                disabled={creating}
+                className="text-sm rounded-sm px-3 py-1.5 text-white disabled:opacity-60"
+                style={{ backgroundColor: 'var(--color-ink)' }}
+              >
+                {creating ? 'Creating…' : '+ New scenario'}
+              </button>
+            </div>
+            {createError && (
+              <p className="mb-2 text-sm" style={{ color: 'var(--color-alert)' }}>
+                {createError}
+              </p>
+            )}
+
             {subScenarios && subScenarios.length === 0 && (
               <p className="text-sm text-[var(--color-ink-soft)]">
-                No what-if scenarios yet for this goal.
+                No what-if scenarios yet for this goal. Create one to try a different inflation
+                {goal.goal_type === 'retirement' ? ' or withdrawal-rate' : ''} assumption without
+                touching the base plan.
               </p>
             )}
             {subScenarios && subScenarios.length > 0 && (
               <ul className="space-y-2">
-                {subScenarios.map((s) => (
-                  <li
-                    key={s.id}
-                    className="rounded-sm border px-4 py-3"
-                    style={{
-                      backgroundColor: 'var(--color-paper-raised)',
-                      borderColor: s.is_overridden ? 'var(--color-alert)' : 'var(--color-line)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium" style={{ color: 'var(--color-ink)' }}>
-                        Scenario #{s.id}
-                      </span>
-                      {s.is_overridden && (
-                        <span
-                          className="rounded-sm px-2 py-0.5 text-xs"
-                          style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}
-                        >
-                          Overridden — not following parent
+                {subScenarios.map((s) => {
+                  const isExpanded = expandedId === s.id;
+                  return (
+                    <li
+                      key={s.id}
+                      className="rounded-sm border"
+                      style={{
+                        backgroundColor: 'var(--color-paper-raised)',
+                        borderColor: s.is_overridden ? 'var(--color-alert)' : 'var(--color-line)',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : s.id)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left"
+                      >
+                        <span className="text-sm font-medium" style={{ color: 'var(--color-ink)' }}>
+                          Scenario #{s.id}
                         </span>
+                        <div className="flex items-center gap-2">
+                          {s.is_overridden && (
+                            <span
+                              className="rounded-sm px-2 py-0.5 text-xs"
+                              style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}
+                            >
+                              Overridden — not following parent
+                            </span>
+                          )}
+                          <span className="text-xs text-[var(--color-ink-soft)]">
+                            {isExpanded ? '▲' : '▼'}
+                          </span>
+                        </div>
+                      </button>
+
+                      {!isExpanded && (
+                        <div className="px-4 pb-3 grid grid-cols-3 gap-2 text-xs text-[var(--color-ink-soft)]">
+                          <span>Inflation: {s.custom_inflation ?? '—'}%</span>
+                          <span>Withdrawal: {s.custom_withdrawal_rate ?? '—'}%</span>
+                          <span>Return: {s.custom_drawdown_return_rate ?? '—'}%</span>
+                        </div>
                       )}
-                    </div>
-                    <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-[var(--color-ink-soft)]">
-                      <span>Inflation: {s.custom_inflation ?? '—'}%</span>
-                      <span>Withdrawal: {s.custom_withdrawal_rate ?? '—'}%</span>
-                      <span>Return: {s.custom_drawdown_return_rate ?? '—'}%</span>
-                    </div>
-                  </li>
-                ))}
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-1 border-t" style={{ borderColor: 'var(--color-line)' }}>
+                          <ScenarioPanel goal={goal} subScenario={s} onChanged={handleScenarioChanged} />
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </>
