@@ -3,11 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
-
-// NOTE: MFA and password reset are deliberately not implemented in this endpoint —
-// see docs/02 Section 3.2. Both are real gaps that must ship before this goes in
-// front of real users; they're out of scope for the Phase 3 build prompt this
-// file corresponds to. Don't treat this endpoint as launch-ready on its own.
+require_once __DIR__ . '/lib/Totp.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -17,9 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-$input = json_decode(file_get_contents('php://input'), true) ?? [];
-$email = trim((string) ($input['email'] ?? ''));
-$password = (string) ($input['password'] ?? '');
+$input     = json_decode(file_get_contents('php://input'), true) ?? [];
+$email     = trim((string) ($input['email'] ?? ''));
+$password  = (string) ($input['password'] ?? '');
 $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
 if ($email === '' || $password === '') {
@@ -30,20 +26,20 @@ if ($email === '' || $password === '') {
 
 $db = getPdo();
 
-// Rate limit check happens BEFORE any password verification, so a locked-out
-// attacker can't keep spending compute on password_verify() calls either.
+// Rate limit check BEFORE password verification — a locked-out attacker
+// must not be allowed to keep spending compute on password_verify() calls.
 if (!checkLoginRateLimit($db, $email, $ipAddress)) {
     http_response_code(429);
     echo json_encode(['status' => 'error', 'message' => 'Too many failed attempts. Try again later.']);
     exit();
 }
 
-$stmt = $db->prepare("SELECT id, tenant_id, role, password_hash FROM users WHERE email = :email LIMIT 1");
+$stmt = $db->prepare("SELECT id, tenant_id, role, password_hash, mfa_secret FROM users WHERE email = :email LIMIT 1");
 $stmt->execute([':email' => $email]);
 $user = $stmt->fetch();
 
-// Deliberately identical error for "no such user" and "wrong password" —
-// distinguishing them lets an attacker enumerate valid emails.
+// Identical error for "no such user" and "wrong password" — prevents email
+// enumeration. Do not change this to be more specific.
 if (!$user || !password_verify($password, $user['password_hash'])) {
     recordLoginAttempt($db, $email, $ipAddress, false);
     http_response_code(401);
@@ -52,6 +48,23 @@ if (!$user || !password_verify($password, $user['password_hash'])) {
 }
 
 recordLoginAttempt($db, $email, $ipAddress, true);
+
+if (!empty($user['mfa_secret'])) {
+    // MFA enrolled — password is verified but no full session yet.
+    // Issue a short-lived pending token; the client must POST the OTP
+    // to mfa_verify.php to complete authentication.
+    issueMfaPendingToken($db, (int) $user['id'], 'login');
+
+    http_response_code(202);
+    echo json_encode([
+        'status'       => 'mfa_required',
+        'message'      => 'Password accepted. Submit your authenticator code to complete sign in.',
+    ]);
+    exit();
+}
+
+// MFA not yet enrolled — issue a full session. Once MFA enrollment is
+// mandatory (post-MVP), this branch should redirect to enrollment instead.
 issueSession($db, (int) $user['id'], (int) $user['tenant_id'], $user['role']);
 
 echo json_encode([

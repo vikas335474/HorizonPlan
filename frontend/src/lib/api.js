@@ -13,11 +13,32 @@ class ApiError extends Error {
   }
 }
 
+// CSRF: read the double-submit cookie the server sets after login / session check.
+// The cookie is non-httpOnly by design so JS can read it here.
+// Returns '' if the cookie isn't present yet (e.g. before first login).
+function getCsrfToken() {
+  const match = document.cookie
+    .split('; ')
+    .find((c) => c.startsWith('hp_csrf='));
+  return match ? match.split('=')[1] : '';
+}
+
+// State-changing methods (POST/PUT/PATCH/DELETE) automatically attach the
+// CSRF token as a header. GET requests don't need it (server is exempt for
+// read-only methods, per verifyCsrfToken() in security_gatekeeper.php).
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 async function request(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const csrfHeaders = MUTATION_METHODS.has(method)
+    ? { 'X-CSRF-Token': getCsrfToken() }
+    : {};
+
   const res = await fetch(`${BASE}/${path}`, {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...csrfHeaders,
       ...(options.headers || {}),
     },
     ...options,
@@ -31,16 +52,29 @@ async function request(path, options = {}) {
     // status code, don't pretend we parsed something we didn't.
   }
 
-  if (!res.ok) {
+  // 202 is a valid non-error response (mfa_required after password check) —
+  // don't throw for it, let callers inspect body.status instead.
+  if (!res.ok && res.status !== 202) {
     throw new ApiError(body?.message || `Request failed (${res.status})`, res.status, body);
   }
 
-  return body;
+  return { ...body, _httpStatus: res.status };
 }
 
 export const api = {
   login: (email, password) =>
     request('login.php', { method: 'POST', body: JSON.stringify({ email, password }) }),
+
+  // MFA: submit OTP after login.php returns mfa_required
+  mfaVerify: (code) =>
+    request('mfa_verify.php', { method: 'POST', body: JSON.stringify({ code }) }),
+
+  // MFA enrollment (called from settings/profile, not login flow)
+  mfaEnroll: () =>
+    request('mfa_enroll.php', { method: 'POST' }),
+
+  mfaEnrollConfirm: (code) =>
+    request('mfa_enroll_confirm.php', { method: 'POST', body: JSON.stringify({ code }) }),
 
   logout: () => request('logout.php', { method: 'POST' }),
 

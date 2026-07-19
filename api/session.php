@@ -18,6 +18,11 @@ if ($session === null) {
     exit();
 }
 
+// Re-issue the CSRF token on every session check so it stays fresh after
+// page reloads. The JS layer reads it from the cookie and attaches it to
+// all subsequent mutation requests as X-CSRF-Token.
+issueCsrfToken();
+
 echo json_encode([
     'status' => 'success',
     'user'   => [
