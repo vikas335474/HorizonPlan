@@ -80,6 +80,9 @@ export const api = {
 
   session: () => request('session.php', { method: 'GET' }),
 
+  // Advisor dashboard: all clients in the tenant + aggregate stats.
+  listClients: () => request('clients_list.php'),
+
   // clientId is only meaningful for advisor/super_admin sessions — a client
   // session ignores any client_id sent and always gets their own goals
   // (enforced server-side in goals_list.php, not just here).

@@ -1,26 +1,30 @@
 import { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import { Card, EmptyState, Spinner } from '../components/ui';
 
-// A client's own goals view. Clients never pass a client_id — the server uses
-// their session identity (goals_list.php enforces this).
-export default function GoalsList() {
+// Advisor drills into one client from the dashboard. clientId comes from the
+// route; goals_list.php accepts client_id for advisor/super_admin sessions and
+// scopes it to the advisor's tenant server-side.
+export default function ClientGoals() {
+  const { clientId } = useParams();
   const [goals, setGoals] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     api
-      .listGoals()
+      .listGoals(clientId)
       .then((res) => {
         if (!cancelled) setGoals(res.goals);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message || 'Could not load your goals.');
+        if (!cancelled) setError(err.message || 'Could not load this client’s goals.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -28,16 +32,20 @@ export default function GoalsList() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [clientId]);
 
   return (
     <div className="min-h-screen">
       <AppHeader />
       <main className="mx-auto max-w-6xl px-5 py-8">
-        <div className="mb-5">
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Your goals</h1>
+        <Link to="/" className="text-sm text-[var(--color-ink-2)] hover:text-[var(--color-ink)]">
+          ← All clients
+        </Link>
+
+        <div className="mt-3 mb-5">
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Client goals</h1>
           <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
-            Retirement and savings plans your advisor has set up with you.
+            Every goal on this client's plan. Open one to adjust scenarios.
           </p>
         </div>
 
@@ -45,7 +53,7 @@ export default function GoalsList() {
           <DisclosureBanner />
         </div>
 
-        {loading && <Spinner label="Loading your goals…" />}
+        {loading && <Spinner label="Loading goals…" />}
 
         {error && (
           <Card className="p-4 border-[var(--color-alert)]">
@@ -55,9 +63,8 @@ export default function GoalsList() {
 
         {goals && goals.length === 0 && (
           <Card>
-            <EmptyState title="No goals yet">
-              Your advisor hasn't set up any goals for you yet. Once they do, you'll be able to explore
-              different scenarios here.
+            <EmptyState title="No goals for this client yet">
+              This client doesn't have any goals set up. Goal creation isn't available in this view yet.
             </EmptyState>
           </Card>
         )}

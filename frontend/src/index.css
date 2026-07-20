@@ -1,30 +1,97 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Source Serif 4", serif;
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
-  /* Ink / paper — deliberately cool, not the cream+terracotta default. */
-  --color-paper: #F4F5F3;
-  --color-paper-raised: #FFFFFF;
-  --color-ink: #16233D;
-  --color-ink-soft: #4A5568;
-  --color-line: #DCDFD9;
+  /* Modern fintech palette — deep slate ink, cool paper, disciplined accents.
+     Deliberately NOT the cream/serif/terracotta AI-default look. */
+  --color-canvas: #F7F8FA;      /* cool off-white app background */
+  --color-surface: #FFFFFF;     /* card surface */
+  --color-surface-2: #F1F3F6;   /* subtle raised/inset panels */
 
-  /* Brass — the "horizon at dusk" accent: retirement/wealth, not the usual clay. */
-  --color-brass: #A9782F;
-  --color-brass-soft: #F1E6D0;
+  --color-ink: #0F1729;         /* near-black slate — primary text, primary buttons */
+  --color-ink-2: #46506A;       /* secondary text */
+  --color-ink-3: #8A93A6;       /* tertiary / captions */
 
-  /* Muted forest for growth/positive states, muted rust for alerts/overrides. */
-  --color-growth: #3F6B52;
-  --color-alert: #A6493A;
-  --color-alert-soft: #F3E3DF;
+  --color-line: #E4E8EE;        /* hairline borders */
+  --color-line-2: #D3D9E2;      /* stronger dividers */
+
+  /* Single confident accent for growth/positive + interactive emphasis */
+  --color-teal: #0E7C6B;
+  --color-teal-soft: #E1F0ED;
+  --color-teal-ink: #0A5E51;
+
+  /* Measured amber — used sparingly for highlights, corpus figures */
+  --color-amber: #A9782F;
+  --color-amber-soft: #F5ECDC;
+
+  /* Alert / override state — muted rust, never alarming red */
+  --color-alert: #B44A38;
+  --color-alert-soft: #F7E7E3;
+
+  --radius-card: 12px;
+  --radius-ctrl: 8px;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background-color: var(--color-paper);
+  background-color: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04";
+}
+
+/* Every financial figure uses tabular monospaced numerals so columns align —
+   this is the product's data-forward signature. */
+.tnum {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Range slider — themed to the teal accent, larger hit target for touch */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-line-2);
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-teal);
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-teal);
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25);
+  cursor: pointer;
+}
+input[type="range"]:disabled { opacity: 0.5; }
+
+/* Focus-visible ring for keyboard nav — accessibility floor */
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
 }

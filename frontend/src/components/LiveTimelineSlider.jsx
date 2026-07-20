@@ -1,16 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 
 /**
- * Original blueprint's Live Timeline Slider (Section 6): local state updates
- * while dragging, a single dispatch on release. React's onChange for a
- * range input fires continuously (behaves like native "input", not native
- * "change"), so continuous updates and the release-commit are deliberately
- * split across two handlers here rather than relying on onChange alone.
- *
- * `onCommit` fires once per drag (on mouseup/touchend), and once per
- * discrete key press for keyboard users (arrow keys don't have a
- * "release" event, so each keystroke is its own commit — still far from
- * "per drag frame").
+ * Live Timeline Slider (blueprint Section 6): local state while dragging, a
+ * single commit on release. onChange for a range input fires continuously
+ * (like native "input"), so continuous visual updates and the release-commit
+ * are split across handlers — onCommit fires once on mouseup/touchend, and
+ * once per discrete keypress for keyboard users.
  */
 export default function LiveTimelineSlider({
   label,
@@ -26,7 +21,6 @@ export default function LiveTimelineSlider({
   const [localValue, setLocalValue] = useState(value);
   const lastCommitted = useRef(value);
 
-  // Parent value changes underneath us (e.g. after a reset) — resync.
   useEffect(() => {
     setLocalValue(value);
     lastCommitted.current = value;
@@ -38,13 +32,15 @@ export default function LiveTimelineSlider({
     onCommit(localValue);
   }
 
+  const pct = ((localValue - min) / (max - min)) * 100;
+
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1">
-        <label className="text-sm text-[var(--color-ink-soft)]">{label}</label>
-        <span className="text-sm" style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-ink)' }}>
+      <div className="flex items-baseline justify-between mb-2">
+        <label className="text-sm font-medium text-[var(--color-ink-2)]">{label}</label>
+        <span className="tnum text-sm font-semibold text-[var(--color-ink)]">
           {localValue.toFixed(2)}
-          {unit}
+          <span className="text-[var(--color-ink-3)]">{unit}</span>
         </span>
       </div>
       <input
@@ -58,9 +54,12 @@ export default function LiveTimelineSlider({
         onMouseUp={commit}
         onTouchEnd={commit}
         onKeyUp={commit}
-        className="w-full accent-[var(--color-brass)] disabled:opacity-50"
+        aria-label={label}
+        style={{
+          background: `linear-gradient(to right, var(--color-teal) ${pct}%, var(--color-line-2) ${pct}%)`,
+        }}
       />
-      {helpText && <p className="mt-1 text-xs text-[var(--color-ink-soft)]">{helpText}</p>}
+      {helpText && <p className="mt-2 text-xs leading-relaxed text-[var(--color-ink-3)]">{helpText}</p>}
     </div>
   );
 }
