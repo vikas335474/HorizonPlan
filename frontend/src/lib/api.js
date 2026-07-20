@@ -83,6 +83,13 @@ export const api = {
   // Advisor dashboard: all clients in the tenant + aggregate stats.
   listClients: () => request('clients_list.php'),
 
+  // Advisor onboards a new client into their tenant.
+  createClient: (email, temporaryPassword) =>
+    request('clients_create.php', {
+      method: 'POST',
+      body: JSON.stringify({ email, temporary_password: temporaryPassword }),
+    }),
+
   // clientId is only meaningful for advisor/super_admin sessions — a client
   // session ignores any client_id sent and always gets their own goals
   // (enforced server-side in goals_list.php, not just here).
