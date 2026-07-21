@@ -63,7 +63,7 @@ export default function GoalsList() {
         )}
 
         {goals && goals.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="stagger-children grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {goals.map((goal) => (
               <GoalCard key={goal.id} goal={goal} />
             ))}

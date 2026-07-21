@@ -76,6 +76,14 @@ export const api = {
   mfaEnrollConfirm: (code) =>
     request('mfa_enroll_confirm.php', { method: 'POST', body: JSON.stringify({ code }) }),
 
+  // Self-service password change — requires re-entering the current password
+  // (verified server-side), not just an active session.
+  updatePassword: (currentPassword, newPassword) =>
+    request('password_update.php', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
   logout: () => request('logout.php', { method: 'POST' }),
 
   session: () => request('session.php', { method: 'GET' }),
@@ -89,6 +97,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, temporary_password: temporaryPassword }),
     }),
+
+  // Advisor creates a goal for a client. `fields` matches goals_create.php's
+  // expected shape: { client_id, goal_type, goal_label, initial_net_worth,
+  // inflation_rate, projection_horizon_years, and optionally target_amount,
+  // target_date, withdrawal_rate }.
+  createGoal: (fields) =>
+    request('goals_create.php', { method: 'POST', body: JSON.stringify(fields) }),
 
   // clientId is only meaningful for advisor/super_admin sessions — a client
   // session ignores any client_id sent and always gets their own goals

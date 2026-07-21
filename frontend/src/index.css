@@ -31,8 +31,28 @@
   --color-alert: #B44A38;
   --color-alert-soft: #F7E7E3;
 
-  --radius-card: 12px;
+  --radius-sm: 6px;
   --radius-ctrl: 8px;
+  --radius-card: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Elevation scale — soft, cool-tinted shadows (slate, never pure black) so
+     surfaces lift off the canvas with the restraint a wealth product needs. */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 41, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 41, 0.04), 0 1px 3px rgba(15, 23, 41, 0.06);
+  --shadow-md: 0 2px 6px -2px rgba(15, 23, 41, 0.06), 0 8px 20px -6px rgba(15, 23, 41, 0.10);
+  --shadow-lg: 0 4px 12px -4px rgba(15, 23, 41, 0.08), 0 18px 40px -12px rgba(15, 23, 41, 0.16);
+  --shadow-teal: 0 6px 18px -6px rgba(14, 124, 107, 0.40);
+  --shadow-ink: 0 8px 24px -8px rgba(15, 23, 41, 0.40);
+
+  /* Signature gradients — used sparingly on hero surfaces and primary CTAs. */
+  --grad-ink: linear-gradient(135deg, #16213B 0%, #0F1729 100%);
+  --grad-teal: linear-gradient(135deg, #12907B 0%, #0A5E51 100%);
+  --grad-hero: linear-gradient(150deg, #0F1729 0%, #163043 55%, #0E5F52 130%);
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * {
@@ -41,11 +61,24 @@
 }
 
 body {
+  /* Layered depth: a whisper of teal at the top edge and a cool slate wash in
+     the corners lifts the flat canvas into something that feels considered,
+     without reading as decorative. Fixed so it stays put while content scrolls. */
   background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(1100px 520px at 50% -8%, rgba(14, 124, 107, 0.06), transparent 62%),
+    radial-gradient(900px 600px at 100% 0%, rgba(58, 76, 173, 0.045), transparent 55%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   color: var(--color-ink);
   font-family: var(--font-sans);
-  font-feature-settings: "cv02", "cv03", "cv04";
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+  text-rendering: optimizeLegibility;
 }
+
+/* Tighter optical tracking on large headings — the wealth-product signature is
+   confident, condensed display type over generous data type. */
+h1, h2 { letter-spacing: -0.018em; }
 
 /* Every financial figure uses tabular monospaced numerals so columns align —
    this is the product's data-forward signature. */
@@ -55,11 +88,13 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Range slider — themed to the teal accent, larger hit target for touch */
+/* Range slider — themed to the teal accent, larger hit target for touch.
+   The thumb carries a soft teal halo that intensifies on hover/active so
+   dragging feels tactile and alive, not like a form control. */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
+  height: 6px;
   border-radius: 999px;
   background: var(--color-line-2);
   outline: none;
@@ -67,22 +102,33 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: var(--color-teal);
-  border: 3px solid var(--color-surface);
-  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25);
-  cursor: pointer;
+  border: 4px solid var(--color-surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25), 0 0 0 0 rgba(14, 124, 107, 0.18);
+  cursor: grab;
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.08); }
+input[type="range"]:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25), 0 0 0 7px rgba(14, 124, 107, 0.16);
 }
 input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: var(--color-teal);
-  border: 3px solid var(--color-surface);
+  border: 4px solid var(--color-surface);
   box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25);
-  cursor: pointer;
+  cursor: grab;
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+input[type="range"]:active::-moz-range-thumb {
+  cursor: grabbing;
+  box-shadow: 0 1px 3px rgba(15, 23, 41, 0.25), 0 0 0 7px rgba(14, 124, 107, 0.16);
 }
 input[type="range"]:disabled { opacity: 0.5; }
 
@@ -107,6 +153,53 @@ input[type="range"]:disabled { opacity: 0.5; }
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes drawLine {
+  from { stroke-dashoffset: 240; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Entrance for page and card content. Pair with an inline animation-delay for a
+   gentle stagger down a list (see .stagger-children). */
+.animate-rise { animation: rise 0.55s var(--ease-out) both; }
+.stagger-children > * { animation: rise 0.55s var(--ease-out) both; }
+.stagger-children > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.07s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.12s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.17s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.22s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.27s; }
+
+/* Frosted, translucent surface for the sticky header — content slides under it. */
+.surface-glass {
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+}
+
+/* Teal-to-ink gradient text for a single hero number or wordmark accent. */
+.text-gradient-teal {
+  background: linear-gradient(120deg, var(--color-teal) 0%, var(--color-teal-ink) 55%, var(--color-ink) 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Hover-lift for interactive cards — a small, quick rise with a deeper shadow. */
+.lift {
+  transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), border-color 0.18s;
+}
+.lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Skeleton loading shimmer */

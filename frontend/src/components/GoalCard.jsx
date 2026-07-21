@@ -15,8 +15,12 @@ export default function GoalCard({ goal }) {
   return (
     <Link
       to={`/goals/${goal.id}`}
-      className="group block bg-[var(--color-surface)] border border-[var(--color-line)] rounded-[var(--radius-card)] p-4 hover:border-[var(--color-line-2)] hover:shadow-[0_2px_12px_rgba(15,23,41,0.06)] transition-all"
+      className="lift group relative block overflow-hidden bg-[var(--color-surface)] border border-[var(--color-line)] rounded-[var(--radius-card)] p-4 pl-5"
+      style={{ boxShadow: 'var(--shadow-sm)' }}
     >
+      {/* Type-keyed accent spine — makes a grid of goals scannable by color */}
+      <span className="absolute left-0 top-0 h-full w-1" style={{ backgroundColor: accent.fg, opacity: 0.85 }} aria-hidden="true" />
+
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <h3 className="text-[15px] font-semibold text-[var(--color-ink)] truncate">{goal.goal_label}</h3>
@@ -44,8 +48,11 @@ export default function GoalCard({ goal }) {
         <span className="text-xs text-[var(--color-ink-3)]">
           {goal.projection_horizon_years}-year horizon
         </span>
-        <span className="text-xs font-medium text-[var(--color-teal-ink)] group-hover:underline">
-          Open →
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-teal-ink)]">
+          Open
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" className="transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+            <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </span>
       </div>
     </Link>

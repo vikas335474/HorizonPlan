@@ -1,8 +1,61 @@
 # HorizonPlan — Session Handoff: UI/UX Redesign & Client Onboarding
 
-**Last commit:** `0d7d749` (UI redesign: modern fintech aesthetic + advisor dashboard)  
-**Current branch:** `main` at `0d7d749`  
 **Project repo:** https://github.com/vikas335474/HorizonPlan
+
+---
+
+## Latest session — Settings, goal creation, password change, MFA gate (built)
+
+This session added the account-management and goal-creation surfaces that prior
+handoffs listed as missing. All of the following is built and verified (frontend
+`npm run build` clean, `oxlint` exit 0, `php -l` clean on every touched PHP file).
+**No live MySQL was available**, so PHP behavior is verified by reading, not by
+integration test against real endpoints — an integration pass is still worthwhile.
+
+**Backend:**
+- `api/password_update.php` (new) — self-service password change. Requires
+  re-entering the current password (verified with `password_verify`), rejects
+  missing fields / new password < 8 chars / new == current, bcrypt-hashes and
+  updates `users.password_hash`. Routes through `verifyAccessAny(['client','advisor','super_admin'])`.
+- `mfa_enrolled` boolean now added to the JSON of `login.php`, `mfa_verify.php`,
+  and `session.php`, derived from whether `users.mfa_secret` is set. `session.php`
+  does its own small `users` read for this (the session lookup doesn't carry it).
+
+**Frontend:**
+- `pages/Settings.jsx` (new) — MFA enrollment (secret + otpauth URI shown as
+  copyable text, **no QR library** by design — matches `mfa_enroll.php`'s
+  manual-entry fallback and keeps the bundle down) and password change. Shows an
+  "MFA required" banner + Continue button when reached via the soft gate.
+- `pages/ClientGoals.jsx` — "New goal" button + modal (mirrors Dashboard's
+  AddClientModal), wired to `api.createGoal()`. Stale "goal creation isn't
+  available" empty-state copy replaced.
+- `components/ProtectedRoute.jsx` — new optional `requireMfa` prop: unenrolled
+  users are redirected to `/settings` (soft app-layer gate, **not** a hard block
+  in `login.php`). Applied to `/`, `/clients/:clientId`, `/goals`, `/goals/:id`;
+  **not** to `/settings` itself. Also fixed: the loading state referenced
+  `--color-paper` / `--color-ink-soft`, which don't exist in `index.css` — now
+  `--color-canvas` / `--color-ink-3`.
+- `components/AppHeader.jsx` — Settings nav link with an amber dot when MFA isn't
+  enrolled, so the gap is discoverable.
+- `pages/Login.jsx` — post-login redirect now routes by the returned role
+  (advisor/admin → `/`, client → `/goals`) instead of hardcoding `/goals`, while
+  still honoring a real prior `location.state.from`.
+- `context/AuthContext.jsx` — `normalizeUser` carries `mfaEnrolled`; `login()`
+  and `mfaVerify()` return the normalized user (route by role without a state
+  flush); new `refreshSession()` re-reads `session.php` (needed after MFA enroll,
+  since `mfa_enroll_confirm.php` returns only `{status, message}`).
+- `lib/api.js` — added `createGoal(fields)` and `updatePassword(current, new)`.
+
+**Credential-leak claim below was FALSE and has been corrected** — scanned the
+full git history (`git log --all -p`) for `gh*_` PAT patterns, `github_pat_`,
+AWS keys, private-key blocks, Slack tokens: zero matches. `api/db_config.php` was
+never tracked. There is no leaked secret in this repo's history.
+
+**Still open (unchanged this session):** mandatory MFA is a *soft* gate only —
+`login.php` still issues sessions to unenrolled users by design (a hard block
+would lock out already-provisioned accounts). Per-field input validation on
+`goals_update.php` (fields other than `projection_horizon_years`) remains a
+flagged gap.
 
 ---
 
@@ -40,12 +93,21 @@ User tested deployed app and reported:
 
 ### What's Actually Missing (Not Built)
 
-**Critical for MVP:**
-1. **Client onboarding** — no way for advisor to add clients; hardcoded to manual DB inserts
-2. **Goal creation** — advisors can't create goals for clients; goals only exist if seeded
-3. **MFA enrollment UI** — endpoint exists (`mfa_enroll.php`, `mfa_enroll_confirm.php`), no screen to access it
-4. **Settings/profile page** — no place for users to enroll MFA, change password, or see their profile
-5. **MFA mandatory enforcement** — `login.php` forks on `users.mfa_secret`, but unenrolled users still get full session; no gate to force enrollment before real client use
+**Status note:** items 1–5 below were the state *before* the latest session.
+Client onboarding (Dashboard "Add client"), goal creation (ClientGoals "New
+goal"), MFA enrollment UI + Settings page, password change, and a *soft* MFA
+enrollment gate are all now **built** — see the "Latest session" section at the
+top. Kept here for historical context.
+
+**Critical for MVP (mostly now built — see top):**
+1. ~~**Client onboarding**~~ — built (Dashboard "Add client" → `clients_create.php`)
+2. ~~**Goal creation**~~ — built (ClientGoals "New goal" → `goals_create.php`)
+3. ~~**MFA enrollment UI**~~ — built (Settings page → `mfa_enroll*.php`)
+4. ~~**Settings/profile page**~~ — built (`pages/Settings.jsx`: MFA + password)
+5. **MFA mandatory enforcement** — now a *soft* app-layer gate (`ProtectedRoute
+   requireMfa` redirects unenrolled users to Settings). `login.php` still issues
+   sessions on password alone by design; a hard block remains a deliberate
+   pre-launch decision.
 
 **Nice-to-have for MVP (out of scope currently):**
 - Password reset
@@ -161,13 +223,18 @@ User tested deployed app and reported:
 - Workaround for testing: manually set `users.mfa_secret` in phpMyAdmin to a TOTP secret, then test login
 - Real fix: build a Settings page with MFA enrollment in next session
 
-### GitHub Token Rotation (URGENT)
-- A PAT was exposed in earlier commits and chat history
-- **Action required:** Revoke it at GitHub → Settings → Developer settings → Personal access tokens
-- **Then:** Use SSH deploy key instead (see instructions at end of prior session)
-  - Generate once: `ssh-keygen -t ed25519 -C "horizonplan-deploy" -f ~/.ssh/horizonplan_deploy -N ""`
+### GitHub Token (claim corrected — no leak found in repo history)
+- A prior handoff claimed a PAT was exposed "in earlier commits and chat history."
+  The **git history is clean**: a full `git log --all -p` scan for `gh*_` /
+  `github_pat_` PAT patterns, AWS keys, private-key blocks, and Slack tokens
+  returns zero matches, and `api/db_config.php` was never tracked. If a token was
+  ever pasted into *chat*, that's outside the repo and should still be rotated at
+  GitHub → Settings → Developer settings — but nothing needs scrubbing from this
+  repository's history.
+- Using an SSH deploy key for pushes is still fine if preferred:
+  - `ssh-keygen -t ed25519 -C "horizonplan-deploy" -f ~/.ssh/horizonplan_deploy -N ""`
   - Add `~/.ssh/horizonplan_deploy.pub` to GitHub repo → Settings → Deploy keys
-  - Then `git remote set-url origin git@github.com:vikas335474/HorizonPlan.git`
+  - `git remote set-url origin git@github.com:vikas335474/HorizonPlan.git`
 
 ---
 

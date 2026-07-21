@@ -23,11 +23,20 @@ if ($session === null) {
 // all subsequent mutation requests as X-CSRF-Token.
 issueCsrfToken();
 
+// The active_sessions lookup doesn't carry mfa_secret, so do a small extra
+// read to tell the frontend whether this user has MFA enrolled. This drives
+// the soft app-layer MFA gate (redirect unenrolled users to Settings) — the
+// column value itself is never returned, only the boolean derived from it.
+$mfaStmt = $db->prepare("SELECT mfa_secret FROM users WHERE id = :id LIMIT 1");
+$mfaStmt->execute([':id' => (int) $session['user_id']]);
+$mfaRow = $mfaStmt->fetch();
+
 echo json_encode([
     'status' => 'success',
     'user'   => [
-        'user_id'   => (int) $session['user_id'],
-        'tenant_id' => (int) $session['tenant_id'],
-        'role'      => $session['role'],
+        'user_id'      => (int) $session['user_id'],
+        'tenant_id'    => (int) $session['tenant_id'],
+        'role'         => $session['role'],
+        'mfa_enrolled' => !empty($mfaRow['mfa_secret']),
     ],
 ]);

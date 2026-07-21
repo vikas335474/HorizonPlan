@@ -70,8 +70,13 @@ issueSession($db, (int) $user['id'], (int) $user['tenant_id'], $user['role']);
 echo json_encode([
     'status' => 'success',
     'user'   => [
-        'id'        => (int) $user['id'],
-        'tenant_id' => (int) $user['tenant_id'],
-        'role'      => $user['role'],
+        'id'           => (int) $user['id'],
+        'tenant_id'    => (int) $user['tenant_id'],
+        'role'         => $user['role'],
+        // Always false here — this branch is only reached when mfa_secret is
+        // empty. Derived rather than hardcoded so it stays correct if the
+        // branching above ever changes. The frontend uses this to know whether
+        // to nudge the user toward MFA enrollment.
+        'mfa_enrolled' => !empty($user['mfa_secret']),
     ],
 ]);

@@ -95,8 +95,11 @@ issueSession($db, (int) $user['id'], (int) $user['tenant_id'], $user['role']);
 echo json_encode([
     'status' => 'success',
     'user'   => [
-        'id'        => (int) $user['id'],
-        'tenant_id' => (int) $user['tenant_id'],
-        'role'      => $user['role'],
+        'id'           => (int) $user['id'],
+        'tenant_id'    => (int) $user['tenant_id'],
+        'role'         => $user['role'],
+        // True here by construction — this path only runs for MFA-enrolled users
+        // whose OTP just verified. Derived from the same column for consistency.
+        'mfa_enrolled' => !empty($user['mfa_secret']),
     ],
 ]);
