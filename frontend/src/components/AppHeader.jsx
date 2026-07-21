@@ -31,11 +31,29 @@ export default function AppHeader() {
           <span className="text-[15px] font-semibold tracking-tight text-[var(--color-ink)]">HorizonPlan</span>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {user && (
             <span className="hidden sm:inline text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}
             </span>
+          )}
+          {user && (
+            <Link
+              to="/settings"
+              className="relative flex items-center gap-1.5 text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
+            >
+              Settings
+              {/* Amber nudge dot when MFA isn't enrolled — makes the gap
+                  discoverable, not just enforced by the route gate. */}
+              {!user.mfaEnrolled && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-amber)' }}
+                  title="Two-factor authentication is not set up"
+                  aria-label="Two-factor authentication is not set up"
+                />
+              )}
+            </Link>
           )}
           <button
             onClick={handleLogout}

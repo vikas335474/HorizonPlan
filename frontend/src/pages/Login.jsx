@@ -11,7 +11,18 @@ export default function Login() {
   const { login, mfaVerify } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/goals';
+  // Where to land after login. If the user was redirected here from a specific
+  // protected route, honor that. Otherwise pick a role-appropriate default:
+  // advisors/admins land on "/" (Dashboard), clients on "/goals". We must NOT
+  // hardcode "/goals" for everyone — that dropped advisors onto the client-only
+  // goals list. The role isn't known until login() resolves, so compute the
+  // destination there rather than up here.
+  const fromPath = location.state?.from?.pathname || null;
+
+  function destinationFor(user) {
+    if (fromPath) return fromPath;
+    return user?.role === 'client' ? '/goals' : '/';
+  }
 
   const [step, setStep] = useState('password'); // 'password' | 'mfa'
   const [email, setEmail] = useState('');
@@ -29,7 +40,7 @@ export default function Login() {
       if (result.mfaRequired) {
         setStep('mfa');
       } else {
-        navigate(from, { replace: true });
+        navigate(destinationFor(result.user), { replace: true });
       }
     } catch (err) {
       setError(err.message || 'Something went wrong. Try again.');
@@ -43,8 +54,8 @@ export default function Login() {
     setError('');
     setSubmitting(true);
     try {
-      await mfaVerify(code);
-      navigate(from, { replace: true });
+      const user = await mfaVerify(code);
+      navigate(destinationFor(user), { replace: true });
     } catch (err) {
       // mfa_verify.php consumes the pending token on the first wrong attempt —
       // the user must start over from the password step.
