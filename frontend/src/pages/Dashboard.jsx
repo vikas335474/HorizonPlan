@@ -66,7 +66,7 @@ export default function Dashboard() {
         {data && !loading && (
           <>
             {/* Stat band */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div className="stagger-children grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
               <MetricCard
                 label="Clients"
                 value={data.stats.total_clients}
