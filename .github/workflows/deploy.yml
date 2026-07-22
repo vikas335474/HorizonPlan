@@ -1,0 +1,104 @@
+# Builds the React SPA and publishes a ready-to-serve public_html tree to the
+# `deploy` branch, which Hostinger's native Git deployment (hPanel → Advanced →
+# GIT) pulls straight into public_html. This removes the manual "dig into
+# frontend/dist, copy the contents up, re-add the .htaccess that got dropped"
+# step on every release — see DEPLOY.md for the one-time Hostinger setup.
+#
+# The `deploy` branch is built ON TOP of its own history (never force-pushed),
+# so Hostinger's `git pull` always fast-forwards. api/db_config.php is never
+# committed here, so the real credentials file you create once on the server is
+# left untouched by every pull.
+name: Build & publish deploy branch
+
+on:
+  push:
+    branches: [main]
+    # Only rebuild when something that actually ships changes.
+    paths:
+      - 'frontend/**'
+      - 'api/**'
+      - '.github/workflows/deploy.yml'
+  # Lets you re-publish on demand from the Actions tab without a code change.
+  workflow_dispatch:
+
+# GITHUB_TOKEN needs write access to push the deploy branch.
+permissions:
+  contents: write
+
+# Never let two publishes race on the same branch.
+concurrency:
+  group: publish-deploy-branch
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # Full history so we can build on top of the existing deploy branch.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Assemble public_html tree
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+          # Compiled SPA: index.html, assets/, favicon, and .htaccess (a dotfile,
+          # so the trailing "/." copies it too) land at the deploy root.
+          cp -a frontend/dist/. _site/
+          # PHP API served as-is, same origin under /api — no build step.
+          cp -a api _site/api
+          # Belt-and-suspenders: real credentials must never reach the branch.
+          rm -f _site/api/db_config.php
+          echo "Assembled tree:"
+          ls -la _site
+          test -f _site/index.html || { echo "index.html missing from build"; exit 1; }
+          test -f _site/.htaccess || { echo ".htaccess missing from build"; exit 1; }
+
+      - name: Publish to deploy branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          DEPLOY_DIR="$(mktemp -d)"
+          if git ls-remote --exit-code --heads origin deploy >/dev/null 2>&1; then
+            # Continue the existing linear history so Hostinger's pull fast-forwards.
+            git fetch origin deploy
+            git worktree add "$DEPLOY_DIR" -B deploy origin/deploy
+          else
+            # First run: branch off the current commit; the sync below then strips
+            # the source tree, leaving only the assembled site in the first commit.
+            git worktree add "$DEPLOY_DIR" -B deploy HEAD
+          fi
+
+          # Mirror the assembled tree into the branch, deleting anything stale
+          # (old hashed asset bundles), but never the worktree's own .git link.
+          rsync -a --delete --exclude='.git' _site/ "$DEPLOY_DIR/"
+
+          git -C "$DEPLOY_DIR" add -A
+          if git -C "$DEPLOY_DIR" diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git -C "$DEPLOY_DIR" commit -m "Deploy build from ${GITHUB_SHA::7}"
+            git -C "$DEPLOY_DIR" push origin deploy
+          fi
+
+          git worktree remove "$DEPLOY_DIR" --force
