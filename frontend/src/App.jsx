@@ -23,22 +23,22 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
 
-          <Route path="/" element={<ProtectedRoute requireMfa><Home /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
 
           {/* Advisor: drill into one client's goals */}
           <Route
             path="/clients/:clientId"
-            element={<ProtectedRoute requireMfa><ClientGoals /></ProtectedRoute>}
+            element={<ProtectedRoute><ClientGoals /></ProtectedRoute>}
           />
 
           {/* Client: their own goals */}
-          <Route path="/goals" element={<ProtectedRoute requireMfa><GoalsList /></ProtectedRoute>} />
+          <Route path="/goals" element={<ProtectedRoute><GoalsList /></ProtectedRoute>} />
 
           {/* Goal detail — shared by both roles */}
-          <Route path="/goals/:id" element={<ProtectedRoute requireMfa><GoalDetail /></ProtectedRoute>} />
+          <Route path="/goals/:id" element={<ProtectedRoute><GoalDetail /></ProtectedRoute>} />
 
-          {/* Settings — deliberately NOT requireMfa, or an unenrolled user
-              redirected here for the MFA gate would loop back to itself. */}
+          {/* MFA enrollment is optional (not mandatory) — no route gates on it.
+              The nudge to enrol lives in AppHeader (amber dot on Settings). */}
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />

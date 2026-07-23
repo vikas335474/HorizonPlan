@@ -1,13 +1,11 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-// requireMfa: when true, a logged-in but MFA-unenrolled user is bounced to
-// /settings (with location.state.mfaRequired) instead of the route rendering.
-// This is a SOFT, app-layer gate — login.php still issues sessions to
-// unenrolled users (a hard block there would lock out already-provisioned
-// accounts that have no enrollment path). Do NOT apply requireMfa to /settings
-// itself, or an unenrolled user redirected there loops back onto itself.
-export default function ProtectedRoute({ children, requireMfa = false }) {
+// Gates a route on an authenticated session only. MFA enrolment is optional by
+// design (login.php issues sessions to unenrolled users), so there is no MFA
+// gate here — the reminder to enrol lives in AppHeader as an amber dot on the
+// Settings link, and users enrol voluntarily from /settings.
+export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -21,10 +19,6 @@ export default function ProtectedRoute({ children, requireMfa = false }) {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  if (requireMfa && !user.mfaEnrolled) {
-    return <Navigate to="/settings" state={{ mfaRequired: true }} replace />;
   }
 
   return children;
