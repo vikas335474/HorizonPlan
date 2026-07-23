@@ -1,29 +1,32 @@
-# HorizonPlan — Apache rewrite rules for React Router (client-side routing).
+# HorizonPlan — React Router SPA rewrite + security headers.
 #
-# Without this, navigating directly to /goals or /goals/42 returns a 404
-# because Apache looks for a literal file at that path and finds nothing.
-# These rules tell Apache: if the request isn't for a real file and isn't
-# under /api, serve index.html and let React Router take over.
-
-Options -Indexes
+# Without the rewrite, opening or refreshing /goals, /settings, etc. returns a
+# 404 (or 403 on hosts with directory indexes disabled) because the server looks
+# for a literal file at that path. These rules serve real files/assets as-is,
+# leave /api to PHP, and send everything else to index.html for React Router.
+#
+# NOTE: intentionally no `Options -Indexes` line — some shared hosts (incl. some
+# Hostinger/LiteSpeed configs) reject `Options` in .htaccess and return 403.
+# Directory listing isn't a real exposure here anyway: every servable dir has an
+# index.html and the SPA rewrite already covers non-file paths.
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    RewriteBase /
 
-    # Don't rewrite requests for actual files (JS/CSS/images in /assets, favicon, etc.)
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
+    # Serve index.html itself directly (avoids a rewrite loop)
+    RewriteRule ^index\.html$ - [L]
 
-    # Don't rewrite /api — PHP handles those directly
-    RewriteCond %{REQUEST_URI} ^/api/ [NC]
-    RewriteRule ^ - [L]
-
-    # Everything else → index.html, React Router handles the route
-    RewriteRule ^ /index.html [L]
+    # Real files and directories (JS/CSS in /assets, favicon, etc.) served as-is
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    # /api/* is handled by PHP, never rewritten to the SPA
+    RewriteCond %{REQUEST_URI} !^/api/
+    RewriteRule . /index.html [L]
 </IfModule>
 
-# Security headers — belt-and-suspenders alongside sameSite=Strict cookie flags
+# Security headers — belt-and-suspenders alongside sameSite=Strict cookie flags.
+# Guarded by IfModule so a host without mod_headers simply skips them (no 500).
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "DENY"

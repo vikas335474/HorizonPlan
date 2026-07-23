@@ -46,6 +46,15 @@ integration test against real endpoints — an integration pass is still worthwh
   since `mfa_enroll_confirm.php` returns only `{status, message}`).
 - `lib/api.js` — added `createGoal(fields)` and `updatePassword(current, new)`.
 
+**Deploy pipeline (new):** `.github/workflows/deploy.yml` builds the SPA on
+pushes to `main` and publishes a `public_html`-shaped tree (compiled `dist/` at
+root + `api/` under `/api`) to a `deploy` branch, which Hostinger's native Git
+deployment pulls automatically — replacing the manual "copy `dist/` contents up,
+re-add the dropped `.htaccess`" step. Never force-pushed (Hostinger `git pull`
+fast-forwards); `api/db_config.php` is stripped in CI and stays server-only.
+One-time Hostinger setup + the site-wide-403 troubleshooting are in `DEPLOY.md`.
+The workflow fires from `main` only, so it activates after this branch merges.
+
 **Credential-leak claim below was FALSE and has been corrected** — scanned the
 full git history (`git log --all -p`) for `gh*_` PAT patterns, `github_pat_`,
 AWS keys, private-key blocks, Slack tokens: zero matches. `api/db_config.php` was

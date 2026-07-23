@@ -3,7 +3,7 @@
 B2B2C retirement planning platform for Indian MFDs/IFAs and SEBI-RIA firms. Full context lives in `/docs/` — read the relevant file before starting work on that area, don't assume this file alone is enough.
 
 ## Stack
-PHP (no framework) + PDO + MySQL, hosted on Hostinger Premium. React SPA (Tailwind, shadcn/ui), pre-compiled — Hostinger serves static files, it does not run a Node build step, so the frontend must be built (`npm run build`) before every deploy. No `.github/workflows/` pipeline exists yet to automate this — see "Deploy" below for the current manual process.
+PHP (no framework) + PDO + MySQL, hosted on Hostinger Premium. React SPA (Tailwind, shadcn/ui), pre-compiled — Hostinger serves static files, it does not run a Node build step, so the frontend must be built (`npm run build`) before every deploy. A `.github/workflows/deploy.yml` pipeline now automates this by publishing the compiled output to a `deploy` branch — see "Deploy" below and `DEPLOY.md`.
 
 ## Docs — read before touching the matching area
 - `docs/01_HorizonPlan_Architecture_Review.md` — original security/architecture audit. Read before touching auth or the data-access layer.
@@ -61,6 +61,8 @@ Phase 8 audit gaps now resolved — both MFA and CSRF double-submit tokens are i
 **Summary:** All 7 original checked items are now either clean or resolved. MFA (TOTP) and CSRF (double-submit) are both implemented as of the post-Phase-8 hardening session. The one still-open pre-launch item is mandatory MFA enrollment — unenrolled users still get a full session on password alone. The other known gap (per-field input validation on `goals_update.php` for fields other than `projection_horizon_years`) remains flagged and unresolved, out of scope for both audit sessions.
 
 ## Deploy
-**Current process (manual):** build the frontend locally (`cd frontend && npm run build`), then upload the `dist/` output into `public_html` via Hostinger's File Manager, alongside `public_html/api`, so the frontend and API stay same-origin (no CORS). SQL migrations in `/sql` are **not** run automatically — run new migrations manually via hPanel's database tool after each deploy that includes one.
+**Automated (preferred):** `.github/workflows/deploy.yml` builds the React app on every push to `main` (touching `frontend/`, `api/`, or the workflow) and publishes a `public_html`-shaped tree — compiled `dist/` at the root plus `api/` under `/api` — to a dedicated **`deploy` branch**, building on top of that branch's history (never force-pushed) so Hostinger's `git pull` always fast-forwards. Hostinger's native Git deployment (hPanel → Advanced → GIT, branch `deploy`, directory `public_html`) pulls it automatically. `api/db_config.php` is stripped in CI and lives only on the server, so pulls never touch it. **Full setup + gotchas in `DEPLOY.md`.** Note: the workflow only fires from `main`, so it activates after this branch is merged, not on the feature branch itself.
 
-**Not yet built:** a `.github/workflows/` CI pipeline that builds the React app and pushes compiled output to a `deploy` branch for Hostinger's native Git deployment (hPanel → Advanced → Git) to pick up automatically. This was deliberately deferred during Phase 5 (see the Phase 5 note above) rather than built ad hoc — set it up as its own focused task when ready, not folded into a feature phase.
+**Manual fallback:** build locally (`cd frontend && npm run build`), then upload the `dist/` output into `public_html` via Hostinger's File Manager alongside `public_html/api`. Watch two things this replaces: `.htaccess` is a hidden dotfile inside `dist/` that file managers drop, and every `dist/` file (including `assets/`) must land at the `public_html` root together or the absolute `/assets/…` paths 404.
+
+SQL migrations in `/sql` are **not** run automatically under either path — run new migrations manually via hPanel's database tool after each deploy that includes one.
