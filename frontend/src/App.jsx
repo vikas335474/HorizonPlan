@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import ClientGoals from './pages/ClientGoals';
 import GoalsList from './pages/GoalsList';
 import GoalDetail from './pages/GoalDetail';
+import PlanReport from './pages/PlanReport';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -36,6 +37,9 @@ export default function App() {
 
           {/* Goal detail — shared by both roles */}
           <Route path="/goals/:id" element={<ProtectedRoute><GoalDetail /></ProtectedRoute>} />
+
+          {/* Printable/shareable client-meeting report for a single goal */}
+          <Route path="/goals/:id/report" element={<ProtectedRoute><PlanReport /></ProtectedRoute>} />
 
           {/* MFA enrollment is optional (not mandatory) — no route gates on it.
               The nudge to enrol lives in AppHeader (amber dot on Settings). */}
