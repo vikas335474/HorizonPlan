@@ -31,6 +31,24 @@ $mfaStmt = $db->prepare("SELECT mfa_secret FROM users WHERE id = :id LIMIT 1");
 $mfaStmt->execute([':id' => (int) $session['user_id']]);
 $mfaRow = $mfaStmt->fetch();
 
+// Tenant-level context the client-facing UI needs: the compliance disclosure
+// mode (docs/02 Section 3.6 — must be read from the tenant, never hardcoded)
+// and the white-label branding. advisory_mode is only ever set server-side by a
+// Super Admin, so the frontend reads it here but can never change it.
+$tenantStmt = $db->prepare("SELECT company_name, advisory_mode, white_label_settings FROM tenants WHERE id = :id LIMIT 1");
+$tenantStmt->execute([':id' => (int) $session['tenant_id']]);
+$tenantRow = $tenantStmt->fetch();
+
+// white_label_settings is stored as a JSON string (nullable). Decode defensively
+// so a malformed value degrades to "no branding" rather than breaking the session.
+$whiteLabel = null;
+if ($tenantRow && !empty($tenantRow['white_label_settings'])) {
+    $decoded = json_decode((string) $tenantRow['white_label_settings'], true);
+    if (is_array($decoded)) {
+        $whiteLabel = $decoded;
+    }
+}
+
 echo json_encode([
     'status' => 'success',
     'user'   => [
@@ -38,5 +56,10 @@ echo json_encode([
         'tenant_id'    => (int) $session['tenant_id'],
         'role'         => $session['role'],
         'mfa_enrolled' => !empty($mfaRow['mfa_secret']),
+    ],
+    'tenant' => [
+        'company_name'  => $tenantRow['company_name'] ?? null,
+        'advisory_mode' => $tenantRow['advisory_mode'] ?? 'distribution',
+        'white_label'   => $whiteLabel,
     ],
 ]);

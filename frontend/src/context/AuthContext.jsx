@@ -19,8 +19,22 @@ function normalizeUser(raw) {
   };
 }
 
+// Tenant context (company name, compliance mode, white-label branding). Only
+// session.php returns this today, so it populates on bootstrap and after a
+// session refresh. advisoryMode defaults to the conservative 'distribution'
+// copy whenever it's unknown — the compliance-safe fallback (docs/02 3.6).
+function normalizeTenant(raw) {
+  if (!raw) return null;
+  return {
+    companyName: raw.company_name ?? null,
+    advisoryMode: raw.advisory_mode === 'advisory' ? 'advisory' : 'distribution',
+    whiteLabel: raw.white_label ?? null,
+  };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,7 +42,10 @@ export function AuthProvider({ children }) {
     api
       .session()
       .then((res) => {
-        if (!cancelled) setUser(normalizeUser(res.user));
+        if (!cancelled) {
+          setUser(normalizeUser(res.user));
+          setTenant(normalizeTenant(res.tenant));
+        }
       })
       .catch((err) => {
         // 401 "no active session" is expected on page load — not an error.
@@ -40,6 +57,24 @@ export function AuthProvider({ children }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
+  }, []);
+
+  // Re-fetch session.php and update user + tenant state. Needed after MFA
+  // enrollment (mfa_enroll_confirm.php returns only { status, message }) and
+  // after login (login.php doesn't carry the tenant block). Defined before the
+  // callbacks that depend on it to avoid a temporal-dead-zone reference.
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await api.session();
+      const normalized = normalizeUser(res.user);
+      setUser(normalized);
+      setTenant(normalizeTenant(res.tenant));
+      return normalized;
+    } catch {
+      // A failed refresh shouldn't tear down the current session state — the
+      // existing user stays until an explicit logout or a hard 401 elsewhere.
+      return null;
+    }
   }, []);
 
   // login() returns { mfaRequired: true } if the server returned 202, or
@@ -58,8 +93,11 @@ export function AuthProvider({ children }) {
 
     const normalized = normalizeUser(res.user);
     setUser(normalized);
+    // login.php doesn't carry the tenant block; pull it in the background so the
+    // compliance disclosure and branding are correct without blocking routing.
+    refreshSession();
     return { mfaRequired: false, user: normalized };
-  }, []);
+  }, [refreshSession]);
 
   // mfaVerify() is called from Login.jsx after the user enters their OTP.
   // On success the server issues a full session and the CSRF cookie. Returns
@@ -68,34 +106,20 @@ export function AuthProvider({ children }) {
     const res = await api.mfaVerify(code);
     const normalized = normalizeUser(res.user);
     setUser(normalized);
+    refreshSession(); // pull the tenant block in the background, as login() does
     return normalized;
-  }, []);
-
-  // Re-fetch session.php and update user state. Needed after MFA enrollment:
-  // mfa_enroll_confirm.php returns only { status, message }, no user object, so
-  // the frontend re-reads the session to pick up mfa_enrolled: true.
-  const refreshSession = useCallback(async () => {
-    try {
-      const res = await api.session();
-      const normalized = normalizeUser(res.user);
-      setUser(normalized);
-      return normalized;
-    } catch {
-      // A failed refresh shouldn't tear down the current session state — the
-      // existing user stays until an explicit logout or a hard 401 elsewhere.
-      return null;
-    }
-  }, []);
+  }, [refreshSession]);
 
   const logout = useCallback(async () => {
     await api.logout().catch(() => {
       // Idempotent — clear local state even if the network request fails.
     });
     setUser(null);
+    setTenant(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, mfaVerify, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, tenant, loading, login, mfaVerify, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

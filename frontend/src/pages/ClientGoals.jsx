@@ -193,6 +193,24 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
       description="Set up a goal for this client. You can refine scenarios after it's created."
     >
       <form onSubmit={handleSubmit}>
+        {/* Practitioner guidance (docs/05 item 4): the multi-goal model already
+            supports this — surface it so advisors actually use it. */}
+        <div
+          className="mb-4 flex items-start gap-2 rounded-[var(--radius-ctrl)] px-3 py-2.5"
+          style={{ backgroundColor: 'var(--color-teal-soft)' }}
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className="mt-0.5 shrink-0" aria-hidden="true">
+            <path d="M7.5 1.5a4 4 0 0 0-2.4 7.2c.4.3.6.7.6 1.1v.4h3.6v-.4c0-.4.2-.8.6-1.1A4 4 0 0 0 7.5 1.5Z"
+              stroke="var(--color-teal-ink)" strokeWidth="1.1" fill="none" />
+            <path d="M6 12.5h3M6.3 10.7h2.4" stroke="var(--color-teal-ink)" strokeWidth="1.1" strokeLinecap="round" />
+          </svg>
+          <p className="text-xs leading-relaxed text-[var(--color-teal-ink)]">
+            <strong>Tip:</strong> model fast-inflating costs like healthcare as their own goal with a
+            higher inflation rate (often 8–14% vs ~6% general), rather than blending them into one
+            number — it's the most commonly underestimated line item for retirees.
+          </p>
+        </div>
+
         <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Goal type</label>
         <div className="grid grid-cols-2 gap-2 mb-4">
           {GOAL_TYPES.map((t) => {
