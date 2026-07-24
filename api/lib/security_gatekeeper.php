@@ -32,16 +32,21 @@ const CSRF_HEADER_NAME = 'X-CSRF-Token';
  */
 function checkLoginRateLimit(PDO $db, string $email, string $ipAddress): bool
 {
+    // NOTE: the window is inlined, not bound. MySQL native prepared statements
+    // (EMULATE_PREPARES => false) reject a parameter marker in the
+    // "INTERVAL ? MINUTE" position with a syntax error, which would make every
+    // login 500 before the password is ever checked. The value is a hardcoded
+    // integer constant — cast defensively — so inlining carries no injection risk.
+    $windowMinutes = (int) LOGIN_RATE_LIMIT_WINDOW_MINUTES;
     $stmt = $db->prepare(
         "SELECT COUNT(*) FROM login_attempts
          WHERE (email = :email OR ip_address = :ip)
            AND successful = 0
-           AND attempted_at > (NOW() - INTERVAL :window MINUTE)"
+           AND attempted_at > (NOW() - INTERVAL {$windowMinutes} MINUTE)"
     );
     $stmt->execute([
         ':email'  => $email,
         ':ip'     => $ipAddress,
-        ':window' => LOGIN_RATE_LIMIT_WINDOW_MINUTES,
     ]);
     $failedCount = (int) $stmt->fetchColumn();
 

@@ -88,6 +88,38 @@ export const api = {
 
   session: () => request('session.php', { method: 'GET' }),
 
+  // --- Super Admin console (super_admin sessions only; server-enforced) ---
+  // List every advisory firm with mode, branding, and head-counts.
+  listTenants: () => request('tenants_list.php'),
+
+  // Create a firm, optionally with its first advisor in the same step.
+  // `firstAdvisor` (optional): { email, temporary_password }.
+  createTenant: (companyName, advisoryMode = 'distribution', firstAdvisor) =>
+    request('tenants_create.php', {
+      method: 'POST',
+      body: JSON.stringify({
+        company_name: companyName,
+        advisory_mode: advisoryMode,
+        ...(firstAdvisor ? { first_advisor: firstAdvisor } : {}),
+      }),
+    }),
+
+  // Update a firm's advisory_mode and/or white-label branding. `changes` is a
+  // subset of { advisory_mode, white_label } — white_label is an object
+  // { company_name?, logo_url?, primary_color? } or null to clear it.
+  updateTenant: (tenantId, changes) =>
+    request('tenant_update.php', {
+      method: 'POST',
+      body: JSON.stringify({ tenant_id: tenantId, ...changes }),
+    }),
+
+  // Add an advisor to an existing firm.
+  createAdvisor: (tenantId, email, temporaryPassword) =>
+    request('admin_advisor_create.php', {
+      method: 'POST',
+      body: JSON.stringify({ tenant_id: tenantId, email, temporary_password: temporaryPassword }),
+    }),
+
   // Advisor dashboard: all clients in the tenant + aggregate stats.
   listClients: () => request('clients_list.php'),
 

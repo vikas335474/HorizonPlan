@@ -1,0 +1,79 @@
+# Runs the PHP test suite against a real MySQL on every push/PR. Executing the
+# queries against an actual database is the point: bugs like binding a parameter
+# into "INTERVAL ? MINUTE" (rejected only by MySQL's native prepared statements)
+# pass `php -l` and pure unit tests, and only surface when the query really runs.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  php-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_DATABASE: horizonplan_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpw"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql
+          coverage: none
+
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -uroot -prootpw --silent; then
+              echo "MySQL is up"; break
+            fi
+            echo "waiting for MySQL ($i)"; sleep 2
+          done
+
+      - name: Run migrations
+        run: |
+          set -euo pipefail
+          for f in $(ls sql/*.sql | sort); do
+            echo "→ $f"
+            mysql -h 127.0.0.1 -uroot -prootpw horizonplan_test < "$f"
+          done
+
+      - name: Write test db_config.php
+        run: |
+          cat > api/db_config.php <<'PHP'
+          <?php
+          define('DB_HOST', '127.0.0.1');
+          define('DB_NAME', 'horizonplan_test');
+          define('DB_USER', 'root');
+          define('DB_PASS', 'rootpw');
+          define('DB_CHARSET', 'utf8mb4');
+          function getPdo(): PDO {
+              $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+              return new PDO($dsn, DB_USER, DB_PASS, [
+                  PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                  PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                  PDO::ATTR_EMULATE_PREPARES   => false,
+              ]);
+          }
+          PHP
+
+      - name: Run test suite
+        run: bash tests/run_all.sh

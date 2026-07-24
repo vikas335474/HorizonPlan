@@ -227,3 +227,15 @@ input[type="range"]:disabled { opacity: 0.5; }
   border-color: var(--color-teal);
   box-shadow: 0 0 0 3px var(--color-teal-soft);
 }
+
+/* Print — the client report (/goals/:id/report) is designed to be printed or
+   saved as PDF. Hide app chrome, drop tinted backgrounds so ink isn't wasted,
+   and give the sheet clean margins. */
+@media print {
+  .no-print { display: none !important; }
+  @page { margin: 16mm; }
+  html, body { background: #fff !important; }
+  .report-sheet { max-width: none !important; padding: 0 !important; }
+  /* Keep the projection chart and disclosure from splitting across pages. */
+  .report-sheet section, .report-sheet header { break-inside: avoid; }
+}

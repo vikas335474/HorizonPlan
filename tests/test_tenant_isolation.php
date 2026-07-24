@@ -73,9 +73,13 @@ try {
 assertTrue($threw, 'update() throws when called with no row-level condition');
 
 // --- Test 5: assertAllowedTable rejects a table not in the allow-list ---
+// NOTE: 'users' is now IN ALLOWED_TABLES (added in the Phase 8 hardening so
+// goals_create.php's client-ownership check could route through the helper), so
+// it no longer belongs here. Use a table the helper is genuinely not meant to
+// touch — login_attempts is written only by the raw auth path, never scoped.
 $threw = false;
 try {
-    $dbTenantA->select('users'); // users is tenant-scoped but deliberately not in ALLOWED_TABLES for this helper
+    $dbTenantA->select('login_attempts');
 } catch (InvalidArgumentException $e) {
     $threw = true;
 }
