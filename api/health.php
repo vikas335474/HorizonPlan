@@ -15,9 +15,12 @@ declare(strict_types=1);
 //
 // Once the deploy is healthy, gate this behind an admin check or delete it.
 
-require_once __DIR__ . '/db_config.php';
+// Install the handler before requiring db_config.php: if that file is the
+// thing that's missing/broken, we still want a clean JSON 500 (with db_connect
+// reported false) instead of a raw fatal — the whole point of this endpoint.
 require_once __DIR__ . '/lib/error_handler.php';
 installApiErrorHandlers();
+require_once __DIR__ . '/db_config.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
