@@ -18,8 +18,8 @@ declare(strict_types=1);
 // still distinguishable by design here since both are the caller's own input,
 // but we never leak anything about account existence or session internals).
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 

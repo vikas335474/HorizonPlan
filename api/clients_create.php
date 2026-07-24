@@ -10,8 +10,8 @@ declare(strict_types=1);
 // creating advisor's tenant — client_id/tenant boundaries can't be crossed here
 // because TenantScopedDb::insert() overwrites tenant_id with the session's tenant.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 
 header('Content-Type: application/json; charset=UTF-8');

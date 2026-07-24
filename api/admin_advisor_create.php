@@ -6,8 +6,8 @@ declare(strict_types=1);
 // from the session. The user insert + audit row still go through TenantScopedDb,
 // bound to the chosen tenant, so the helper pattern holds (docs/02 3.1).
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 
 header('Content-Type: application/json; charset=UTF-8');

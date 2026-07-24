@@ -1,14 +1,15 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../db_config.php';
+// Install JSON error handling before requiring anything else — including
+// db_config.php. A missing/broken db_config.php (it's gitignored; must be
+// hand-created on the server per DEPLOY.md) throws its own fatal on the
+// require below, and that fatal must be caught too, not just DB-query errors
+// that happen after this file finishes loading.
 require_once __DIR__ . '/error_handler.php';
-
-// Install JSON error handling as early as possible: every endpoint requires
-// this file, so from here on an uncaught PDOException (e.g. a missing table on
-// the server) returns a structured JSON 500 with a log reference instead of a
-// blank fatal the frontend can only show as "Request failed (500)".
 installApiErrorHandlers();
+
+require_once __DIR__ . '/../db_config.php';
 
 // Cookie config for session tokens — httpOnly/secure/sameSite per docs/02 Section 3.2.
 // Never returned in a JSON body for client-side (localStorage) storage.

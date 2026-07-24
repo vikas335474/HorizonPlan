@@ -9,8 +9,8 @@ declare(strict_types=1);
 // role has no business here (they don't have a client list) — advisor and
 // super_admin only.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 
 header('Content-Type: application/json; charset=UTF-8');
