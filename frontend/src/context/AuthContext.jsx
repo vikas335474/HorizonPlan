@@ -59,6 +59,20 @@ export function AuthProvider({ children }) {
     return () => { cancelled = true; };
   }, []);
 
+  // White-label theming: a firm's primary colour overrides the teal accent
+  // used across the app. Server-validated as a #rrggbb hex before it ever
+  // reaches here (tenant_update.php). Cleared when branding is absent/logout.
+  const brandColor = tenant?.whiteLabel?.primary_color || null;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (brandColor) {
+      root.style.setProperty('--color-teal', brandColor);
+    } else {
+      root.style.removeProperty('--color-teal');
+    }
+    return () => root.style.removeProperty('--color-teal');
+  }, [brandColor]);
+
   // Re-fetch session.php and update user + tenant state. Needed after MFA
   // enrollment (mfa_enroll_confirm.php returns only { status, message }) and
   // after login (login.php doesn't carry the tenant block). Defined before the

@@ -7,6 +7,7 @@ import ClientGoals from './pages/ClientGoals';
 import GoalsList from './pages/GoalsList';
 import GoalDetail from './pages/GoalDetail';
 import PlanReport from './pages/PlanReport';
+import AdminConsole from './pages/AdminConsole';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -43,6 +44,10 @@ export default function App() {
 
           {/* MFA enrollment is optional (not mandatory) — no route gates on it.
               The nudge to enrol lives in AppHeader (amber dot on Settings). */}
+          {/* Super Admin console — role is enforced server-side on every
+              endpoint; AdminConsole also client-guards and redirects non-admins. */}
+          <Route path="/admin" element={<ProtectedRoute><AdminConsole /></ProtectedRoute>} />
+
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
