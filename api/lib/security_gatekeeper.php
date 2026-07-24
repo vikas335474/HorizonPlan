@@ -2,6 +2,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../db_config.php';
+require_once __DIR__ . '/error_handler.php';
+
+// Install JSON error handling as early as possible: every endpoint requires
+// this file, so from here on an uncaught PDOException (e.g. a missing table on
+// the server) returns a structured JSON 500 with a log reference instead of a
+// blank fatal the frontend can only show as "Request failed (500)".
+installApiErrorHandlers();
 
 // Cookie config for session tokens — httpOnly/secure/sameSite per docs/02 Section 3.2.
 // Never returned in a JSON body for client-side (localStorage) storage.
