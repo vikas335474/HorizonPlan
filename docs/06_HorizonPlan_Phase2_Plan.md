@@ -43,7 +43,14 @@ arithmetic within Hostinger's execution budget.
    claims. Do not bake specific allocation/withdrawal numbers into code as
    authoritative advice. Well-known public heuristics (below) may be offered as
    clearly-labelled, editable starting points that require professional sign-off
-   before a tenant uses them with real clients.
+   before a tenant uses them with real clients. **This sign-off must be
+   enforceable data, not just process:** both `strategy_templates` and the risk
+   questionnaire/scoring carry an explicit approval state (see C and B), and an
+   unapproved definition is illustration-only — it cannot be applied to, or
+   presented on, a real client's plan until a firm principal (CFA/RIA) marks it
+   approved for that tenant. Seeded global starters ship as `draft`, never
+   pre-approved. This is the data-level guarantee behind "have your CFA/RIA
+   supply the definitions before those parts ship to real clients."
 3. **Suitability language is a compliance control (`docs/02` §0, §3.6).**
    "Recommended for a 25-year-old," "ABC is the better strategy," or any
    best-for-you framing is *advice*. It may render **only for advisory-mode
@@ -133,6 +140,13 @@ dictates**, the return-rate assumptions elsewhere. The questionnaire content and
 scoring must come from the firm/CFA (compliance value re: SEBI scrutiny of
 aggressive-fund mis-selling — `docs/05` item 2/new-item). Ship the mechanism and
 an editable question set; don't invent the scoring rubric as authoritative.
+**Approval gate (guardrail 2):** the active question set + scoring rubric for a
+tenant carries an approval state (a `risk_question_sets` row, or an `approved_by
+_user_id`/`approved_at` pair on the set) set by a firm principal. Until it's
+approved, a submitted profile may be captured but its band must **not** surface
+as a suggested return assumption on a client plan — the mechanism ships inert,
+the firm's own definition is what turns it on. No HorizonPlan-authored default
+rubric is ever marked approved on the firm's behalf.
 
 **Endpoints:** `risk_profile_submit.php` (advisor/super_admin), `risk_profile_read.php`.
 **Frontend:** questionnaire on the client/goal view; the resulting band surfaces
@@ -146,8 +160,22 @@ firm-editable templates.
 **Schema (`sql/011_strategy_templates.sql`):** `strategy_templates`
 (`id, tenant_id NULL, name, description, category ENUM('accumulation',
 'decumulation','allocation'), applies_when JSON, params JSON, provenance TEXT,
-requires_advisory_mode TINYINT(1) DEFAULT 0, created_by_user_id, created_at`).
-- `tenant_id NULL` = a global/starter template; non-null = a firm's own.
+requires_advisory_mode TINYINT(1) DEFAULT 0, status ENUM('draft','approved')
+DEFAULT 'draft', approved_by_user_id NULL, approved_at DATETIME NULL,
+created_by_user_id, created_at`).
+- `status` = the enforceable sign-off gate from guardrail 2. Only `approved`
+  templates may be applied to a real client goal/sub-scenario; `draft` templates
+  are visible in the admin UI for review but cannot be applied client-side. A
+  firm principal (CFA/RIA) approving it sets `status='approved'` +
+  `approved_by_user_id`/`approved_at`. `strategy_templates_create/update.php`
+  must reset `status` to `draft` on any change to `params`/`applies_when` so an
+  edited definition re-enters review rather than silently keeping stale approval.
+- `tenant_id NULL` = a global/starter template; non-null = a firm's own. Global
+  starters are seeded `draft` and are **never directly applicable to a client** —
+  a firm adopts one by cloning it into its own `tenant_id` row (starting `draft`),
+  then its principal approves that copy. This keeps approval firm-scoped without a
+  per-tenant status on the shared global row, and guarantees a HorizonPlan-seeded
+  heuristic is never approved on any firm's behalf.
 - `applies_when` = optional hints, e.g. `{"min_age":20,"max_age":25}` — used for
   *filtering/labelling*, never auto-applied as advice.
 - `params` = the assumption bundle applied to a goal/sub-scenario (e.g.
@@ -201,6 +229,10 @@ render for advisory tenants. Treat every advisory string with auth-level care.
 - [ ] Any age-based/"best" framing is gated on `advisory_mode==='advisory'`.
 - [ ] Seeded strategy templates carry `provenance` and correct
       `requires_advisory_mode`; none are presented as HorizonPlan's own advice.
+- [ ] Sign-off is enforced by data, not prose: only `status='approved'`,
+      firm-owned strategy templates can be applied to a client, and an unapproved
+      risk question set never surfaces a suggested return band. Seeded/global
+      starters and any HorizonPlan-authored default rubric remain `draft`.
 - [ ] `accumulation_return_rate` stays distinct from `drawdown_return_rate`.
 - [ ] New tenant-scoped tables go through `TenantScopedDb`; `advisory_mode`
       remains super-admin-only to change.
@@ -244,3 +276,8 @@ architecture review / this doc it hasn't addressed yet.
 - Compliance: log in as a distribution-mode tenant and confirm no suitability
   language appears anywhere; flip a test tenant to advisory mode and confirm it
   does.
+- Sign-off gate: confirm a `draft` strategy template (and a seeded global starter)
+  cannot be applied to a client goal server-side — not merely hidden in the UI —
+  and that an unapproved risk question set captures a profile without surfacing a
+  suggested return band. Add a DB test asserting the apply path rejects a
+  non-`approved` template.
