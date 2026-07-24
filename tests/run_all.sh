@@ -14,7 +14,8 @@ for t in \
   tests/test_password_hashing.php \
   tests/test_inheritance_cascade.php \
   tests/test_tenant_isolation.php \
-  tests/test_auth_db.php
+  tests/test_auth_db.php \
+  tests/test_password_reset_db.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"

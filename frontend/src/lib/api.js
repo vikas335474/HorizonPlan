@@ -84,6 +84,18 @@ export const api = {
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
     }),
 
+  // Forgot-password flow. Both are unauthenticated (no session/CSRF cookie
+  // exists yet, same as login/mfaVerify) — see password_reset_request.php /
+  // password_reset_confirm.php for why that's safe here.
+  requestPasswordReset: (email) =>
+    request('password_reset_request.php', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  confirmPasswordReset: (token, newPassword) =>
+    request('password_reset_confirm.php', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    }),
+
   logout: () => request('logout.php', { method: 'POST' }),
 
   session: () => request('session.php', { method: 'GET' }),
