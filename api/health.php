@@ -34,6 +34,7 @@ $required = [
     'change_log',
     'login_attempts',
     'mfa_pending',
+    'password_resets',
 ];
 
 // getPdo() throws on a connection/credential failure — the installed handler

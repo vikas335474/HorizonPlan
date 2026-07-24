@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Login is a two-step flow when the user has MFA enrolled:
@@ -18,6 +18,9 @@ export default function Login() {
   // goals list. The role isn't known until login() resolves, so compute the
   // destination there rather than up here.
   const fromPath = location.state?.from?.pathname || null;
+  // Set by ResetPassword.jsx after a successful reset — shown once, not
+  // persisted, so a refresh of /login doesn't keep re-displaying it.
+  const passwordResetDone = location.state?.passwordResetDone;
 
   function destinationFor(user) {
     if (fromPath) return fromPath;
@@ -97,6 +100,15 @@ export default function Login() {
           >
             {step === 'password' && (
               <form onSubmit={handlePasswordSubmit}>
+                {passwordResetDone && (
+                  <p
+                    className="mb-4 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5"
+                    style={{ backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }}
+                  >
+                    Password updated. Sign in with your new password.
+                  </p>
+                )}
+
                 <label className="block text-sm font-medium mb-1.5 text-[var(--color-ink-2)]" htmlFor="email">
                   Email
                 </label>
@@ -112,9 +124,14 @@ export default function Login() {
                   className="field mb-4"
                 />
 
-                <label className="block text-sm font-medium mb-1.5 text-[var(--color-ink-2)]" htmlFor="password">
-                  Password
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium text-[var(--color-ink-2)]" htmlFor="password">
+                    Password
+                  </label>
+                  <Link to="/forgot-password" className="text-xs text-[var(--color-ink-2)] hover:text-[var(--color-ink)]">
+                    Forgot password?
+                  </Link>
+                </div>
                 <input
                   id="password"
                   type="password"
