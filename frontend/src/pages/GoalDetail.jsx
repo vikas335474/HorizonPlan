@@ -13,6 +13,7 @@ import {
   GOAL_TYPE_ACCENT,
   corpusMultiple,
 } from '../lib/format';
+import { presetsForGoalType } from '../lib/strategyPresets';
 
 export default function GoalDetail() {
   const { id } = useParams();
@@ -60,6 +61,25 @@ export default function GoalDetail() {
       setExpandedId(res.sub_scenario_id);
     } catch (err) {
       setCreateError(err.message || 'Could not create a new scenario.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  // Apply a strategy preset: create a fresh sub-scenario, then override it with
+  // the preset's parameters through the existing endpoints (no new backend).
+  // The server stays the source of truth — the projection redraws from it.
+  async function handleApplyPreset(preset) {
+    setCreating(true);
+    setCreateError('');
+    try {
+      const res = await api.createSubScenario(goal.id);
+      await api.updateSubScenario(res.sub_scenario_id, preset.params);
+      const fresh = await api.listSubScenarios(goal.id);
+      setSubScenarios(fresh.sub_scenarios);
+      setExpandedId(res.sub_scenario_id);
+    } catch (err) {
+      setCreateError(err.message || 'Could not apply that preset.');
     } finally {
       setCreating(false);
     }
@@ -138,6 +158,35 @@ export default function GoalDetail() {
             <div className="mb-6">
               <DisclosureBanner />
             </div>
+
+            {/* Strategy presets — one-click, comparable withdrawal-rate scenarios.
+                Neutral illustrations to compare, not advice (see strategyPresets.js). */}
+            {presetsForGoalType(goal.goal_type).length > 0 && (
+              <Card className="p-4 mb-4">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <h2 className="text-base font-semibold text-[var(--color-ink)]">Compare a strategy preset</h2>
+                </div>
+                <p className="text-xs text-[var(--color-ink-2)] mb-3">
+                  Spin up a ready-made withdrawal-rate scenario to compare on the chart. Each is a starting
+                  point to adjust per client — an illustration, not a recommendation.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {presetsForGoalType(goal.goal_type).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={creating}
+                      onClick={() => handleApplyPreset(p)}
+                      className="text-left rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] px-3 py-2 transition-colors hover:border-[var(--color-teal)] disabled:opacity-50"
+                      style={{ minWidth: '10rem' }}
+                    >
+                      <div className="text-sm font-semibold text-[var(--color-ink)]">{p.name}</div>
+                      <div className="text-[11px] text-[var(--color-ink-3)] mt-0.5">{p.tagline}</div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             {/* Sub-scenarios */}
             <div className="flex items-center justify-between mb-3">
