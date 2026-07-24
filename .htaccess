@@ -17,6 +17,17 @@
     # Serve index.html itself directly (avoids a rewrite loop)
     RewriteRule ^index\.html$ - [L]
 
+    # A missing file under /assets/ must 404 — it must NEVER fall through to the
+    # SPA rewrite below. The compiled index.html references content-hashed
+    # bundles (e.g. /assets/index-CCI7QYml.css); a stale or partial deploy that
+    # leaves index.html pointing at a hash no longer on disk would otherwise get
+    # index.html served back (text/html, 200) for a .css/.js request. Under
+    # X-Content-Type-Options: nosniff the browser then aborts the stylesheet,
+    # surfacing as a silent unstyled page instead of an obvious error. Fail
+    # loudly so a desynced deploy is unambiguous.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^assets/ - [R=404,L]
+
     # Real files and directories (JS/CSS in /assets, favicon, etc.) served as-is
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
