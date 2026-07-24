@@ -12,8 +12,8 @@ declare(strict_types=1);
 // don't exit early in that branch), so the user can try again within the 10-minute
 // window without going back to step 1.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/Totp.php';
 
 header('Content-Type: application/json; charset=UTF-8');

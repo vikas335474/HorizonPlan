@@ -15,8 +15,8 @@ declare(strict_types=1);
 // before confirmation would lock out any user who set up the table entry but
 // never confirmed a working OTP.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/Totp.php';
 
 header('Content-Type: application/json; charset=UTF-8');

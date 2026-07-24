@@ -6,8 +6,8 @@ declare(strict_types=1);
 // super_admin-gated, so the mode can never be flipped from an advisor/client
 // session regardless of what any frontend sends.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 

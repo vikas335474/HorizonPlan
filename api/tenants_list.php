@@ -5,8 +5,8 @@ declare(strict_types=1);
 // branding, and a head-count of advisors/clients. Cross-tenant read, gated to
 // super_admin — operates on the tenants registry, not a tenant-scoped table.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 

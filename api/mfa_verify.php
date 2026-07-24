@@ -14,8 +14,8 @@ declare(strict_types=1);
 // consuming the pending token on the first wrong attempt is already the
 // primary defence against brute force at this step.
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/Totp.php';
 
 header('Content-Type: application/json; charset=UTF-8');
