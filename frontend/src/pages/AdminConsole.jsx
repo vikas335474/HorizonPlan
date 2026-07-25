@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
-import { Card, Badge, Button, EmptyState, Spinner } from '../components/ui';
+import { Card, Badge, Button, EmptyState, Spinner, StatCard } from '../components/ui';
 import { AllocationBar, RiskBadge, TemplateCreateModal, ApprovalBadge, ApproveButton } from '../components/TemplateUI';
 
 // Super Admin console: tabs for Firms and Strategy Templates. super_admin only —
@@ -74,6 +74,15 @@ function FirmsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]);
 
+  const stats = (tenants || []).reduce(
+    (acc, t) => ({
+      advisors: acc.advisors + t.advisor_count,
+      clients: acc.clients + t.client_count,
+      advisory: acc.advisory + (t.advisory_mode === 'advisory' ? 1 : 0),
+    }),
+    { advisors: 0, clients: 0, advisory: 0 }
+  );
+
   return (
     <>
       <div className="mb-5 flex items-end justify-between gap-4">
@@ -85,6 +94,20 @@ function FirmsTab() {
         </div>
         <Button onClick={() => setCreateOpen(true)}>+ New firm</Button>
       </div>
+
+      {tenants && tenants.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Firms" value={tenants.length} />
+          <StatCard label="Advisors" value={stats.advisors} accent="teal" />
+          <StatCard label="Clients" value={stats.clients} accent="teal" />
+          <StatCard
+            label="Advisory-mode firms"
+            value={stats.advisory}
+            sublabel={`${tenants.length - stats.advisory} distribution-mode`}
+            accent="amber"
+          />
+        </div>
+      )}
 
       {loading && <Spinner label="Loading firms…" />}
       {error && (
@@ -286,79 +309,194 @@ function AdminTemplateRow({ template, onChanged }) {
 }
 
 function TenantRow({ tenant, onChanged }) {
-  const [panel, setPanel] = useState(null); // 'branding' | 'advisor' | null
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  return (
+    <>
+      <Card className="p-4 lift cursor-pointer" onClick={() => setDetailOpen(true)}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-3">
+            {tenant.white_label?.logo_url ? (
+              <img
+                src={tenant.white_label.logo_url}
+                alt=""
+                className="h-9 w-9 rounded-[var(--radius-ctrl)] object-cover border border-[var(--color-line-2)]"
+              />
+            ) : (
+              <div
+                className="h-9 w-9 rounded-[var(--radius-ctrl)] flex items-center justify-center text-sm font-semibold text-white shrink-0"
+                style={{ background: tenant.white_label?.primary_color || 'var(--color-ink-3)' }}
+              >
+                {tenant.company_name.slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-base font-semibold text-[var(--color-ink)] truncate">{tenant.company_name}</h2>
+                <Badge
+                  fg={tenant.advisory_mode === 'advisory' ? 'var(--color-teal-ink)' : 'var(--color-ink-2)'}
+                  bg={tenant.advisory_mode === 'advisory' ? 'var(--color-teal-soft)' : 'var(--color-surface-2)'}
+                >
+                  {tenant.advisory_mode}
+                </Badge>
+              </div>
+              <p className="mt-0.5 text-xs text-[var(--color-ink-3)]">
+                {tenant.advisor_count} advisor{tenant.advisor_count === 1 ? '' : 's'} · {tenant.client_count} client{tenant.client_count === 1 ? '' : 's'}
+              </p>
+            </div>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}>
+            Manage firm
+          </Button>
+        </div>
+      </Card>
+
+      <FirmDetailModal
+        tenantId={detailOpen ? tenant.id : null}
+        onClose={() => setDetailOpen(false)}
+        onChanged={onChanged}
+      />
+    </>
+  );
+}
+
+// ─── Firm detail: the single place to manage a firm's compliance mode,
+// branding, and advisors — replaces the old three-panel-per-row layout, which
+// cluttered the list and scattered a firm's settings across expand/collapse
+// panels instead of one coherent view. ──────────────────────────────────────
+function FirmDetailModal({ tenantId, onClose, onChanged }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+
+  function load() {
+    if (!tenantId) return;
+    setLoading(true); setError('');
+    api.getTenantDetail(tenantId)
+      .then((res) => setDetail(res))
+      .catch((e) => setError(e.message || 'Could not load this firm.'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    if (tenantId) load();
+    else setDetail(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
+
+  function refresh() {
+    load();
+    onChanged();
+  }
 
   async function setMode(mode) {
-    if (mode === tenant.advisory_mode || busy) return;
-    setBusy(true); setErr('');
+    if (!detail || mode === detail.tenant.advisory_mode || busy) return;
+    setBusy(true);
     try {
-      await api.updateTenant(tenant.id, { advisory_mode: mode });
-      onChanged();
+      await api.updateTenant(detail.tenant.id, { advisory_mode: mode });
+      refresh();
     } catch (e) {
-      setErr(e.message || 'Could not change mode.');
+      setError(e.message || 'Could not change mode.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-semibold text-[var(--color-ink)] truncate">{tenant.company_name}</h2>
-            <Badge
-              fg={tenant.advisory_mode === 'advisory' ? 'var(--color-teal-ink)' : 'var(--color-ink-2)'}
-              bg={tenant.advisory_mode === 'advisory' ? 'var(--color-teal-soft)' : 'var(--color-surface-2)'}
-            >
-              {tenant.advisory_mode}
-            </Badge>
-          </div>
-          <p className="mt-0.5 text-xs text-[var(--color-ink-3)]">
-            {tenant.advisor_count} advisor{tenant.advisor_count === 1 ? '' : 's'} · {tenant.client_count} client{tenant.client_count === 1 ? '' : 's'}
-          </p>
-        </div>
+    <Modal open={!!tenantId} onClose={onClose} size="xl" title={detail ? detail.tenant.company_name : 'Firm'}>
+      {loading && <Spinner label="Loading firm…" />}
+      {error && (
+        <p className="mb-4 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2" style={{ color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
 
-        <div className="flex items-center gap-2">
-          {/* Compliance mode — super-admin-only control (docs/02 3.6) */}
-          <div className="inline-flex rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] overflow-hidden text-xs">
-            {['distribution', 'advisory'].map((m) => (
-              <button
-                key={m}
-                type="button"
-                disabled={busy}
-                onClick={() => setMode(m)}
-                className="px-2.5 py-1.5 font-medium transition-colors"
-                style={
-                  tenant.advisory_mode === m
-                    ? { backgroundColor: 'var(--color-ink)', color: 'white' }
-                    : { color: 'var(--color-ink-2)' }
-                }
-              >
-                {m}
-              </button>
-            ))}
+      {detail && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-3 gap-3">
+            <StatCard label="Advisors" value={detail.tenant.advisor_count} />
+            <StatCard label="Clients" value={detail.tenant.client_count} />
+            <StatCard label="Goals" value={detail.tenant.goal_count} accent="teal" />
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setPanel(panel === 'branding' ? null : 'branding')}>
-            Branding
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setPanel(panel === 'advisor' ? null : 'advisor')}>
-            Add advisor
-          </Button>
+
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-2">Compliance mode</h3>
+            <p className="mb-2 text-xs text-[var(--color-ink-3)]">
+              Advisory mode carries advice language and is for SEBI-RIA firms only — set it only after off-platform review (docs/02 §3.6).
+            </p>
+            <div className="inline-flex rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] overflow-hidden text-sm">
+              {['distribution', 'advisory'].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setMode(m)}
+                  className="px-3 py-1.5 font-medium transition-colors"
+                  style={
+                    detail.tenant.advisory_mode === m
+                      ? { backgroundColor: 'var(--color-ink)', color: 'white' }
+                      : { color: 'var(--color-ink-2)' }
+                  }
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-5 border-t border-[var(--color-line)]">
+            <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-3">Branding</h3>
+            <BrandingPreview tenant={detail.tenant} />
+            <BrandingForm tenant={detail.tenant} onSaved={refresh} />
+          </div>
+
+          <div className="pt-5 border-t border-[var(--color-line)]">
+            <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-3">Advisors</h3>
+            {detail.advisors.length === 0 && (
+              <p className="text-sm text-[var(--color-ink-3)] mb-3">No advisors yet — add the first one below.</p>
+            )}
+            {detail.advisors.length > 0 && (
+              <ul className="mb-4 divide-y divide-[var(--color-line)] rounded-[var(--radius-ctrl)] border border-[var(--color-line)]">
+                {detail.advisors.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="text-[var(--color-ink)]">{a.email}</span>
+                    <span className="text-xs text-[var(--color-ink-3)]">since {a.created_at.slice(0, 10)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <AddAdvisorForm tenant={detail.tenant} onAdded={refresh} embedded />
+          </div>
         </div>
+      )}
+    </Modal>
+  );
+}
+
+// A rough client-facing header preview — helps a super_admin see the branding
+// they're setting without leaving the console to check a real client view.
+function BrandingPreview({ tenant }) {
+  const wl = tenant.white_label || {};
+  const color = wl.primary_color || '#0f766e';
+  return (
+    <div
+      className="mb-4 flex items-center gap-3 rounded-[var(--radius-card)] px-4 py-3 border border-[var(--color-line-2)]"
+      style={{ background: `color-mix(in srgb, ${color} 8%, var(--color-surface))` }}
+    >
+      {wl.logo_url ? (
+        <img src={wl.logo_url} alt="" className="h-8 w-8 rounded object-cover" />
+      ) : (
+        <div className="h-8 w-8 rounded flex items-center justify-center text-xs font-semibold text-white" style={{ background: color }}>
+          {(wl.company_name || tenant.company_name).slice(0, 1).toUpperCase()}
+        </div>
+      )}
+      <div>
+        <p className="text-sm font-semibold" style={{ color }}>{wl.company_name || tenant.company_name}</p>
+        <p className="text-[11px] text-[var(--color-ink-3)]">How this firm's client-facing header will look</p>
       </div>
-
-      {err && <p className="mt-2 text-xs" style={{ color: 'var(--color-alert)' }}>{err}</p>}
-
-      {panel === 'branding' && (
-        <BrandingForm tenant={tenant} onSaved={() => { setPanel(null); onChanged(); }} />
-      )}
-      {panel === 'advisor' && (
-        <AddAdvisorForm tenant={tenant} onAdded={() => { setPanel(null); onChanged(); }} />
-      )}
-    </Card>
+    </div>
   );
 }
 
@@ -412,12 +550,13 @@ function BrandingForm({ tenant, onSaved }) {
   );
 }
 
-function AddAdvisorForm({ tenant, onAdded }) {
+function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(() => GENERATED());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
+  const wrap = embedded ? '' : 'mt-4 pt-4 border-t border-[var(--color-line)]';
 
   async function submit(e) {
     e.preventDefault();
@@ -434,18 +573,18 @@ function AddAdvisorForm({ tenant, onAdded }) {
 
   if (done) {
     return (
-      <div className="mt-4 pt-4 border-t border-[var(--color-line)]">
+      <div className={wrap}>
         <p className="text-sm text-[var(--color-ink)]">
-          Advisor <strong>{done.email}</strong> created. Share these credentials securely — they can change the password after signing in.
+          Advisor <strong>{done.email}</strong> created and emailed their sign-in details. Here's a fallback in case delivery doesn't land:
         </p>
         <p className="mt-1 tnum text-xs text-[var(--color-ink-2)]">Temporary password: <strong>{done.password}</strong></p>
-        <div className="mt-2"><Button size="sm" variant="ghost" onClick={onAdded}>Done</Button></div>
+        <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => { setDone(null); setEmail(''); setPassword(GENERATED()); onAdded(); }}>Add another</Button></div>
       </div>
     );
   }
 
   return (
-    <form onSubmit={submit} className="mt-4 pt-4 border-t border-[var(--color-line)] grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <form onSubmit={submit} className={`${wrap} grid grid-cols-1 sm:grid-cols-2 gap-3`}>
       <div>
         <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Advisor email</label>
         <input type="email" required className="field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="advisor@firm.in" />
@@ -465,37 +604,61 @@ function AddAdvisorForm({ tenant, onAdded }) {
 const GENERATED = () =>
   Math.random().toString(36).slice(2, 6) + '-' + Math.random().toString(36).slice(2, 6);
 
+const WIZARD_STEPS = [
+  { key: 'firm', label: 'Firm' },
+  { key: 'branding', label: 'Branding' },
+  { key: 'advisor', label: 'First advisor' },
+];
+
+// Onboarding wizard for a new firm — three short steps instead of one cramped
+// form, with branding/advisor steps skippable ("do it later"), ending in a
+// setup-progress summary so it reads like onboarding a real customer, not
+// filling out a database record.
 function CreateFirmModal({ open, onClose, onCreated }) {
+  const [step, setStep] = useState(0);
   const [companyName, setCompanyName] = useState('');
   const [advisoryMode, setAdvisoryMode] = useState('distribution');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#0f766e');
+  const [brandingSkipped, setBrandingSkipped] = useState(false);
   const [addAdvisor, setAddAdvisor] = useState(true);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(GENERATED());
+  const [password, setPassword] = useState(() => GENERATED());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
 
   function reset() {
-    setCompanyName(''); setAdvisoryMode('distribution'); setAddAdvisor(true);
-    setEmail(''); setPassword(GENERATED()); setErr(''); setDone(null);
+    setStep(0); setCompanyName(''); setAdvisoryMode('distribution');
+    setLogoUrl(''); setPrimaryColor('#0f766e'); setBrandingSkipped(false);
+    setAddAdvisor(true); setEmail(''); setPassword(GENERATED()); setErr(''); setDone(null);
   }
   function closeAndReset() { onClose(); setTimeout(reset, 200); }
 
-  async function submit(e) {
-    e.preventDefault();
+  async function finish() {
     setBusy(true); setErr('');
     try {
-      const firstAdvisor = addAdvisor
+      const firstAdvisor = addAdvisor && email.trim()
         ? { email: email.trim(), temporary_password: password }
         : undefined;
       const res = await api.createTenant(companyName.trim(), advisoryMode, firstAdvisor);
-      if (addAdvisor) {
-        setDone({ email: email.trim(), password });
-      } else {
-        onCreated();
-        reset();
+
+      const hasBranding = !brandingSkipped && (logoUrl.trim() || primaryColor !== '#0f766e');
+      if (hasBranding) {
+        await api.updateTenant(res.tenant_id, {
+          white_label: {
+            ...(logoUrl.trim() ? { logo_url: logoUrl.trim() } : {}),
+            ...(primaryColor ? { primary_color: primaryColor } : {}),
+          },
+        });
       }
-      return res;
+
+      setDone({
+        companyName: companyName.trim(),
+        advisorEmail: firstAdvisor ? firstAdvisor.email : null,
+        password: firstAdvisor ? password : null,
+        brandingSet: hasBranding,
+      });
     } catch (e2) {
       setErr(e2.message || 'Could not create the firm.');
     } finally {
@@ -503,78 +666,177 @@ function CreateFirmModal({ open, onClose, onCreated }) {
     }
   }
 
+  function next() {
+    setErr('');
+    if (step === 0 && !companyName.trim()) { setErr('Firm name is required.'); return; }
+    if (step < 2) { setStep(step + 1); return; }
+    finish();
+  }
+  function back() { setErr(''); setStep(Math.max(0, step - 1)); }
+
   return (
-    <Modal
-      open={open}
-      onClose={closeAndReset}
-      title="New firm"
-      description="Onboard an advisory firm. You can add its first advisor now or later."
-    >
+    <Modal open={open} onClose={closeAndReset} size="lg" title={done ? 'Firm onboarded' : 'Onboard a new firm'}>
       {done ? (
         <div>
           <p className="text-sm text-[var(--color-ink)]">
-            Firm created and advisor <strong>{done.email}</strong> can sign in. Share these credentials securely:
+            <strong>{done.companyName}</strong> is live on HorizonPlan. Here's what's set up:
           </p>
-          <p className="mt-1 tnum text-xs text-[var(--color-ink-2)]">Temporary password: <strong>{done.password}</strong></p>
-          <div className="mt-3"><Button onClick={() => { onCreated(); reset(); }}>Done</Button></div>
+          <ul className="mt-4 space-y-2 text-sm">
+            <li className="flex items-center gap-2 text-[var(--color-ink)]">
+              <CheckDot /> Firm created, compliance mode set
+            </li>
+            <li className="flex items-center gap-2" style={{ color: done.brandingSet ? 'var(--color-ink)' : 'var(--color-ink-3)' }}>
+              {done.brandingSet ? <CheckDot /> : <PendingDot />}
+              {done.brandingSet ? 'Branding applied' : 'Branding not set yet — add it from Manage firm'}
+            </li>
+            <li className="flex items-center gap-2" style={{ color: done.advisorEmail ? 'var(--color-ink)' : 'var(--color-ink-3)' }}>
+              {done.advisorEmail ? <CheckDot /> : <PendingDot />}
+              {done.advisorEmail ? `Advisor ${done.advisorEmail} created and emailed sign-in details` : 'No advisor added yet — add one from Manage firm'}
+            </li>
+          </ul>
+          {done.password && (
+            <p className="mt-3 tnum text-xs text-[var(--color-ink-2)]">
+              Fallback temporary password (in case the email doesn't land): <strong>{done.password}</strong>
+            </p>
+          )}
+          <div className="mt-5"><Button onClick={() => { onCreated(); reset(); }}>Done</Button></div>
         </div>
       ) : (
-        <form onSubmit={submit}>
-          <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Firm name</label>
-          <input className="field mb-4" required autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Nirvana Wealth" />
-
-          <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Compliance mode</label>
-          <div className="grid grid-cols-2 gap-2 mb-1">
-            {['distribution', 'advisory'].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setAdvisoryMode(m)}
-                className="rounded-[var(--radius-ctrl)] border px-3 py-2 text-sm font-medium transition-colors"
-                style={
-                  advisoryMode === m
-                    ? { borderColor: 'var(--color-teal)', backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }
-                    : { borderColor: 'var(--color-line-2)', color: 'var(--color-ink-2)' }
-                }
-              >
-                {m}
-              </button>
+        <div>
+          <ol className="mb-6 flex items-center gap-2">
+            {WIZARD_STEPS.map((s, i) => (
+              <li key={s.key} className="flex items-center gap-2 flex-1">
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+                  style={
+                    i <= step
+                      ? { background: 'var(--color-ink)', color: 'white' }
+                      : { background: 'var(--color-surface-2)', color: 'var(--color-ink-3)' }
+                  }
+                >
+                  {i + 1}
+                </span>
+                <span className={`text-xs font-medium ${i === step ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-3)]'}`}>{s.label}</span>
+                {i < WIZARD_STEPS.length - 1 && <span className="h-px flex-1 bg-[var(--color-line)]" />}
+              </li>
             ))}
-          </div>
-          <p className="mb-4 text-xs text-[var(--color-ink-3)]">
-            Advisory mode carries advice language and is for SEBI-RIA firms only — set it only after off-platform review.
-          </p>
+          </ol>
 
-          <label className="flex items-center gap-2 mb-3 text-sm text-[var(--color-ink-2)]">
-            <input type="checkbox" checked={addAdvisor} onChange={(e) => setAddAdvisor(e.target.checked)} />
-            Add the first advisor now
-          </label>
+          {step === 0 && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Firm name</label>
+              <input className="field mb-4" required autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Nirvana Wealth" />
 
-          {addAdvisor && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Advisor email</label>
-                <input type="email" required className="field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="advisor@firm.in" />
+              <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Compliance mode</label>
+              <div className="grid grid-cols-2 gap-2 mb-1">
+                {['distribution', 'advisory'].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setAdvisoryMode(m)}
+                    className="rounded-[var(--radius-ctrl)] border px-3 py-2 text-sm font-medium transition-colors"
+                    style={
+                      advisoryMode === m
+                        ? { borderColor: 'var(--color-teal)', backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }
+                        : { borderColor: 'var(--color-line-2)', color: 'var(--color-ink-2)' }
+                    }
+                  >
+                    {m}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Temporary password</label>
-                <input type="text" required minLength={8} className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <p className="text-xs text-[var(--color-ink-3)]">
+                Advisory mode carries advice language and is for SEBI-RIA firms only — set it only after off-platform review.
+              </p>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div>
+              <p className="mb-3 text-sm text-[var(--color-ink-2)]">Optional — logo and colour shown on this firm's client-facing pages. Skip and set it later from Manage firm.</p>
+              <div
+                className="mb-4 flex items-center gap-3 rounded-[var(--radius-card)] px-4 py-3 border border-[var(--color-line-2)]"
+                style={{ background: `color-mix(in srgb, ${primaryColor} 8%, var(--color-surface))` }}
+              >
+                {logoUrl.trim() ? (
+                  <img src={logoUrl.trim()} alt="" className="h-8 w-8 rounded object-cover" />
+                ) : (
+                  <div className="h-8 w-8 rounded flex items-center justify-center text-xs font-semibold text-white" style={{ background: primaryColor }}>
+                    {(companyName || '?').slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <p className="text-sm font-semibold" style={{ color: primaryColor }}>{companyName || 'Firm name'}</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Logo URL</label>
+                  <input className="field" value={logoUrl} onChange={(e) => { setLogoUrl(e.target.value); setBrandingSkipped(false); }} placeholder="https://…/logo.svg" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Primary colour</label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={primaryColor} onChange={(e) => { setPrimaryColor(e.target.value); setBrandingSkipped(false); }} className="h-9 w-10 rounded border border-[var(--color-line-2)]" />
+                    <input className="field" value={primaryColor} onChange={(e) => { setPrimaryColor(e.target.value); setBrandingSkipped(false); }} />
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
+          {step === 2 && (
+            <div>
+              <label className="flex items-center gap-2 mb-3 text-sm text-[var(--color-ink-2)]">
+                <input type="checkbox" checked={addAdvisor} onChange={(e) => setAddAdvisor(e.target.checked)} />
+                Add the first advisor now
+              </label>
+              {addAdvisor && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Advisor email</label>
+                    <input type="email" className="field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="advisor@firm.in" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Temporary password</label>
+                    <input type="text" minLength={8} className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                </div>
+              )}
+              {!addAdvisor && (
+                <p className="text-xs text-[var(--color-ink-3)]">You can add advisors any time from Manage firm.</p>
+              )}
+            </div>
+          )}
+
           {err && (
-            <p className="mb-4 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2" style={{ color: 'var(--color-alert)' }}>
+            <p className="mt-4 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2" style={{ color: 'var(--color-alert)' }}>
               {err}
             </p>
           )}
 
-          <div className="flex gap-2">
-            <Button type="submit" disabled={busy} className="flex-1">{busy ? 'Creating…' : 'Create firm'}</Button>
+          <div className="mt-6 flex gap-2">
+            {step > 0 && <Button type="button" variant="ghost" onClick={back}>Back</Button>}
+            {step === 1 && (
+              <Button type="button" variant="ghost" onClick={() => { setBrandingSkipped(true); setLogoUrl(''); setPrimaryColor('#0f766e'); setStep(2); }}>Skip</Button>
+            )}
+            <div className="flex-1" />
+            <Button type="button" onClick={next} disabled={busy}>
+              {busy ? 'Creating…' : step === 2 ? 'Create firm' : 'Continue'}
+            </Button>
             <Button type="button" variant="ghost" onClick={closeAndReset}>Cancel</Button>
           </div>
-        </form>
+        </div>
       )}
     </Modal>
   );
+}
+
+function CheckDot() {
+  return (
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--color-teal)' }}>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </span>
+  );
+}
+function PendingDot() {
+  return <span className="h-4 w-4 shrink-0 rounded-full border-2" style={{ borderColor: 'var(--color-line-2)' }} />;
 }

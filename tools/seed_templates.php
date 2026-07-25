@@ -15,12 +15,25 @@ require_once __DIR__ . '/../api/lib/TenantScopedDb.php';
 
 $db = getPdo();
 
-// Ensure system tenant (ID 0) exists for global template ownership
-// (typically created by admin onboarding; if missing, create it now)
-$tenantCheck = $db->query("SELECT id FROM tenants WHERE id = 0");
-if (!$tenantCheck->fetch()) {
-    $db->exec("INSERT INTO tenants (id, company_name, advisory_mode) VALUES (0, 'HorizonPlan System', 'advisory')");
-    echo "[✓] Created system tenant (ID 0)\n";
+// A system template's tenant_id only has to satisfy the FK constraint on
+// template_strategies — visibility to every tenant comes from
+// is_system_template=1/is_published=1 (see TenantScopedDb::selectGlobalPublishedTemplates(),
+// which has no tenant_id filter at all), not from which tenant_id the row
+// happens to carry. So this just needs *some* real tenant row to reference,
+// found or created by name rather than assumed to be a magic ID 0 — tenants.id
+// is AUTO_INCREMENT, and MySQL treats an explicit 0 there as "assign the next
+// value" (not "use literal 0") unless NO_AUTO_VALUE_ON_ZERO is in sql_mode, so
+// a hardcoded `VALUES (0, ...)` silently creates a different-numbered tenant
+// and every later `tenant_id = 0` reference then fails its FK check.
+$tenantCheck = $db->prepare("SELECT id FROM tenants WHERE company_name = 'HorizonPlan System' LIMIT 1");
+$tenantCheck->execute();
+$systemTenant = $tenantCheck->fetch();
+if ($systemTenant) {
+    $systemTenantId = (int) $systemTenant['id'];
+} else {
+    $db->exec("INSERT INTO tenants (company_name, advisory_mode) VALUES ('HorizonPlan System', 'advisory')");
+    $systemTenantId = (int) $db->lastInsertId();
+    echo "[✓] Created system tenant (id {$systemTenantId})\n";
 }
 
 // Seed data: realistic Indian retirement strategy templates
@@ -78,7 +91,7 @@ foreach ($templates as $t) {
             (:tenant_id, NULL, NULL, :name, :desc, :market, :alloc, :return, :risk, 1, 1, NOW())"
     );
     $stmt->execute([
-        ':tenant_id' => 0,
+        ':tenant_id' => $systemTenantId,
         ':name'      => $t['template_name'],
         ':desc'      => $t['description'],
         ':market'    => $t['market_code'],
