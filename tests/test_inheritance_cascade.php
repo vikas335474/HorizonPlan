@@ -29,6 +29,13 @@ $db->exec("DELETE FROM sub_scenarios");
 $db->exec("DELETE FROM base_plans");
 $db->exec("DELETE FROM template_customizations");
 $db->exec("DELETE FROM template_strategies");
+// risk_profiles and client_portfolio_items (migrations 017/018) also FK to
+// users — must clear before DELETE FROM users, same reason base_plans had to
+// move before template_strategies/template_customizations when migration 014
+// added those FKs.
+$db->exec("DELETE FROM risk_profiles");
+$db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM mfa_pending");
 $db->exec("DELETE FROM password_resets");
@@ -115,5 +122,17 @@ $rowAAfterAcc = $scopedDb->select('sub_scenarios', ['id' => $rowA])[0];
 $rowBAfterAcc = $scopedDb->select('sub_scenarios', ['id' => $rowB])[0];
 assertTrue((float) $rowAAfterAcc['custom_accumulation_return_rate'] === 9.00, 'Row A (not overridden) received the cascaded accumulation_return_rate update');
 assertTrue($rowBAfterAcc['custom_accumulation_return_rate'] === null, 'Row B (overridden) did NOT receive the accumulation_return_rate cascade, same shared flag as the original three fields');
+
+// docs/05 item 3 / docs/06 corpus composition — locked_return_rate is the
+// only corpus-composition field that's a rate assumption (liquid/locked
+// corpus AMOUNTS don't cascade, same precedent as initial_net_worth), so
+// it's the only one that joins the cascade. Same Row A/Row B check again.
+$newLockedReturn = 6.50;
+$scopedDb->update('sub_scenarios', ['custom_locked_return_rate' => $newLockedReturn], ['base_plan_id' => $goalId, 'is_overridden' => 0]);
+
+$rowAAfterLocked = $scopedDb->select('sub_scenarios', ['id' => $rowA])[0];
+$rowBAfterLocked = $scopedDb->select('sub_scenarios', ['id' => $rowB])[0];
+assertTrue((float) $rowAAfterLocked['custom_locked_return_rate'] === 6.50, 'Row A (not overridden) received the cascaded locked_return_rate update');
+assertTrue($rowBAfterLocked['custom_locked_return_rate'] === null, 'Row B (overridden) did NOT receive the locked_return_rate cascade');
 
 echo "\nAll cascade tests passed.\n";

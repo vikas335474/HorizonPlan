@@ -304,6 +304,22 @@ export const api = {
   // clientId is ignored for a client session (forced server-side to their own).
   getRiskProfile: (clientId) =>
     request(`risk_profile_read.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // --- Client portfolio ledger (docs/05 item 3 / docs/06 corpus composition) ---
+  // clientId is ignored for a client session (forced server-side to their own).
+  getClientPortfolio: (clientId) =>
+    request(`client_portfolio_list.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // fields: { client_id, item_kind: 'asset'|'liability', bucket: 'liquid'|'locked' (assets only),
+  // category, description, value }
+  createPortfolioItem: (fields) =>
+    request('client_portfolio_create.php', { method: 'POST', body: JSON.stringify(fields) }),
+
+  updatePortfolioItem: (id, fields) =>
+    request('client_portfolio_update.php', { method: 'POST', body: JSON.stringify({ id, ...fields }) }),
+
+  deletePortfolioItem: (id) =>
+    request('client_portfolio_delete.php', { method: 'POST', body: JSON.stringify({ id }) }),
 };
 
 export { ApiError };

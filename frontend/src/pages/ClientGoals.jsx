@@ -6,6 +6,7 @@ import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import Modal from '../components/Modal';
 import { RiskProfileSummary } from '../components/RiskProfileUI';
+import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { Card, EmptyState, Spinner, Button } from '../components/ui';
 
 // Advisor drills into one client from the dashboard. clientId comes from the
@@ -58,6 +59,10 @@ export default function ClientGoals() {
         <div className="mb-6">
           <DisclosureBanner />
         </div>
+
+        {/* docs/05 item 3 / docs/06 corpus composition — what the client already
+            owns, independent of any one goal. */}
+        <ClientPortfolioCard clientId={clientId} />
 
         {/* docs/06 Section B — risk tolerance belongs to the client, not one goal. */}
         <RiskProfileSummary clientId={clientId} />
@@ -124,6 +129,13 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
   const [accumulationReturnRate, setAccumulationReturnRate] = useState('');
   const [monthlySipAmount, setMonthlySipAmount] = useState('');
   const [sipStepUpRate, setSipStepUpRate] = useState('');
+  // docs/05 item 3 / docs/06 corpus composition — optional liquid/locked
+  // split of initial_net_worth, retirement goals only.
+  const [showCorpusComposition, setShowCorpusComposition] = useState(false);
+  const [liquidCorpusAmount, setLiquidCorpusAmount] = useState('');
+  const [lockedCorpusAmount, setLockedCorpusAmount] = useState('');
+  const [lockedReturnRate, setLockedReturnRate] = useState('');
+  const [prefillError, setPrefillError] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -142,7 +154,33 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
     setAccumulationReturnRate('');
     setMonthlySipAmount('');
     setSipStepUpRate('');
+    setShowCorpusComposition(false);
+    setLiquidCorpusAmount('');
+    setLockedCorpusAmount('');
+    setLockedReturnRate('');
+    setPrefillError('');
     setError('');
+  }
+
+  // docs/05 item 3 — pull the client's already-recorded portfolio totals as a
+  // starting point. Sets initial_net_worth to match too, since liquid+locked
+  // must sum to it; the advisor can still edit any of the three afterward if
+  // this goal's corpus is meant to be a subset of the client's total.
+  async function handlePrefillFromPortfolio() {
+    setPrefillError('');
+    try {
+      const res = await api.getClientPortfolio(clientId);
+      const { liquid_total, locked_total } = res.totals;
+      if (liquid_total === 0 && locked_total === 0) {
+        setPrefillError('No portfolio items recorded for this client yet.');
+        return;
+      }
+      setLiquidCorpusAmount(String(liquid_total));
+      setLockedCorpusAmount(String(locked_total));
+      setInitialNetWorth(String(liquid_total + locked_total));
+    } catch (err) {
+      setPrefillError(err.message || 'Could not load this client\'s portfolio.');
+    }
   }
 
   function closeAndReset() {
@@ -202,6 +240,25 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
       if (accumulationReturnRate !== '') fields.accumulation_return_rate = Number(accumulationReturnRate);
       if (monthlySipAmount !== '') fields.monthly_sip_amount = Number(monthlySipAmount);
       if (sipStepUpRate !== '') fields.sip_step_up_rate = Number(sipStepUpRate);
+    }
+
+    // docs/05 item 3 — mirrors goals_create.php's own validation: both-or-
+    // neither, and the two must sum to initial_net_worth.
+    if (isRetirement && showCorpusComposition && (liquidCorpusAmount !== '' || lockedCorpusAmount !== '')) {
+      const liquid = Number(liquidCorpusAmount);
+      const locked = Number(lockedCorpusAmount);
+      if (liquidCorpusAmount === '' || lockedCorpusAmount === '') {
+        return setError('Provide both liquid and locked corpus amounts, or neither.');
+      }
+      if (!Number.isFinite(liquid) || !Number.isFinite(locked) || liquid < 0 || locked < 0) {
+        return setError('Liquid and locked corpus amounts must be valid non-negative numbers.');
+      }
+      if (Math.abs(liquid + locked - netWorth) > 0.01) {
+        return setError(`Liquid + locked (${liquid + locked}) must sum to the starting corpus (${netWorth}).`);
+      }
+      fields.liquid_corpus_amount = liquid;
+      fields.locked_corpus_amount = locked;
+      if (lockedReturnRate !== '') fields.locked_return_rate = Number(lockedReturnRate);
     }
 
     setSubmitting(true);
@@ -402,6 +459,68 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
                     className="field"
                   />
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* docs/05 item 3 / docs/06 corpus composition — optional liquid vs
+            locked split. Optional: a goal can still be a single undecomposed corpus. */}
+        {isRetirement && (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => setShowCorpusComposition((v) => !v)}
+              className="text-sm font-medium text-[var(--color-teal-ink)] hover:underline"
+            >
+              {showCorpusComposition ? '− Hide' : '+ Add'} corpus composition (optional)
+            </button>
+            {showCorpusComposition && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-[var(--color-ink-2)]">
+                    Split the starting corpus into liquid (market-linked) vs locked (EPF/NPS/PPF-style) — withdrawals
+                    draw from liquid first, then locked.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={handlePrefillFromPortfolio} className="shrink-0 ml-2">
+                    Use client's portfolio
+                  </Button>
+                </div>
+                {prefillError && <p className="text-xs mb-2" style={{ color: 'var(--color-alert)' }}>{prefillError}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Liquid corpus (₹)</label>
+                    <input
+                      type="number" min="0" step="any" value={liquidCorpusAmount}
+                      onChange={(e) => setLiquidCorpusAmount(e.target.value)}
+                      className="field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Locked corpus (₹)</label>
+                    <input
+                      type="number" min="0" step="any" value={lockedCorpusAmount}
+                      onChange={(e) => setLockedCorpusAmount(e.target.value)}
+                      className="field"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">
+                      Locked bucket return (%) <span className="text-[var(--color-ink-3)] font-normal">optional</span>
+                    </label>
+                    <input
+                      type="number" min="0" max="100" step="any" value={lockedReturnRate}
+                      onChange={(e) => setLockedReturnRate(e.target.value)}
+                      placeholder="e.g. 8"
+                      className="field"
+                    />
+                  </div>
+                </div>
+                {liquidCorpusAmount !== '' && lockedCorpusAmount !== '' && (
+                  <p className="mt-1.5 text-[11px] text-[var(--color-ink-3)]">
+                    Sum: {(Number(liquidCorpusAmount) || 0) + (Number(lockedCorpusAmount) || 0)} — must match the starting corpus above.
+                  </p>
+                )}
               </div>
             )}
           </div>

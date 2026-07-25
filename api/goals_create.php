@@ -68,6 +68,26 @@ if ($currentAge !== null && $retirementAge !== null && (int) $retirementAge <= (
     exit();
 }
 
+// docs/05 item 3 / docs/06 corpus composition — liquid vs locked split of
+// initial_net_worth, retirement goals only, optional (a goal can still be a
+// single undifferentiated corpus, same as today). Both-or-neither: providing
+// only one bucket amount is ambiguous, and the two must sum to
+// initial_net_worth so there's one source of truth for the goal's total.
+$liquidCorpusAmount = $isRetirement ? ($input['liquid_corpus_amount'] ?? null) : null;
+$lockedCorpusAmount = $isRetirement ? ($input['locked_corpus_amount'] ?? null) : null;
+if (($liquidCorpusAmount === null) !== ($lockedCorpusAmount === null)) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'liquid_corpus_amount and locked_corpus_amount must be provided together, or not at all.']);
+    exit();
+}
+if ($liquidCorpusAmount !== null && $lockedCorpusAmount !== null) {
+    if (abs(((float) $liquidCorpusAmount + (float) $lockedCorpusAmount) - (float) $initialNetWorth) > 0.01) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'liquid_corpus_amount + locked_corpus_amount must sum to initial_net_worth.']);
+        exit();
+    }
+}
+
 $data = [
     'client_id'                => $clientId,
     'goal_type'                => $goalType,
@@ -84,6 +104,9 @@ $data = [
     'retirement_age'           => $retirementAge,
     'monthly_sip_amount'       => $isRetirement ? ($input['monthly_sip_amount'] ?? null) : null,
     'sip_step_up_rate'         => $isRetirement ? ($input['sip_step_up_rate'] ?? null) : null,
+    'liquid_corpus_amount'     => $liquidCorpusAmount,
+    'locked_corpus_amount'     => $lockedCorpusAmount,
+    'locked_return_rate'       => $isRetirement ? ($input['locked_return_rate'] ?? null) : null,
 ];
 
 $goalId = $scopedDb->insert('base_plans', $data);

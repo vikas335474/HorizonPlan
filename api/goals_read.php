@@ -79,6 +79,10 @@ echo json_encode([
         'retirement_age'           => $goal['retirement_age'] !== null ? (int) $goal['retirement_age'] : null,
         'monthly_sip_amount'       => $goal['monthly_sip_amount'] !== null ? (float) $goal['monthly_sip_amount'] : null,
         'sip_step_up_rate'         => $goal['sip_step_up_rate'] !== null ? (float) $goal['sip_step_up_rate'] : null,
+        // docs/05 item 3 / docs/06 corpus composition.
+        'liquid_corpus_amount'     => $goal['liquid_corpus_amount'] !== null ? (float) $goal['liquid_corpus_amount'] : null,
+        'locked_corpus_amount'     => $goal['locked_corpus_amount'] !== null ? (float) $goal['locked_corpus_amount'] : null,
+        'locked_return_rate'       => $goal['locked_return_rate'] !== null ? (float) $goal['locked_return_rate'] : null,
         // docs/07 Bet 1: which template/customization (if any) most recently
         // set drawdown_return_rate via goals_apply_template.php. The frontend
         // resolves the name from the templates it already has loaded rather
