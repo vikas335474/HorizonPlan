@@ -2,6 +2,8 @@
 
 Use this as the standing instruction set for building HorizonPlan. It supersedes the original blueprint's implementation details in the specific places marked **[REVISED]** below; everything else from the original blueprint stands as designed.
 
+> **Product direction:** for what to build *next* and why (the meeting / follow-through / record thesis, the seven differentiation bets, and their sequencing against the roadmap's gates), see `07_HorizonPlan_Product_Vision_Differentiation.md`. This document remains the authority on *how* anything gets built — tenant isolation, compliance gating, and schema rules here are not relaxed by anything in `07`.
+
 ---
 
 ## 0. Target market & persona — decided
@@ -102,4 +104,4 @@ Original blueprint stands: React + Tailwind + shadcn/ui, debounced slider update
 - Do not build the Section 7 distribution/withdrawal-sequencing engine as part of the MVP. It's a Phase 3+ item per the feature roadmap, gated on validation with the RIA partner and real MFD users.
 - Do not let a tenant self-serve into advisory mode. That switch is a Super Admin action only, per 3.6.
 - Do not deviate from the tenant-scoping helper pattern once it exists, even for "quick" endpoints.
-- Do not build WhatsApp sharing, BSE/NSE transaction integration, or multi-goal planning into the MVP — all are logged, real, and deferred. See `04_HorizonPlan_Feature_Roadmap.md` for where each lands.
+- Do not build WhatsApp sharing or BSE/NSE transaction integration into the MVP — both are logged, real, and deferred. See `04_HorizonPlan_Feature_Roadmap.md` for where each lands. (An earlier draft of this list also deferred multi-goal planning; that was superseded by Section 4.1 and the roadmap's Phase 1 scope, which pull multi-goal *into* the MVP — 4.1 is authoritative.)

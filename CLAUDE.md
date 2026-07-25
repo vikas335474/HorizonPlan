@@ -11,6 +11,7 @@ PHP (no framework) + PDO + MySQL, hosted on Hostinger Premium. React SPA (Tailwi
 - `docs/03_HorizonPlan_Roadmap_and_Prompts.md` — Phase 1 (MVP) build order. Follow this sequence; don't build Phase 2+ items without checking `04` first.
 - `docs/04_HorizonPlan_Feature_Roadmap.md` — what belongs in MVP vs. later, and why. Check the "explicitly out of scope" list before adding anything not asked for.
 - `docs/05_HorizonPlan_Practitioner_Validation_Review.md` — why certain features exist (e.g. India-specific withdrawal rates, sequence-of-returns chart).
+- `docs/07_HorizonPlan_Product_Vision_Differentiation.md` — product thesis ("the meeting, the follow-through, the record") and the prioritized differentiation bets with build sequencing. Read this when deciding *what* to build next; `docs/02` still governs *how*.
 
 ## Non-negotiable rules (always apply, every session)
 1. **Tenant isolation:** every query on tenant-scoped data goes through `api/lib/TenantScopedDb.php`. Never write a raw `WHERE tenant_id = :tenant_id` inline in an endpoint file — if the helper doesn't exist yet, build it first (see `docs/02`, Section 3.1).
