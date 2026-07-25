@@ -161,6 +161,14 @@ export const api = {
     return request(`goals_read.php?${params.toString()}`);
   },
 
+  // Partial update — only keys present in fields are changed, mirroring
+  // updateSubScenario. Used today for docs/07 Session C's accumulation-phase
+  // fields (current_age, retirement_age, accumulation_return_rate,
+  // monthly_sip_amount, sip_step_up_rate) — the only base-goal fields with an
+  // edit-after-creation UI so far.
+  updateGoal: (id, fields) =>
+    request('goals_update.php', { method: 'POST', body: JSON.stringify({ id, ...fields }) }),
+
   listSubScenarios: (basePlanId) =>
     request(`subscenarios_list.php?base_plan_id=${encodeURIComponent(basePlanId)}`),
 

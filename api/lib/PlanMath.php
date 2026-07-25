@@ -231,4 +231,83 @@ final class PlanMath
 
         return $balances;
     }
+
+    /**
+     * docs/07 Session C / docs/06 Section A: accumulation-phase (pre-retirement
+     * saving years) balance, year by year. balance[n] = balance[n-1]*(1+r) +
+     * annualSip[n], where annualSip[n] = 12*monthlySipAmount*(1+stepUp)^(n-1)
+     * — the base monthly amount runs unstepped through year 1, then increases
+     * once per full year thereafter (standard Indian step-up SIP convention,
+     * matching Investwell Mint's calculator per docs/05).
+     *
+     * accumulationReturnRatePercent is guardrail-distinct from
+     * drawdownReturnRatePercent (docs/05 item 1, docs/06 guardrail 1) — never
+     * merge these into one rate, even though the arithmetic shape is similar.
+     *
+     * @return float[] index 0 = starting balance (year 0), index n = balance after year n
+     */
+    public static function accumulationSeries(
+        float $initialNetWorth,
+        float $accumulationReturnRatePercent,
+        float $monthlySipAmount,
+        float $sipStepUpRatePercent,
+        int $yearsToRetirement
+    ): array {
+        $r = $accumulationReturnRatePercent / 100.0;
+        $stepUp = $sipStepUpRatePercent / 100.0;
+
+        $balances = [$initialNetWorth];
+        $balance = $initialNetWorth;
+
+        for ($n = 1; $n <= $yearsToRetirement; $n++) {
+            $annualSip = 12 * $monthlySipAmount * (1 + $stepUp) ** ($n - 1);
+            $balance = $balance * (1 + $r) + $annualSip;
+            $balances[] = round($balance, 2);
+        }
+
+        return $balances;
+    }
+
+    /**
+     * docs/07 Session C / docs/06 Section A: one continuous curve spanning
+     * the saving years and the withdrawal years — accumulationSeries()'s
+     * terminal corpus becomes decumulation's starting balance. The two
+     * series are concatenated with the boundary year (retirement day)
+     * de-duplicated: accumulationSeries()'s last point and
+     * steadyReturnSeries()'s year-0 point are the same balance, so only one
+     * copy survives in the combined array.
+     *
+     * @return float[] index 0 = starting balance, index yearsToRetirement =
+     *   retirement-day corpus, subsequent indices = decumulation years
+     */
+    public static function lifecycleSeries(
+        float $initialNetWorth,
+        float $accumulationReturnRatePercent,
+        float $monthlySipAmount,
+        float $sipStepUpRatePercent,
+        int $yearsToRetirement,
+        float $withdrawalRatePercent,
+        float $inflationRatePercent,
+        float $drawdownReturnRatePercent,
+        int $decumulationHorizonYears
+    ): array {
+        $accumulation = self::accumulationSeries(
+            $initialNetWorth,
+            $accumulationReturnRatePercent,
+            $monthlySipAmount,
+            $sipStepUpRatePercent,
+            $yearsToRetirement
+        );
+        $terminalCorpus = end($accumulation);
+
+        $decumulation = self::steadyReturnSeries(
+            $terminalCorpus,
+            $withdrawalRatePercent,
+            $inflationRatePercent,
+            $drawdownReturnRatePercent,
+            $decumulationHorizonYears
+        );
+
+        return array_merge($accumulation, array_slice($decumulation, 1));
+    }
 }

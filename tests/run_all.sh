@@ -10,13 +10,16 @@ cd "$(dirname "$0")/.."
 status=0
 for t in \
   tests/test_plan_math.php \
+  tests/test_accumulation.php \
+  tests/test_risk_profile_scoring.php \
   tests/test_totp.php \
   tests/test_password_hashing.php \
   tests/test_inheritance_cascade.php \
   tests/test_tenant_isolation.php \
   tests/test_auth_db.php \
   tests/test_password_reset_db.php \
-  tests/test_templates_db.php
+  tests/test_templates_db.php \
+  tests/test_risk_profiles_db.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"

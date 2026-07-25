@@ -45,6 +45,10 @@ $result = array_map(static function (array $s): array {
         'custom_inflation'             => $s['custom_inflation'] !== null ? (float) $s['custom_inflation'] : null,
         'custom_withdrawal_rate'       => $s['custom_withdrawal_rate'] !== null ? (float) $s['custom_withdrawal_rate'] : null,
         'custom_drawdown_return_rate' => $s['custom_drawdown_return_rate'] !== null ? (float) $s['custom_drawdown_return_rate'] : null,
+        // docs/07 Session C / docs/06 Section A.
+        'custom_accumulation_return_rate' => $s['custom_accumulation_return_rate'] !== null ? (float) $s['custom_accumulation_return_rate'] : null,
+        'custom_monthly_sip_amount'       => $s['custom_monthly_sip_amount'] !== null ? (float) $s['custom_monthly_sip_amount'] : null,
+        'custom_sip_step_up_rate'         => $s['custom_sip_step_up_rate'] !== null ? (float) $s['custom_sip_step_up_rate'] : null,
         'is_overridden'                => (bool) $s['is_overridden'],
         'updated_at'                   => $s['updated_at'],
     ];

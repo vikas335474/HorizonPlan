@@ -43,10 +43,13 @@ if ($session['role'] === 'client') {
     }
 }
 
-// Single is_overridden flag covers all three fields (docs/02 Section 4.2 —
-// documented behavior, not a bug): customizing any one of them freezes the
-// whole row from cascade on all of them.
-$overridableFields = ['custom_inflation', 'custom_withdrawal_rate', 'custom_drawdown_return_rate'];
+// Single is_overridden flag covers all six fields (docs/02 Section 4.2,
+// extended by docs/07 Session C — documented behavior, not a bug):
+// customizing any one of them freezes the whole row from cascade on all of them.
+$overridableFields = [
+    'custom_inflation', 'custom_withdrawal_rate', 'custom_drawdown_return_rate',
+    'custom_accumulation_return_rate', 'custom_monthly_sip_amount', 'custom_sip_step_up_rate',
+];
 
 $changes = [];
 foreach ($overridableFields as $field) {

@@ -112,6 +112,14 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
   const [targetDate, setTargetDate] = useState('');
   const [withdrawalRate, setWithdrawalRate] = useState('3.5');
   const [horizonYears, setHorizonYears] = useState('30');
+  // docs/07 Session C / docs/06 Section A — accumulation-phase fields, all
+  // optional. A goal can still be decumulation-only, same as before this session.
+  const [showAccumulation, setShowAccumulation] = useState(false);
+  const [currentAge, setCurrentAge] = useState('');
+  const [retirementAge, setRetirementAge] = useState('');
+  const [accumulationReturnRate, setAccumulationReturnRate] = useState('');
+  const [monthlySipAmount, setMonthlySipAmount] = useState('');
+  const [sipStepUpRate, setSipStepUpRate] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -124,6 +132,12 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
     setTargetDate('');
     setWithdrawalRate('3.5');
     setHorizonYears('30');
+    setShowAccumulation(false);
+    setCurrentAge('');
+    setRetirementAge('');
+    setAccumulationReturnRate('');
+    setMonthlySipAmount('');
+    setSipStepUpRate('');
     setError('');
   }
 
@@ -170,6 +184,21 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
     }
     if (targetDate !== '') fields.target_date = targetDate;
     if (isRetirement) fields.withdrawal_rate = withdrawal;
+
+    // docs/07 Session C — all optional, retirement goals only. Mirrors
+    // goals_create.php's own validation (retirement_age > current_age).
+    if (isRetirement && showAccumulation) {
+      const age = currentAge !== '' ? Number(currentAge) : null;
+      const retAge = retirementAge !== '' ? Number(retirementAge) : null;
+      if (age !== null && retAge !== null && retAge <= age) {
+        return setError('Retirement age must be greater than current age.');
+      }
+      if (age !== null) fields.current_age = age;
+      if (retAge !== null) fields.retirement_age = retAge;
+      if (accumulationReturnRate !== '') fields.accumulation_return_rate = Number(accumulationReturnRate);
+      if (monthlySipAmount !== '') fields.monthly_sip_amount = Number(monthlySipAmount);
+      if (sipStepUpRate !== '') fields.sip_step_up_rate = Number(sipStepUpRate);
+    }
 
     setSubmitting(true);
     try {
@@ -308,6 +337,71 @@ function NewGoalModal({ open, clientId, onClose, onCreated }) {
             </div>
           )}
         </div>
+
+        {/* docs/07 Session C / docs/06 Section A — the saving years before
+            retirement. Optional: a goal can still be decumulation-only. */}
+        {isRetirement && (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={() => setShowAccumulation((v) => !v)}
+              className="text-sm font-medium text-[var(--color-teal-ink)] hover:underline"
+            >
+              {showAccumulation ? '− Hide' : '+ Add'} accumulation phase (optional)
+            </button>
+            {showAccumulation && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Current age</label>
+                  <input
+                    type="number" min="0" max="120" step="1" value={currentAge}
+                    onChange={(e) => setCurrentAge(e.target.value)}
+                    placeholder="35"
+                    className="field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Retirement age</label>
+                  <input
+                    type="number" min="0" max="120" step="1" value={retirementAge}
+                    onChange={(e) => setRetirementAge(e.target.value)}
+                    placeholder="60"
+                    className="field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Pre-retirement return (%)</label>
+                  <input
+                    type="number" min="0" max="100" step="any" value={accumulationReturnRate}
+                    onChange={(e) => setAccumulationReturnRate(e.target.value)}
+                    placeholder="10"
+                    className="field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Monthly SIP (₹)</label>
+                  <input
+                    type="number" min="0" step="any" value={monthlySipAmount}
+                    onChange={(e) => setMonthlySipAmount(e.target.value)}
+                    placeholder="25000"
+                    className="field"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">
+                    Annual SIP step-up (%) <span className="text-[var(--color-ink-3)] font-normal">optional</span>
+                  </label>
+                  <input
+                    type="number" min="0" max="100" step="any" value={sipStepUpRate}
+                    onChange={(e) => setSipStepUpRate(e.target.value)}
+                    placeholder="10"
+                    className="field"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="mb-4 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2"
