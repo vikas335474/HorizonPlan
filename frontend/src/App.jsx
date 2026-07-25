@@ -9,6 +9,7 @@ import ClientGoals from './pages/ClientGoals';
 import GoalsList from './pages/GoalsList';
 import GoalDetail from './pages/GoalDetail';
 import PlanReport from './pages/PlanReport';
+import MeetingMode from './pages/MeetingMode';
 import AdminConsole from './pages/AdminConsole';
 import AdvisorTemplates from './pages/AdvisorTemplates';
 import Settings from './pages/Settings';
@@ -48,6 +49,9 @@ export default function App() {
 
           {/* Printable/shareable client-meeting report for a single goal */}
           <Route path="/goals/:id/report" element={<ProtectedRoute><PlanReport /></ProtectedRoute>} />
+
+          {/* docs/07 Bet 5 — full-screen guided presentation for a live client meeting */}
+          <Route path="/goals/:id/meeting" element={<ProtectedRoute><MeetingMode /></ProtectedRoute>} />
 
           {/* MFA enrollment is optional (not mandatory) — no route gates on it.
               The nudge to enrol lives in AppHeader (amber dot on Settings). */}

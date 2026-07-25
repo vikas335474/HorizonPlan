@@ -10,11 +10,17 @@ import { formatCurrencyCompact, formatCurrency } from '../lib/format';
 // soft gradient body under it. The adverse path is a dashed rust line riding
 // below it; the shaded wedge between them is the sequence-of-returns risk made
 // literal. The custom tooltip surfaces that gap as a number.
-export default function SequenceRiskChart({ steadySeries, adverseSeries }) {
+//
+// docs/07 Bet 2: an optional third series — a real historical sequence
+// (historicalSeries + historicalLabel, e.g. "Replay from 2008") — renders as
+// a third amber line when provided. Purely additive; omitting it leaves the
+// chart identical to before Bet 2.
+export default function SequenceRiskChart({ steadySeries, adverseSeries, historicalSeries, historicalLabel }) {
   const data = steadySeries.map((value, year) => ({
     year,
     steady: value,
     adverse: adverseSeries[year],
+    ...(historicalSeries ? { historical: historicalSeries[year] } : {}),
   }));
 
   return (
@@ -72,6 +78,23 @@ export default function SequenceRiskChart({ steadySeries, adverseSeries }) {
             isAnimationActive
             animationDuration={700}
           />
+
+          {/* Historical replay path (docs/07 Bet 2) — amber dotted line, only
+              rendered when the caller supplies it. */}
+          {historicalSeries && (
+            <Line
+              type="monotone"
+              dataKey="historical"
+              name={historicalLabel || 'Historical replay'}
+              stroke="var(--color-amber)"
+              strokeWidth={2.25}
+              strokeDasharray="1 4"
+              dot={false}
+              activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+              isAnimationActive
+              animationDuration={700}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
 
@@ -79,6 +102,9 @@ export default function SequenceRiskChart({ steadySeries, adverseSeries }) {
       <div className="mt-1 flex items-center justify-center gap-5 text-xs text-[var(--color-ink-2)]">
         <LegendKey color="var(--color-teal)">Steady return</LegendKey>
         <LegendKey color="var(--color-alert)" dashed>Adverse sequence</LegendKey>
+        {historicalSeries && (
+          <LegendKey color="var(--color-amber)" dashed>{historicalLabel || 'Historical replay'}</LegendKey>
+        )}
       </div>
     </div>
   );
@@ -99,6 +125,7 @@ function SequenceTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
   const steady = payload.find((p) => p.dataKey === 'steady')?.value;
   const adverse = payload.find((p) => p.dataKey === 'adverse')?.value;
+  const historical = payload.find((p) => p.dataKey === 'historical')?.value;
   const gap = steady != null && adverse != null ? steady - adverse : null;
 
   return (
@@ -109,6 +136,7 @@ function SequenceTooltip({ active, payload, label }) {
       <div className="font-semibold text-[var(--color-ink)] mb-1.5">Year {label}</div>
       <Row color="var(--color-teal)" label="Steady" value={formatCurrency(steady)} />
       <Row color="var(--color-alert)" label="Adverse" value={formatCurrency(adverse)} />
+      {historical != null && <Row color="var(--color-amber)" label="Historical" value={formatCurrency(historical)} />}
       {gap != null && gap > 0 && (
         <div className="mt-1.5 pt-1.5 border-t border-[var(--color-line)] tnum text-[var(--color-ink-2)]">
           Sequence gap · <span className="font-semibold text-[var(--color-alert)]">{formatCurrency(gap)}</span>

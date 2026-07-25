@@ -71,4 +71,52 @@ assertTrue(PlanMath::readinessScore(2.5, $steadyStrong, $adverseStrong) === 100,
 // horizon to measure survival over -> null, not a division by zero.
 assertTrue(PlanMath::readinessScore(3.5, [10000000.0], [10000000.0]) === null, 'readinessScore returns null when there is no horizon to measure survival over');
 
+// --- historicalSequenceSeries (docs/07 Bet 2) ---
+// A 3-year mock history: 2000 (+10% equity, 5% inflation), 2001 (-10%, 3%),
+// 2002 (+20%, 2%). All values below hand-verified: annualWithdrawal =
+// 1,000,000 * 4% = 40,000; withdrawal each year = 40,000 * cumulative
+// historical inflation (compounded, not a flat assumed rate).
+$mockHistory = [
+    ['year' => 2000, 'equity_return_pct' => 10.0, 'cpi_inflation_pct' => 5.0],
+    ['year' => 2001, 'equity_return_pct' => -10.0, 'cpi_inflation_pct' => 3.0],
+    ['year' => 2002, 'equity_return_pct' => 20.0, 'cpi_inflation_pct' => 2.0],
+];
+
+$hist3 = PlanMath::historicalSequenceSeries(1000000.0, 4.0, $mockHistory, 2000, 3);
+assertTrue(count($hist3) === 4, 'historicalSequenceSeries returns horizon+1 points for an exact-length replay');
+// Year 1: withdrawal = 40,000*1.05 = 42,000; balance = 1,000,000*1.10 - 42,000 = 1,058,000
+assertClose($hist3[1], 1058000.0, 'historicalSequenceSeries year 1 matches the formula by hand', 1.0);
+// Year 2: cumulative infl 1.05*1.03=1.0815; withdrawal=43,260; balance=1,058,000*0.90-43,260=908,940
+assertClose($hist3[2], 908940.0, 'historicalSequenceSeries year 2 uses the actual historical (negative) return and compounded inflation', 1.0);
+assertClose($hist3[3], 1046602.8, 'historicalSequenceSeries year 3 matches the formula by hand', 1.0);
+
+// Replaying 5 years from a 3-year history must wrap back to the earliest
+// year rather than fall back to a flat assumed rate — years 4-5 replay
+// 2000/2001 again, continuing the SAME compounded-inflation trajectory.
+$hist5 = PlanMath::historicalSequenceSeries(1000000.0, 4.0, $mockHistory, 2000, 5);
+assertTrue(count($hist5) === 6, 'historicalSequenceSeries returns horizon+1 points even when it must wrap');
+assertTrue(
+    $hist5[3] === $hist3[3],
+    'historicalSequenceSeries agrees with the non-wrapped series for the years before the wrap point'
+);
+assertClose($hist5[4], 1104931.62, 'historicalSequenceSeries wraps to the earliest year (2000 again) and keeps compounding inflation forward, not resetting it', 1.0);
+assertClose($hist5[5], 946717.05, 'historicalSequenceSeries wrap-around year 5 (2001 again) matches the formula by hand', 1.0);
+
+// Starting mid-history (2001) begins at that year's index, not year 0 of the array.
+$histMidStart = PlanMath::historicalSequenceSeries(1000000.0, 4.0, $mockHistory, 2001, 2);
+assertClose($histMidStart[1], 858800.0, 'historicalSequenceSeries starting mid-array begins at the requested year, not index 0');
+assertClose($histMidStart[2], 988536.0, 'historicalSequenceSeries starting mid-array continues in year order after that', 1.0);
+
+// A start year that isn't in the supplied history (or an empty history)
+// returns just the starting balance — the endpoint is expected to validate
+// the year against market_history_years.php before calling this.
+assertTrue(
+    PlanMath::historicalSequenceSeries(1000000.0, 4.0, $mockHistory, 1999, 3) === [1000000.0],
+    'historicalSequenceSeries returns just the starting balance for a year not present in the supplied history'
+);
+assertTrue(
+    PlanMath::historicalSequenceSeries(1000000.0, 4.0, [], 2000, 3) === [1000000.0],
+    'historicalSequenceSeries returns just the starting balance for an empty history array'
+);
+
 echo "\nAll PlanMath tests passed.\n";
