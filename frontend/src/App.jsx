@@ -12,6 +12,7 @@ import PlanReport from './pages/PlanReport';
 import MeetingMode from './pages/MeetingMode';
 import AdminConsole from './pages/AdminConsole';
 import AdvisorTemplates from './pages/AdvisorTemplates';
+import RiskQuestionnaireBuilder from './pages/RiskQuestionnaireBuilder';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -62,6 +63,10 @@ export default function App() {
           {/* Strategy Templates — advisor/super_admin view; client-side guard in page,
               server-side gate on every API call. */}
           <Route path="/templates" element={<ProtectedRoute><AdvisorTemplates /></ProtectedRoute>} />
+
+          {/* docs/06 Section B — advisor/super_admin manage the firm's risk
+              questionnaire + scoring rubric. Server-enforced (verifyAccess 'advisor'). */}
+          <Route path="/risk-questionnaire" element={<ProtectedRoute><RiskQuestionnaireBuilder /></ProtectedRoute>} />
 
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

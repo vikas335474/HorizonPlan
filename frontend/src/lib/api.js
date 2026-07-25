@@ -279,6 +279,31 @@ export const api = {
   // "replay history from…" control, and whether each is verified yet
   // (docs/07 Bet 2 — sql/015 seeds these as unverified until reviewed).
   listMarketHistoryYears: () => request('market_history_years.php'),
+
+  // --- Risk profiler (docs/06 Section B) ---
+  // Returns { question_set: null } if the firm hasn't set one up yet.
+  getRiskQuestionSet: () => request('risk_question_set_read.php'),
+
+  // fields: { questions, scoring_rubric } — always a full replace (there's
+  // only ever one active set per tenant); resets to draft on every save.
+  updateRiskQuestionSet: (fields) =>
+    request('risk_question_set_update.php', { method: 'POST', body: JSON.stringify(fields) }),
+
+  approveRiskQuestionSet: () =>
+    request('risk_question_set_approve.php', { method: 'POST', body: '{}' }),
+
+  // answers: { [question_id]: selected_value }. Captured regardless of the
+  // question set's approval state — suggested_return_assumption_pct in the
+  // response is null until a firm principal approves the set.
+  submitRiskProfile: (clientId, answers) =>
+    request('risk_profile_submit.php', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: clientId, answers }),
+    }),
+
+  // clientId is ignored for a client session (forced server-side to their own).
+  getRiskProfile: (clientId) =>
+    request(`risk_profile_read.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
 };
 
 export { ApiError };
