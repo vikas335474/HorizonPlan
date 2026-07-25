@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import DisclosureBanner from '../components/DisclosureBanner';
 import SequenceRiskChart from '../components/SequenceRiskChart';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
+import { ReplayYearSelect, UnverifiedHistoryNotice } from '../components/HistoricalReplay';
 import { Spinner } from '../components/ui';
 import {
   formatCurrency,
@@ -26,6 +27,7 @@ export default function PlanReport() {
   const [projection, setProjection] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [replayYear, setReplayYear] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +41,7 @@ export default function PlanReport() {
         // Projection only exists for retirement goals with the required rates;
         // swallow its error so a non-retirement goal still renders its report.
         if (goalRes.goal.goal_type === 'retirement') {
-          return api.getProjection(id).catch(() => null);
+          return api.getProjection(id, undefined, replayYear).catch(() => null);
         }
         return null;
       })
@@ -53,7 +55,7 @@ export default function PlanReport() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, replayYear]);
 
   const firmName = tenant?.whiteLabel?.company_name || tenant?.companyName || 'HorizonPlan';
   const isRetirement = goal?.goal_type === 'retirement';
@@ -69,13 +71,18 @@ export default function PlanReport() {
           >
             ← Back to plan
           </button>
-          <button
-            onClick={() => window.print()}
-            className="rounded-[var(--radius-ctrl)] px-3.5 py-1.5 text-sm font-medium text-white"
-            style={{ background: 'var(--grad-ink, var(--color-ink))' }}
-          >
-            Print / Save as PDF
-          </button>
+          <div className="flex items-center gap-2">
+            {goal?.goal_type === 'retirement' && (
+              <ReplayYearSelect value={replayYear} onChange={setReplayYear} className="text-xs py-1.5" />
+            )}
+            <button
+              onClick={() => window.print()}
+              className="rounded-[var(--radius-ctrl)] px-3.5 py-1.5 text-sm font-medium text-white"
+              style={{ background: 'var(--grad-ink, var(--color-ink))' }}
+            >
+              Print / Save as PDF
+            </button>
+          </div>
         </div>
       </div>
 
@@ -151,7 +158,12 @@ export default function PlanReport() {
                 <SequenceRiskChart
                   steadySeries={projection.steady_return_series}
                   adverseSeries={projection.adverse_sequence_series}
+                  historicalSeries={projection.historical_sequence_series}
+                  historicalLabel={replayYear ? `Replay from ${replayYear}` : undefined}
                 />
+                {projection.historical_replay_meta && !projection.historical_replay_meta.is_verified && (
+                  <UnverifiedHistoryNotice />
+                )}
               </section>
             )}
 

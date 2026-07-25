@@ -5,6 +5,7 @@ import ResetTriggerControl from './ResetTriggerControl';
 import SequenceRiskChart from './SequenceRiskChart';
 import DisclosureBanner from './DisclosureBanner';
 import { ReadinessScoreBadge } from './ReadinessScore';
+import { ReplayYearSelect, UnverifiedHistoryNotice } from './HistoricalReplay';
 import { corpusMultiple } from '../lib/format';
 
 // docs/02 4.2: default 3.5%, range ~2.5%-4% — deliberately not the US 4%/25x
@@ -28,15 +29,16 @@ export default function ScenarioPanel({ goal, subScenario, onChanged }) {
   const [projectionError, setProjectionError] = useState('');
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [replayYear, setReplayYear] = useState(null);
 
   const loadProjection = useCallback(() => {
     if (!isRetirement) return;
     setProjectionError('');
     api
-      .getProjection(goal.id, subScenario.id)
+      .getProjection(goal.id, subScenario.id, replayYear)
       .then(setProjection)
       .catch((err) => setProjectionError(err.message || 'Could not load the projection.'));
-  }, [goal.id, subScenario.id, isRetirement]);
+  }, [goal.id, subScenario.id, isRetirement, replayYear]);
 
   useEffect(() => {
     loadProjection();
@@ -114,18 +116,27 @@ export default function ScenarioPanel({ goal, subScenario, onChanged }) {
 
           {projection && (
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <h4 className="text-sm font-semibold text-[var(--color-ink)]">Sequence-of-returns stress test</h4>
-                <ReadinessScoreBadge score={projection.readiness_score} />
+                <div className="flex items-center gap-2">
+                  <ReplayYearSelect value={replayYear} onChange={setReplayYear} />
+                  <ReadinessScoreBadge score={projection.readiness_score} />
+                </div>
               </div>
               <p className="text-xs text-[var(--color-ink-2)] mb-3 leading-relaxed">
                 Both lines share the same average return. The dashed line front-loads the weak years —
                 showing how much the <em>order</em> of returns matters in drawdown.
+                {replayYear && ' The dotted line replays what actually happened starting that year.'}
               </p>
               <SequenceRiskChart
                 steadySeries={projection.steady_return_series}
                 adverseSeries={projection.adverse_sequence_series}
+                historicalSeries={projection.historical_sequence_series}
+                historicalLabel={replayYear ? `Replay from ${replayYear}` : undefined}
               />
+              {projection.historical_replay_meta && !projection.historical_replay_meta.is_verified && (
+                <UnverifiedHistoryNotice />
+              )}
             </div>
           )}
 

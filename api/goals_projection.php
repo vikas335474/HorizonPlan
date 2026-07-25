@@ -86,7 +86,7 @@ $horizonYears = (int) $goal['projection_horizon_years'];
 $steady = PlanMath::steadyReturnSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
 $adverse = PlanMath::adverseSequenceSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
 
-echo json_encode([
+$response = [
     'status'     => 'success',
     'goal_id'    => $goalId,
     'assumptions' => [
@@ -102,4 +102,61 @@ echo json_encode([
     // docs/07 Bet 3: one deterministic 0-100 number, computed from the two
     // series above plus the corpus multiple — no new inputs.
     'readiness_score'        => PlanMath::readinessScore($withdrawalRate, $steady, $adverse),
-]);
+];
+
+// docs/07 Bet 2: optional third series — "what if you retired in [year]?"
+// Only computed when the caller asks for it, so the default projection
+// response shape is unchanged for existing callers.
+$replayStartYear = (int) ($_GET['replay_start_year'] ?? 0);
+if ($replayStartYear > 0) {
+    $historyStmt = $db->query('SELECT year, equity_return_pct, cpi_inflation_pct, is_verified FROM market_history ORDER BY year ASC');
+    $historyRows = $historyStmt->fetchAll();
+
+    $matchingYear = null;
+    foreach ($historyRows as $row) {
+        if ((int) $row['year'] === $replayStartYear) {
+            $matchingYear = $row;
+            break;
+        }
+    }
+
+    if ($matchingYear === null) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => "No historical data for year $replayStartYear. See market_history_years.php for available years."]);
+        exit();
+    }
+
+    $historical = PlanMath::historicalSequenceSeries(
+        $initialNetWorth,
+        $withdrawalRate,
+        array_map(static fn(array $r) => [
+            'year'               => (int) $r['year'],
+            'equity_return_pct'  => (float) $r['equity_return_pct'],
+            'cpi_inflation_pct'  => (float) $r['cpi_inflation_pct'],
+        ], $historyRows),
+        $replayStartYear,
+        $horizonYears
+    );
+
+    // Whether the years actually used (accounting for wrap-around once real
+    // history runs out) are ALL verified — false if even one used year is
+    // still an unverified seed row (docs/07 Bet 2, sql/015).
+    $count = count($historyRows);
+    $startIndex = array_search($replayStartYear, array_column($historyRows, 'year'), true);
+    $allVerified = true;
+    for ($n = 0; $n < min($horizonYears, $count); $n++) {
+        if (!(bool) $historyRows[($startIndex + $n) % $count]['is_verified']) {
+            $allVerified = false;
+            break;
+        }
+    }
+
+    $response['historical_sequence_series'] = $historical;
+    $response['historical_replay_meta'] = [
+        'start_year'  => $replayStartYear,
+        'wrapped'     => $horizonYears > ($count - $startIndex),
+        'is_verified' => $allVerified,
+    ];
+}
+
+echo json_encode($response);

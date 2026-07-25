@@ -176,13 +176,22 @@ export default function GoalDetail() {
                   {goal.goal_label}
                 </h1>
               </div>
-              <Button variant="ghost" onClick={() => navigate(`/goals/${goal.id}/report`)}>
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true" className="mr-1.5">
-                  <path d="M4 2.5h5l2.5 2.5v7.5h-7.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-                  <path d="M5.5 7.5h4M5.5 9.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-                Client report
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={() => navigate(`/goals/${goal.id}/report`)}>
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true" className="mr-1.5">
+                    <path d="M4 2.5h5l2.5 2.5v7.5h-7.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                    <path d="M5.5 7.5h4M5.5 9.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  Client report
+                </Button>
+                <Button variant="teal" onClick={() => navigate(`/goals/${goal.id}/meeting`)}>
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true" className="mr-1.5">
+                    <rect x="2" y="3" width="11" height="7.5" rx="1" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M5.5 13h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  Meeting Mode
+                </Button>
+              </div>
             </div>
 
             {/* Plan parameters — key figures grid */}

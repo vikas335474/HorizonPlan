@@ -169,4 +169,66 @@ final class PlanMath
         }
         return 1.0;
     }
+
+    /**
+     * docs/07 Bet 2: historical sequence replay — "what if you retired in
+     * [year]?". Same iterative withdrawal formula as steadyReturnSeries, but
+     * each year's return and inflation come from a real historical record
+     * instead of a flat assumption, and the withdrawal inflates by the
+     * ACTUAL compounded historical CPI for the years elapsed rather than a
+     * single assumed rate raised to a power.
+     *
+     * If the requested horizon runs past the end of the available history
+     * (e.g. replaying 30 years starting from a recent year), this wraps back
+     * to the earliest available year rather than falling back to an assumed
+     * flat rate mid-series — documented behavior, not a bug: every year in
+     * the output is still a real historical year, just cycling through the
+     * ones on record once they run out.
+     *
+     * @param array<int,array{year:int,equity_return_pct:float,cpi_inflation_pct:float}> $history
+     *   ALL available years, any order — this method locates $startYear
+     *   within it (after sorting ascending) and wraps as needed, so the
+     *   caller doesn't have to pre-slice or pre-sort.
+     * @return float[] index 0 = year 0 (starting balance), index n = balance after year n.
+     *   Returns just [$initialNetWorth] if $startYear isn't present in $history —
+     *   callers should validate the year against available years before calling
+     *   this, e.g. via the years returned by market_history_years.php.
+     */
+    public static function historicalSequenceSeries(
+        float $initialNetWorth,
+        float $withdrawalRatePercent,
+        array $history,
+        int $startYear,
+        int $horizonYears
+    ): array {
+        usort($history, static fn(array $a, array $b) => $a['year'] <=> $b['year']);
+
+        $startIndex = null;
+        foreach ($history as $i => $row) {
+            if ((int) $row['year'] === $startYear) {
+                $startIndex = $i;
+                break;
+            }
+        }
+
+        $count = count($history);
+        if ($startIndex === null || $count === 0) {
+            return [$initialNetWorth];
+        }
+
+        $annualWithdrawal = $initialNetWorth * ($withdrawalRatePercent / 100.0);
+        $balances = [$initialNetWorth];
+        $balance = $initialNetWorth;
+        $cumulativeInflation = 1.0;
+
+        for ($n = 1; $n <= $horizonYears; $n++) {
+            $row = $history[($startIndex + $n - 1) % $count]; // wrap around once real history is exhausted
+            $cumulativeInflation *= (1 + ((float) $row['cpi_inflation_pct']) / 100.0);
+            $withdrawalThisYear = $annualWithdrawal * $cumulativeInflation;
+            $balance = $balance * (1 + ((float) $row['equity_return_pct']) / 100.0) - $withdrawalThisYear;
+            $balances[] = round($balance, 2);
+        }
+
+        return $balances;
+    }
 }

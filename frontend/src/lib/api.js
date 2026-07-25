@@ -258,11 +258,19 @@ export const api = {
   // Retirement-type goals only — goals_projection.php 400s otherwise.
   // subScenarioId is optional: omit it to project the parent goal's own
   // values, pass it to project a specific (possibly overridden) scenario.
-  getProjection: (goalId, subScenarioId) => {
+  // replayStartYear (docs/07 Bet 2) is optional — pass a year from
+  // listMarketHistoryYears() to also get historical_sequence_series back.
+  getProjection: (goalId, subScenarioId, replayStartYear) => {
     const params = new URLSearchParams({ id: String(goalId) });
     if (subScenarioId) params.set('sub_scenario_id', String(subScenarioId));
+    if (replayStartYear) params.set('replay_start_year', String(replayStartYear));
     return request(`goals_projection.php?${params.toString()}`);
   },
+
+  // market_history_years.php: which calendar years are available for the
+  // "replay history from…" control, and whether each is verified yet
+  // (docs/07 Bet 2 — sql/015 seeds these as unverified until reviewed).
+  listMarketHistoryYears: () => request('market_history_years.php'),
 };
 
 export { ApiError };
