@@ -52,6 +52,10 @@ $data = [
     'custom_accumulation_return_rate' => $goal['accumulation_return_rate'],
     'custom_monthly_sip_amount'       => $goal['monthly_sip_amount'],
     'custom_sip_step_up_rate'         => $goal['sip_step_up_rate'],
+    // docs/05 item 3 — locked_return_rate is the only corpus-composition
+    // field that's a rate assumption (liquid/locked corpus amounts don't
+    // cascade, same precedent as initial_net_worth).
+    'custom_locked_return_rate'       => $goal['locked_return_rate'],
     'is_overridden'                    => 0,
 ];
 

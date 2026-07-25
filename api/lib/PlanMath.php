@@ -79,23 +79,9 @@ final class PlanMath
         $inflation = $inflationRatePercent / 100.0;
 
         // Fixed illustrative spread around the mean rate — documented as such,
-        // not tuned against real market data. Alternates so the raw (pre-sort)
-        // sequence's arithmetic mean stays equal to drawdownReturnRatePercent.
-        $spreadPoints = 4.0;
-        $rawReturns = [];
-        for ($n = 1; $n <= $horizonYears; $n++) {
-            $rawReturns[] = ($n % 2 === 1)
-                ? $drawdownReturnRatePercent - $spreadPoints
-                : $drawdownReturnRatePercent + $spreadPoints;
-        }
-        // If horizon is odd, the unpaired last element biases the mean slightly
-        // low; correct it back onto the flat rate so the two series stay
-        // comparable at a shared average, per the spec's "share a CAGR" intent.
-        if ($horizonYears % 2 === 1 && $horizonYears > 0) {
-            $rawReturns[$horizonYears - 1] = $drawdownReturnRatePercent;
-        }
-
-        sort($rawReturns); // ascending: worst years first, best years last
+        // not tuned against real market data (see adverseReturnSequence()'s
+        // own docblock for the full construction).
+        $rawReturns = self::adverseReturnSequence($drawdownReturnRatePercent, $horizonYears);
 
         $balances = [$initialNetWorth];
         $balance = $initialNetWorth;
@@ -309,5 +295,137 @@ final class PlanMath
         );
 
         return array_merge($accumulation, array_slice($decumulation, 1));
+    }
+
+    /**
+     * docs/05 item 3 / docs/06 "Corpus composition": decumulation across two
+     * buckets with different return characteristics — liquid (market-linked,
+     * readily accessible) and locked (EPF/NPS/PPF-style, restricted-access).
+     * Each bucket compounds at its OWN return rate every year; the year's
+     * withdrawal (same fixed-at-year-1, inflation-grown convention as
+     * steadyReturnSeries) is drawn from the liquid bucket first, spilling
+     * into the locked bucket only once liquid is exhausted. Once liquid hits
+     * zero it stays there (0 compounds to 0); locked can go negative to
+     * signal full depletion, same convention survivalFraction() already reads.
+     *
+     * This is a sequencing SIMPLIFICATION — "spend liquid first" — not a
+     * model of any specific instrument's actual lock-in/maturity rules
+     * (NPS/EPF/PPF withdrawal restrictions vary by instrument and age and are
+     * not encoded here). Matches this class's existing posture: transparent,
+     * deterministic arithmetic: never a hardcoded regulatory authority.
+     *
+     * @return float[] index 0 = starting TOTAL balance (liquid+locked), index
+     *   n = combined balance after year n — same shape as steadyReturnSeries,
+     *   so readinessScore()/the chart need no changes to consume it.
+     */
+    public static function twoBucketDecumulationSeries(
+        float $liquidCorpus,
+        float $lockedCorpus,
+        float $withdrawalRatePercent,
+        float $inflationRatePercent,
+        float $liquidReturnRatePercent,
+        float $lockedReturnRatePercent,
+        int $horizonYears
+    ): array {
+        $annualWithdrawal = ($liquidCorpus + $lockedCorpus) * ($withdrawalRatePercent / 100.0);
+        $inflation = $inflationRatePercent / 100.0;
+        $liquidRate = $liquidReturnRatePercent / 100.0;
+        $lockedRate = $lockedReturnRatePercent / 100.0;
+
+        $liquid = $liquidCorpus;
+        $locked = $lockedCorpus;
+        $balances = [$liquid + $locked];
+
+        for ($n = 1; $n <= $horizonYears; $n++) {
+            $liquid *= (1 + $liquidRate);
+            $locked *= (1 + $lockedRate);
+
+            $withdrawalThisYear = $annualWithdrawal * (1 + $inflation) ** $n;
+            if ($liquid >= $withdrawalThisYear) {
+                $liquid -= $withdrawalThisYear;
+            } else {
+                $locked -= ($withdrawalThisYear - $liquid);
+                $liquid = 0.0;
+            }
+
+            $balances[] = round($liquid + $locked, 2);
+        }
+
+        return $balances;
+    }
+
+    /**
+     * Adverse-sequence counterpart to twoBucketDecumulationSeries() — same
+     * "liquid first, then locked" withdrawal order, but each bucket gets its
+     * OWN synthetic below/above-average return sequence (same construction
+     * as adverseSequenceSeries: a fixed +/- spread around that bucket's own
+     * average rate, sorted so weak years land early), since the two buckets
+     * don't share a single average return to begin with.
+     *
+     * @return float[] same shape as twoBucketDecumulationSeries()
+     */
+    public static function twoBucketAdverseSequenceSeries(
+        float $liquidCorpus,
+        float $lockedCorpus,
+        float $withdrawalRatePercent,
+        float $inflationRatePercent,
+        float $liquidReturnRatePercent,
+        float $lockedReturnRatePercent,
+        int $horizonYears
+    ): array {
+        $annualWithdrawal = ($liquidCorpus + $lockedCorpus) * ($withdrawalRatePercent / 100.0);
+        $inflation = $inflationRatePercent / 100.0;
+
+        $liquidReturns = self::adverseReturnSequence($liquidReturnRatePercent, $horizonYears);
+        $lockedReturns = self::adverseReturnSequence($lockedReturnRatePercent, $horizonYears);
+
+        $liquid = $liquidCorpus;
+        $locked = $lockedCorpus;
+        $balances = [$liquid + $locked];
+
+        for ($n = 1; $n <= $horizonYears; $n++) {
+            $liquid *= (1 + $liquidReturns[$n - 1] / 100.0);
+            $locked *= (1 + $lockedReturns[$n - 1] / 100.0);
+
+            $withdrawalThisYear = $annualWithdrawal * (1 + $inflation) ** $n;
+            if ($liquid >= $withdrawalThisYear) {
+                $liquid -= $withdrawalThisYear;
+            } else {
+                $locked -= ($withdrawalThisYear - $liquid);
+                $liquid = 0.0;
+            }
+
+            $balances[] = round($liquid + $locked, 2);
+        }
+
+        return $balances;
+    }
+
+    /**
+     * Builds a deterministic synthetic sequence of yearly returns whose
+     * arithmetic mean equals $averageReturnRatePercent (a fixed +/- spread
+     * alternating by year — not derived from historical volatility data,
+     * this is explicitly a simple illustrative reordering per the spec, not
+     * a backtest or Monte Carlo draw), then sorts it ascending so
+     * below-average years land first. Used by adverseSequenceSeries() and
+     * twoBucketAdverseSequenceSeries() (which needs it twice, once per
+     * bucket, since the two buckets don't share a single average return).
+     *
+     * @return float[] length $horizonYears, ascending (worst years first)
+     */
+    private static function adverseReturnSequence(float $averageReturnRatePercent, int $horizonYears): array
+    {
+        $spreadPoints = 4.0;
+        $rawReturns = [];
+        for ($n = 1; $n <= $horizonYears; $n++) {
+            $rawReturns[] = ($n % 2 === 1)
+                ? $averageReturnRatePercent - $spreadPoints
+                : $averageReturnRatePercent + $spreadPoints;
+        }
+        if ($horizonYears % 2 === 1 && $horizonYears > 0) {
+            $rawReturns[$horizonYears - 1] = $averageReturnRatePercent;
+        }
+        sort($rawReturns);
+        return $rawReturns;
     }
 }

@@ -44,6 +44,8 @@ $updatableFields = [
     // docs/07 Session C / docs/06 Section A — accumulation-phase fields.
     'accumulation_return_rate', 'current_age', 'retirement_age',
     'monthly_sip_amount', 'sip_step_up_rate',
+    // docs/05 item 3 / docs/06 corpus composition.
+    'liquid_corpus_amount', 'locked_corpus_amount', 'locked_return_rate',
 ];
 
 $changes = []; // field => [old, new]
@@ -92,6 +94,28 @@ if (array_key_exists('current_age', $changes) || array_key_exists('retirement_ag
     }
 }
 
+// docs/05 item 3 / docs/06 corpus composition: liquid_corpus_amount +
+// locked_corpus_amount must sum to the goal's initial_net_worth — checked
+// against whichever of the three is being changed here plus the pre-existing
+// value for whichever isn't, same "effective value" pattern as the age check
+// above, so a partial update can't silently break the invariant.
+if (array_key_exists('liquid_corpus_amount', $changes) || array_key_exists('locked_corpus_amount', $changes) || array_key_exists('initial_net_worth', $changes)) {
+    $effectiveLiquid = array_key_exists('liquid_corpus_amount', $changes) ? $changes['liquid_corpus_amount'][1] : $existing['liquid_corpus_amount'];
+    $effectiveLocked = array_key_exists('locked_corpus_amount', $changes) ? $changes['locked_corpus_amount'][1] : $existing['locked_corpus_amount'];
+    $effectiveNetWorth = array_key_exists('initial_net_worth', $changes) ? $changes['initial_net_worth'][1] : $existing['initial_net_worth'];
+    if (($effectiveLiquid === null) !== ($effectiveLocked === null)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'liquid_corpus_amount and locked_corpus_amount must be provided together, or not at all.']);
+        exit();
+    }
+    if ($effectiveLiquid !== null && $effectiveLocked !== null
+        && abs(((float) $effectiveLiquid + (float) $effectiveLocked) - (float) $effectiveNetWorth) > 0.01) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'liquid_corpus_amount + locked_corpus_amount must sum to initial_net_worth.']);
+        exit();
+    }
+}
+
 $updateData = array_combine(array_keys($changes), array_map(static fn($c) => $c[1], $changes));
 $scopedDb->update('base_plans', $updateData, ['id' => $goalId]);
 
@@ -116,7 +140,11 @@ foreach ($changes as $field => [$oldValue, $newValue]) {
 // current_age/retirement_age are deliberately NOT in this map — a what-if
 // sub-scenario varies assumptions (rates, contribution amount), not the
 // client's age, so there is no custom_current_age/custom_retirement_age
-// column to cascade into (docs/06 Section A).
+// column to cascade into (docs/06 Section A). liquid_corpus_amount/
+// locked_corpus_amount are likewise not cascaded — same precedent as
+// initial_net_worth itself, which has never been overridable per
+// sub-scenario (docs/05 item 3): only locked_return_rate is a rate
+// assumption, so only it gets a custom_* override column.
 $cascadeMap = [
     'inflation_rate'           => 'custom_inflation',
     'withdrawal_rate'          => 'custom_withdrawal_rate',
@@ -124,6 +152,7 @@ $cascadeMap = [
     'accumulation_return_rate' => 'custom_accumulation_return_rate',
     'monthly_sip_amount'       => 'custom_monthly_sip_amount',
     'sip_step_up_rate'         => 'custom_sip_step_up_rate',
+    'locked_return_rate'       => 'custom_locked_return_rate',
 ];
 
 $cascadedFields = array_intersect_key($cascadeMap, $changes);

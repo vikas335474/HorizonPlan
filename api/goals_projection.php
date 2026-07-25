@@ -55,6 +55,12 @@ $drawdownReturnRate = $goal['drawdown_return_rate'] !== null ? (float) $goal['dr
 $accumulationReturnRate = $goal['accumulation_return_rate'] !== null ? (float) $goal['accumulation_return_rate'] : null;
 $monthlySipAmount = $goal['monthly_sip_amount'] !== null ? (float) $goal['monthly_sip_amount'] : null;
 $sipStepUpRate = $goal['sip_step_up_rate'] !== null ? (float) $goal['sip_step_up_rate'] : null;
+// docs/05 item 3 / docs/06 corpus composition — liquid_corpus_amount/
+// locked_corpus_amount are NOT overridable per sub-scenario (same as
+// initial_net_worth), only the locked bucket's return rate is.
+$liquidCorpusAmount = $goal['liquid_corpus_amount'] !== null ? (float) $goal['liquid_corpus_amount'] : null;
+$lockedCorpusAmount = $goal['locked_corpus_amount'] !== null ? (float) $goal['locked_corpus_amount'] : null;
+$lockedReturnRate = $goal['locked_return_rate'] !== null ? (float) $goal['locked_return_rate'] : null;
 
 $subScenarioId = (int) ($_GET['sub_scenario_id'] ?? 0);
 if ($subScenarioId > 0) {
@@ -84,6 +90,9 @@ if ($subScenarioId > 0) {
         if ($sub['custom_sip_step_up_rate'] !== null) {
             $sipStepUpRate = (float) $sub['custom_sip_step_up_rate'];
         }
+        if ($sub['custom_locked_return_rate'] !== null) {
+            $lockedReturnRate = (float) $sub['custom_locked_return_rate'];
+        }
     }
 }
 
@@ -96,8 +105,27 @@ if ($withdrawalRate === null || $drawdownReturnRate === null) {
 $initialNetWorth = (float) $goal['initial_net_worth'];
 $horizonYears = (int) $goal['projection_horizon_years'];
 
-$steady = PlanMath::steadyReturnSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
-$adverse = PlanMath::adverseSequenceSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
+// docs/05 item 3 / docs/06 corpus composition: use the two-bucket
+// (liquid-first, then locked) decumulation methods when a goal has actually
+// decomposed its corpus; otherwise fall back to the original single-bucket
+// methods, byte-for-byte the same call every existing goal has always made.
+// goals_create.php/goals_update.php enforce liquid+locked summing to
+// initial_net_worth and both-or-neither, so only locked_return_rate needs
+// checking here.
+$hasCorpusComposition = $liquidCorpusAmount !== null && $lockedCorpusAmount !== null;
+if ($hasCorpusComposition && $lockedReturnRate === null) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'This goal has a liquid/locked corpus split but no locked_return_rate — required to project a decomposed corpus.']);
+    exit();
+}
+
+if ($hasCorpusComposition) {
+    $steady = PlanMath::twoBucketDecumulationSeries($liquidCorpusAmount, $lockedCorpusAmount, $withdrawalRate, $inflationRate, $drawdownReturnRate, $lockedReturnRate, $horizonYears);
+    $adverse = PlanMath::twoBucketAdverseSequenceSeries($liquidCorpusAmount, $lockedCorpusAmount, $withdrawalRate, $inflationRate, $drawdownReturnRate, $lockedReturnRate, $horizonYears);
+} else {
+    $steady = PlanMath::steadyReturnSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
+    $adverse = PlanMath::adverseSequenceSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
+}
 
 $response = [
     'status'     => 'success',
@@ -116,6 +144,14 @@ $response = [
     // series above plus the corpus multiple — no new inputs.
     'readiness_score'        => PlanMath::readinessScore($withdrawalRate, $steady, $adverse),
 ];
+
+if ($hasCorpusComposition) {
+    $response['corpus_composition'] = [
+        'liquid_corpus_amount' => $liquidCorpusAmount,
+        'locked_corpus_amount' => $lockedCorpusAmount,
+        'locked_return_rate'   => $lockedReturnRate,
+    ];
+}
 
 // docs/07 Session C / docs/06 Section A: accumulation + combined lifecycle
 // series — only computed when the goal actually has ages + an accumulation

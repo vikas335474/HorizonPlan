@@ -49,6 +49,8 @@ $result = array_map(static function (array $s): array {
         'custom_accumulation_return_rate' => $s['custom_accumulation_return_rate'] !== null ? (float) $s['custom_accumulation_return_rate'] : null,
         'custom_monthly_sip_amount'       => $s['custom_monthly_sip_amount'] !== null ? (float) $s['custom_monthly_sip_amount'] : null,
         'custom_sip_step_up_rate'         => $s['custom_sip_step_up_rate'] !== null ? (float) $s['custom_sip_step_up_rate'] : null,
+        // docs/05 item 3 / docs/06 corpus composition.
+        'custom_locked_return_rate'       => $s['custom_locked_return_rate'] !== null ? (float) $s['custom_locked_return_rate'] : null,
         'is_overridden'                => (bool) $s['is_overridden'],
         'updated_at'                   => $s['updated_at'],
     ];
