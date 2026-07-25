@@ -5,6 +5,8 @@ import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import ScenarioPanel from '../components/ScenarioPanel';
 import { Card, Badge, Button, Spinner } from '../components/ui';
+import { ApplyTemplateModal } from '../components/TemplateUI';
+import { ReadinessScoreCard } from '../components/ReadinessScore';
 import {
   formatCurrency,
   formatPercent,
@@ -25,15 +27,24 @@ export default function GoalDetail() {
   const [expandedId, setExpandedId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [baselineProjection, setBaselineProjection] = useState(null);
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [appliedSourceName, setAppliedSourceName] = useState(null);
+
+  function loadGoal() {
+    return api.getGoal(id).then((res) => {
+      setGoal(res.goal);
+      return res.goal;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError('');
-    Promise.all([api.getGoal(id), api.listSubScenarios(id)])
-      .then(([goalRes, subRes]) => {
+    Promise.all([loadGoal(), api.listSubScenarios(id)])
+      .then(([, subRes]) => {
         if (cancelled) return;
-        setGoal(goalRes.goal);
         setSubScenarios(subRes.sub_scenarios);
       })
       .catch((err) => {
@@ -45,7 +56,48 @@ export default function GoalDetail() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Baseline readiness score (docs/07 Bet 3) — the goal's own values, not a
+  // sub-scenario's. goals_projection.php 400s if the required rates aren't
+  // set yet, which is a normal state for a freshly created retirement goal —
+  // swallow that case rather than surfacing it as an error banner.
+  useEffect(() => {
+    if (!goal || goal.goal_type !== 'retirement') return;
+    let cancelled = false;
+    api.getProjection(goal.id)
+      .then((res) => { if (!cancelled) setBaselineProjection(res); })
+      .catch(() => { if (!cancelled) setBaselineProjection(null); });
+    return () => { cancelled = true; };
+  }, [goal?.id, goal?.withdrawal_rate, goal?.drawdown_return_rate, goal?.inflation_rate]);
+
+  // Resolve the currently-applied template/customization's display name
+  // (docs/07 Bet 1) — goals_read.php only returns the ID, since a global
+  // template may live outside this tenant; resolve from whatever the
+  // advisor already has library access to.
+  useEffect(() => {
+    if (!goal || (!goal.applied_template_id && !goal.applied_customization_id)) {
+      setAppliedSourceName(null);
+      return;
+    }
+    let cancelled = false;
+    api.listTemplates().then((res) => {
+      if (cancelled) return;
+      const all = [...(res.global_templates ?? []), ...(res.my_templates ?? []), ...(res.my_customizations ?? [])];
+      const match = all.find((t) =>
+        (goal.applied_template_id && t.id === goal.applied_template_id) ||
+        (goal.applied_customization_id && t.id === goal.applied_customization_id)
+      );
+      setAppliedSourceName(match?.template_name ?? null);
+    }).catch(() => { if (!cancelled) setAppliedSourceName(null); });
+    return () => { cancelled = true; };
+  }, [goal?.applied_template_id, goal?.applied_customization_id]);
+
+  async function handleTemplateApplied() {
+    setApplyModalOpen(false);
+    await loadGoal();
+  }
 
   function handleScenarioChanged(updated) {
     setSubScenarios((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
@@ -155,9 +207,37 @@ export default function GoalDetail() {
               </div>
             </Card>
 
+            {/* Retirement Readiness Score (docs/07 Bet 3) — the goal's own
+                baseline, computed from goals_projection.php. Null while the
+                goal is missing withdrawal_rate/drawdown_return_rate. */}
+            {isRetirement && baselineProjection?.readiness_score != null && (
+              <div className="mb-4">
+                <ReadinessScoreCard score={baselineProjection.readiness_score} />
+              </div>
+            )}
+
             <div className="mb-6">
               <DisclosureBanner />
             </div>
+
+            {/* Apply a strategy template (docs/07 Bet 1) — the loop-closer:
+                sets drawdown_return_rate from an approved template/customization
+                rather than the advisor typing a number in by hand. */}
+            {isRetirement && (
+              <Card className="p-4 mb-4">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <h2 className="text-base font-semibold text-[var(--color-ink)]">Strategy template</h2>
+                  <Button variant="outline" size="sm" onClick={() => setApplyModalOpen(true)}>
+                    Apply a template
+                  </Button>
+                </div>
+                <p className="text-xs text-[var(--color-ink-2)]">
+                  {appliedSourceName
+                    ? <>Currently applied: <strong className="text-[var(--color-ink)]">{appliedSourceName}</strong> — sets the post-retirement return assumption above.</>
+                    : 'No template applied yet — this goal\'s post-retirement return is set manually.'}
+                </p>
+              </Card>
+            )}
 
             {/* Strategy presets — one-click, comparable withdrawal-rate scenarios.
                 Neutral illustrations to compare, not advice (see strategyPresets.js). */}
@@ -270,6 +350,15 @@ export default function GoalDetail() {
           </>
         )}
       </main>
+
+      {goal && (
+        <ApplyTemplateModal
+          open={applyModalOpen}
+          onClose={() => setApplyModalOpen(false)}
+          onApplied={handleTemplateApplied}
+          goalId={goal.id}
+        />
+      )}
     </div>
   );
 }

@@ -20,12 +20,15 @@ function assertTrue(bool $cond, string $label): void
 
 $db = getPdo();
 
+// base_plans must be cleared BEFORE template_strategies/template_customizations
+// — migration 014 added applied_template_id/applied_customization_id FKs on
+// base_plans pointing at those tables.
 $db->exec("DELETE FROM template_audit_log");
-$db->exec("DELETE FROM template_customizations");
-$db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM change_log");
 $db->exec("DELETE FROM sub_scenarios");
 $db->exec("DELETE FROM base_plans");
+$db->exec("DELETE FROM template_customizations");
+$db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM mfa_pending");
 $db->exec("DELETE FROM password_resets");

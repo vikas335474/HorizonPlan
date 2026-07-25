@@ -1,10 +1,10 @@
 // Shared visual primitives for the strategy-template system.
 // Used by AdminConsole (Strategy Templates tab) and AdvisorTemplates page.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import Modal from './Modal';
-import { Badge, Button } from './ui';
+import { Badge, Button, Spinner, EmptyState } from './ui';
 
 // ─── Allocation bar ───────────────────────────────────────────────────────────
 // Renders a proportional colour strip for {equity, debt, gold, cash, ...}.
@@ -320,6 +320,153 @@ export function ForkTemplateModal({ open, onClose, onForked, template }) {
           <Button type="button" variant="ghost" onClick={() => { onClose(); setTimeout(reset, 200); }}>Cancel</Button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+// ─── Approval badge + button (docs/07 Bet 1) ──────────────────────────────────
+// An unapproved template/customization is illustration-only — it can be
+// browsed and forked, but goals_apply_template.php refuses to apply it to a
+// real client's goal. This badge/button pair makes that state visible and
+// actionable everywhere a template row renders.
+
+export function ApprovalBadge({ status }) {
+  if (status === 'approved') {
+    return <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Approved</Badge>;
+  }
+  return <Badge fg="var(--color-amber)" bg="var(--color-amber-soft)">Draft — not approved</Badge>;
+}
+
+export function ApproveButton({ templateId, customizationId, approvalStatus, onApproved, size = 'sm' }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (approvalStatus === 'approved') return null;
+
+  async function handleApprove() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.approveTemplate(templateId, customizationId);
+      onApproved();
+    } catch (err) {
+      setError(err.message || 'Could not approve.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <Button variant="outline" size={size} onClick={handleApprove} disabled={busy}>
+        {busy ? 'Approving…' : 'Approve for use'}
+      </Button>
+      {error && <span className="text-xs" style={{ color: 'var(--color-alert)' }}>{error}</span>}
+    </div>
+  );
+}
+
+// ─── Apply-to-goal modal (docs/07 Bet 1 — the loop-closer) ────────────────────
+// Lets an advisor pick an APPROVED template/customization and apply its
+// return assumption to a retirement goal via goals_apply_template.php.
+// Unapproved rows are listed but disabled, with a note why, so the gap
+// between "exists in the library" and "usable on a real plan" is visible
+// rather than just producing a 403 after the fact.
+
+export function ApplyTemplateModal({ open, onClose, onApplied, goalId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [applyingId, setApplyingId] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    setError('');
+    api.listTemplates()
+      .then(setData)
+      .catch((err) => setError(err.message || 'Could not load templates.'))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  async function handleApply(entry) {
+    setApplyingId(entry.key);
+    setError('');
+    try {
+      await api.applyTemplateToGoal(goalId, {
+        templateId: entry.kind === 'template' ? entry.id : undefined,
+        customizationId: entry.kind === 'customization' ? entry.id : undefined,
+      });
+      onApplied();
+    } catch (err) {
+      setError(err.message || 'Could not apply this template.');
+    } finally {
+      setApplyingId(null);
+    }
+  }
+
+  const rows = data
+    ? [
+        ...(data.global_templates ?? []).map((t) => ({ ...t, kind: 'template', key: `t${t.id}`, sourceLabel: 'Global' })),
+        ...(data.my_templates ?? []).map((t) => ({ ...t, kind: 'template', key: `t${t.id}`, sourceLabel: 'My created' })),
+        ...(data.my_customizations ?? []).map((c) => ({ ...c, kind: 'customization', key: `c${c.id}`, sourceLabel: 'My customized' })),
+      ]
+    : [];
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Apply a strategy template"
+      description="Sets this goal's post-retirement return assumption from an approved template. Only approved templates can be applied to a real plan."
+    >
+      {loading && <Spinner label="Loading templates…" />}
+      {error && (
+        <p className="mb-3 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2" style={{ color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
+
+      {data && rows.length === 0 && (
+        <EmptyState title="No templates yet">
+          Create or fork a strategy template first, from the Templates page.
+        </EmptyState>
+      )}
+
+      {data && rows.length > 0 && (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {rows.map((entry) => {
+            const isApproved = entry.approval_status === 'approved';
+            return (
+              <div
+                key={entry.key}
+                className="flex items-center justify-between gap-3 rounded-[var(--radius-ctrl)] border border-[var(--color-line)] p-3"
+                style={{ opacity: isApproved ? 1 : 0.65 }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className="text-sm font-medium text-[var(--color-ink)] truncate">{entry.template_name}</span>
+                    <Badge fg="var(--color-ink-3)" bg="var(--color-surface-2)">{entry.sourceLabel}</Badge>
+                    <ApprovalBadge status={entry.approval_status} />
+                  </div>
+                  <div className="text-xs text-[var(--color-ink-3)]">
+                    {entry.return_assumption_pct != null ? `${entry.return_assumption_pct}% return assumption` : 'No return assumption set'}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!isApproved || entry.return_assumption_pct == null || applyingId === entry.key}
+                  onClick={() => handleApply(entry)}
+                  title={!isApproved ? 'Not yet approved — cannot be applied to a client plan' : undefined}
+                >
+                  {applyingId === entry.key ? 'Applying…' : 'Apply'}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </Modal>
   );
 }

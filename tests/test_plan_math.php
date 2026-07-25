@@ -43,4 +43,32 @@ assertTrue(end($adverse) < end($steady), 'adverse-sequence ending balance is wor
 $steadyLowWithdrawal = PlanMath::steadyReturnSeries(10000000.0, 0.01, 6.0, 7.0, 5);
 assertTrue($steadyLowWithdrawal[5] > 10000000.0, 'a near-zero withdrawal rate still grows the corpus under a 7% return assumption');
 
+// --- readinessScore (docs/07 Bet 3) ---
+// 3.5% wr / 6% infl / 7% return / 30yr: steady never depletes (fraction 1.0),
+// adverse depletes at year 23 (fraction 22/30), corpus multiple 28.57x ->
+// multipleFactor (28.57-20)/20 = 0.4285. score = .4*1 + .4*(22/30) + .2*.4285 = 78.
+assertTrue(PlanMath::readinessScore(3.5, $steady, $adverse) === 78, 'readinessScore blends steady/adverse survival with corpus-multiple band (3.5% wr -> 78)');
+
+// Same series, no withdrawal rate supplied -> weights renormalize to 50/50
+// steady/adverse (no multiple bonus/penalty): .5*1 + .5*(22/30) = 87.
+assertTrue(PlanMath::readinessScore(null, $steady, $adverse) === 87, 'readinessScore renormalizes to 50/50 steady/adverse when withdrawal rate is unavailable');
+
+// A depleting scenario (8% wr on a 4% return assumption) should score low —
+// steady depletes at year 12 (fraction 11/30), adverse at year 10 (9/30),
+// corpus multiple 12.5x is below the 20x-40x band so its factor clamps to 0.
+$steadyDeplete = PlanMath::steadyReturnSeries(10000000.0, 8.0, 6.0, 4.0, 30);
+$adverseDeplete = PlanMath::adverseSequenceSeries(10000000.0, 8.0, 6.0, 4.0, 30);
+assertTrue(PlanMath::readinessScore(8.0, $steadyDeplete, $adverseDeplete) === 27, 'readinessScore scores a depleting plan low, with the below-band corpus multiple clamped to 0, not negative');
+
+// A very conservative plan (2.5% wr, the bottom of the Indian-calibrated
+// range -> 40x corpus multiple, the top of the clamp) that never depletes
+// either series should hit the ceiling: 100.
+$steadyStrong = PlanMath::steadyReturnSeries(10000000.0, 2.5, 6.0, 9.0, 30);
+$adverseStrong = PlanMath::adverseSequenceSeries(10000000.0, 2.5, 6.0, 9.0, 30);
+assertTrue(PlanMath::readinessScore(2.5, $steadyStrong, $adverseStrong) === 100, 'readinessScore reaches 100 when both series fully survive and the corpus multiple is at/above the clamp ceiling');
+
+// A single-point series (horizon 0, just the starting balance) has no
+// horizon to measure survival over -> null, not a division by zero.
+assertTrue(PlanMath::readinessScore(3.5, [10000000.0], [10000000.0]) === null, 'readinessScore returns null when there is no horizon to measure survival over');
+
 echo "\nAll PlanMath tests passed.\n";

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import AppHeader from '../components/AppHeader';
 import { Card, Badge, Button, EmptyState, Spinner } from '../components/ui';
-import { AllocationBar, RiskBadge, TemplateCreateModal, ForkTemplateModal } from '../components/TemplateUI';
+import { AllocationBar, RiskBadge, TemplateCreateModal, ForkTemplateModal, ApprovalBadge, ApproveButton } from '../components/TemplateUI';
 
 // Advisor console — Strategy Templates page.
 // Tab 1: Global Library (SaaS published templates, advisor can fork any)
@@ -160,6 +160,7 @@ function GlobalTemplateRow({ template, onFork }) {
             {template.market_code && (
               <Badge fg="var(--color-ink-3)" bg="var(--color-surface-2)">{template.market_code}</Badge>
             )}
+            <ApprovalBadge status={template.approval_status} />
           </div>
           {template.description && (
             <p className="text-xs text-[var(--color-ink-2)] mb-2 max-w-lg">{template.description}</p>
@@ -208,6 +209,7 @@ function MyCreatedTab({ templates, onChanged }) {
               key={t.id}
               template={t}
               onFork={() => setForkTarget(t)}
+              onChanged={onChanged}
             />
           ))}
         </div>
@@ -229,7 +231,7 @@ function MyCreatedTab({ templates, onChanged }) {
   );
 }
 
-function OwnTemplateRow({ template, onFork }) {
+function OwnTemplateRow({ template, onFork, onChanged }) {
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -243,6 +245,7 @@ function OwnTemplateRow({ template, onFork }) {
             >
               {template.is_published ? 'published' : 'draft'}
             </Badge>
+            <ApprovalBadge status={template.approval_status} />
           </div>
           {template.description && (
             <p className="text-xs text-[var(--color-ink-2)] mb-2 max-w-lg">{template.description}</p>
@@ -255,7 +258,10 @@ function OwnTemplateRow({ template, onFork }) {
             <span>Used <strong className="text-[var(--color-ink)]">{template.usage_count}</strong> {template.usage_count === 1 ? 'time' : 'times'}</span>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onFork}>Fork</Button>
+        <div className="flex items-center gap-2">
+          <ApproveButton templateId={template.id} approvalStatus={template.approval_status} onApproved={onChanged} />
+          <Button variant="ghost" size="sm" onClick={onFork}>Fork</Button>
+        </div>
       </div>
     </Card>
   );
@@ -294,6 +300,7 @@ function MyCustomizedTab({ customizations, globalTemplates, onChanged }) {
               baseTemplate={globalById[String(c.base_template_id)] ?? null}
               onEdit={() => setEditTarget(c)}
               onAudit={() => setAuditTarget(c)}
+              onChanged={onChanged}
             />
           ))}
         </div>
@@ -317,7 +324,7 @@ function MyCustomizedTab({ customizations, globalTemplates, onChanged }) {
   );
 }
 
-function CustomizationRow({ customization: c, baseTemplate, onEdit, onAudit }) {
+function CustomizationRow({ customization: c, baseTemplate, onEdit, onAudit, onChanged }) {
   const effectiveAllocation = c.allocation_json ?? baseTemplate?.allocation_json ?? null;
   const effectiveReturn = c.return_assumption_pct ?? baseTemplate?.return_assumption_pct ?? null;
 
@@ -330,6 +337,7 @@ function CustomizationRow({ customization: c, baseTemplate, onEdit, onAudit }) {
             {c.is_shareable && (
               <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">shareable</Badge>
             )}
+            <ApprovalBadge status={c.approval_status} />
           </div>
           {baseTemplate && (
             <p className="text-[11px] text-[var(--color-ink-3)] mb-2">
@@ -348,6 +356,11 @@ function CustomizationRow({ customization: c, baseTemplate, onEdit, onAudit }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ApproveButton
+            customizationId={c.id}
+            approvalStatus={c.approval_status}
+            onApproved={onChanged}
+          />
           <Button variant="ghost" size="sm" onClick={onAudit}>Provenance</Button>
           <Button variant="outline" size="sm" onClick={onEdit}>Edit</Button>
         </div>

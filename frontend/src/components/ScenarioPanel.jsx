@@ -4,6 +4,7 @@ import LiveTimelineSlider from './LiveTimelineSlider';
 import ResetTriggerControl from './ResetTriggerControl';
 import SequenceRiskChart from './SequenceRiskChart';
 import DisclosureBanner from './DisclosureBanner';
+import { ReadinessScoreBadge } from './ReadinessScore';
 import { corpusMultiple } from '../lib/format';
 
 // docs/02 4.2: default 3.5%, range ~2.5%-4% — deliberately not the US 4%/25x
@@ -113,8 +114,9 @@ export default function ScenarioPanel({ goal, subScenario, onChanged }) {
 
           {projection && (
             <div>
-              <div className="flex items-baseline justify-between mb-1">
+              <div className="flex items-center justify-between mb-1">
                 <h4 className="text-sm font-semibold text-[var(--color-ink)]">Sequence-of-returns stress test</h4>
+                <ReadinessScoreBadge score={projection.readiness_score} />
               </div>
               <p className="text-xs text-[var(--color-ink-2)] mb-3 leading-relaxed">
                 Both lines share the same average return. The dashed line front-loads the weak years —
