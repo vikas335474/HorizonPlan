@@ -5,6 +5,7 @@ import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import Modal from '../components/Modal';
+import { RiskProfileSummary } from '../components/RiskProfileUI';
 import { Card, EmptyState, Spinner, Button } from '../components/ui';
 
 // Advisor drills into one client from the dashboard. clientId comes from the
@@ -57,6 +58,9 @@ export default function ClientGoals() {
         <div className="mb-6">
           <DisclosureBanner />
         </div>
+
+        {/* docs/06 Section B — risk tolerance belongs to the client, not one goal. */}
+        <RiskProfileSummary clientId={clientId} />
 
         {loading && <Spinner label="Loading goals…" />}
 

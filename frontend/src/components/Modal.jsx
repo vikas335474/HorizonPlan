@@ -3,13 +3,26 @@ import { useEffect, useRef } from 'react';
 export default function Modal({ open, onClose, title, description, children }) {
   const panelRef = useRef(null);
 
+  // onClose is a fresh function reference on every call site's re-render
+  // (nearly every usage wraps it inline, e.g. `onClose={() => { onClose();
+  // setTimeout(reset, 200); }}`). Reading it via a ref that's updated every
+  // render — instead of putting it in the effect's dependency array — keeps
+  // the effect below keyed ONLY on `open`, so it doesn't tear down and rerun
+  // (re-stealing focus via panelRef.current.focus()) on every keystroke a
+  // form inside the modal makes. That was a real bug: every modal in the
+  // app lost input focus after one character, because typing triggers a
+  // state update in the parent, which re-renders the modal, which handed
+  // this effect a new onClose reference each time.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     function onKey(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     }
     document.addEventListener('keydown', onKey);
-    // Focus the panel for accessibility
+    // Focus the panel for accessibility — only when the modal actually opens.
     panelRef.current?.focus();
     // Lock body scroll while open
     const prev = document.body.style.overflow;
@@ -18,7 +31,7 @@ export default function Modal({ open, onClose, title, description, children }) {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
