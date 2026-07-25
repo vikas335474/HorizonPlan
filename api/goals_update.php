@@ -41,6 +41,9 @@ $existing = $rows[0];
 $updatableFields = [
     'goal_label', 'target_amount', 'target_date', 'initial_net_worth',
     'inflation_rate', 'withdrawal_rate', 'drawdown_return_rate', 'projection_horizon_years',
+    // docs/07 Session C / docs/06 Section A — accumulation-phase fields.
+    'accumulation_return_rate', 'current_age', 'retirement_age',
+    'monthly_sip_amount', 'sip_step_up_rate',
 ];
 
 $changes = []; // field => [old, new]
@@ -75,6 +78,20 @@ if (array_key_exists('projection_horizon_years', $changes)) {
     }
 }
 
+// docs/07 Session C: retirement_age must stay after current_age. Checked
+// against whichever of the two changed here plus the pre-existing value for
+// whichever didn't, so a partial update (only one of the pair sent) can't
+// silently create an inverted age range.
+if (array_key_exists('current_age', $changes) || array_key_exists('retirement_age', $changes)) {
+    $effectiveCurrentAge = array_key_exists('current_age', $changes) ? $changes['current_age'][1] : $existing['current_age'];
+    $effectiveRetirementAge = array_key_exists('retirement_age', $changes) ? $changes['retirement_age'][1] : $existing['retirement_age'];
+    if ($effectiveCurrentAge !== null && $effectiveRetirementAge !== null && (int) $effectiveRetirementAge <= (int) $effectiveCurrentAge) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'retirement_age must be greater than current_age.']);
+        exit();
+    }
+}
+
 $updateData = array_combine(array_keys($changes), array_map(static fn($c) => $c[1], $changes));
 $scopedDb->update('base_plans', $updateData, ['id' => $goalId]);
 
@@ -96,10 +113,17 @@ foreach ($changes as $field => [$oldValue, $newValue]) {
 // a protected what-if variant — this mirrors the original blueprint's SQL
 // pattern (docs/02 Section 4.2/4.3: one shared is_overridden flag, no
 // per-field override flags for MVP).
+// current_age/retirement_age are deliberately NOT in this map — a what-if
+// sub-scenario varies assumptions (rates, contribution amount), not the
+// client's age, so there is no custom_current_age/custom_retirement_age
+// column to cascade into (docs/06 Section A).
 $cascadeMap = [
-    'inflation_rate'       => 'custom_inflation',
-    'withdrawal_rate'      => 'custom_withdrawal_rate',
-    'drawdown_return_rate' => 'custom_drawdown_return_rate',
+    'inflation_rate'           => 'custom_inflation',
+    'withdrawal_rate'          => 'custom_withdrawal_rate',
+    'drawdown_return_rate'     => 'custom_drawdown_return_rate',
+    'accumulation_return_rate' => 'custom_accumulation_return_rate',
+    'monthly_sip_amount'       => 'custom_monthly_sip_amount',
+    'sip_step_up_rate'         => 'custom_sip_step_up_rate',
 ];
 
 $cascadedFields = array_intersect_key($cascadeMap, $changes);

@@ -99,4 +99,21 @@ assertTrue((int) $logRow['entity_id'] === $rowA, 'the change_log entry is attrib
 assertTrue($logRow['old_value'] === '6' || $logRow['old_value'] === '6.00', 'change_log old_value captured before the cascade overwrote it');
 assertTrue($logRow['new_value'] === '6.5' || $logRow['new_value'] === '6.50', 'change_log new_value matches the cascaded value');
 
+// docs/07 Session C / docs/06 Section A — the same cascade pattern extended
+// to the three new accumulation-phase custom_* columns. Reuses Row A/Row B:
+// Row A must still receive the cascade, Row B must still be skipped (it's
+// the SAME is_overridden flag, not a new one — docs/06 guardrail 4).
+$newAccumulationReturn = 9.00;
+$accumulationChildRows = $scopedDb->select('sub_scenarios', ['base_plan_id' => $goalId, 'is_overridden' => 0]);
+assertTrue(
+    count($accumulationChildRows) === 1 && (int) $accumulationChildRows[0]['id'] === $rowA,
+    'the accumulation-field cascade SELECT (is_overridden=0) still returns only Row A'
+);
+$scopedDb->update('sub_scenarios', ['custom_accumulation_return_rate' => $newAccumulationReturn], ['base_plan_id' => $goalId, 'is_overridden' => 0]);
+
+$rowAAfterAcc = $scopedDb->select('sub_scenarios', ['id' => $rowA])[0];
+$rowBAfterAcc = $scopedDb->select('sub_scenarios', ['id' => $rowB])[0];
+assertTrue((float) $rowAAfterAcc['custom_accumulation_return_rate'] === 9.00, 'Row A (not overridden) received the cascaded accumulation_return_rate update');
+assertTrue($rowBAfterAcc['custom_accumulation_return_rate'] === null, 'Row B (overridden) did NOT receive the accumulation_return_rate cascade, same shared flag as the original three fields');
+
 echo "\nAll cascade tests passed.\n";

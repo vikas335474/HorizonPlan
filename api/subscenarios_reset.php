@@ -57,15 +57,21 @@ if (!(bool) $existing['is_overridden']) {
 // was last customized) and clear the override flag in one paired
 // update + change_log write, same pattern as the cascade in goals_update.php.
 $resetData = [
-    'custom_inflation'             => $goal['inflation_rate'],
-    'custom_withdrawal_rate'       => $goal['withdrawal_rate'],
-    'custom_drawdown_return_rate' => $goal['drawdown_return_rate'],
-    'is_overridden'                => 0,
+    'custom_inflation'                 => $goal['inflation_rate'],
+    'custom_withdrawal_rate'           => $goal['withdrawal_rate'],
+    'custom_drawdown_return_rate'      => $goal['drawdown_return_rate'],
+    'custom_accumulation_return_rate' => $goal['accumulation_return_rate'],
+    'custom_monthly_sip_amount'       => $goal['monthly_sip_amount'],
+    'custom_sip_step_up_rate'         => $goal['sip_step_up_rate'],
+    'is_overridden'                    => 0,
 ];
 
 $scopedDb->update('sub_scenarios', $resetData, ['id' => $subScenarioId]);
 
-$fieldsToLog = ['custom_inflation', 'custom_withdrawal_rate', 'custom_drawdown_return_rate'];
+$fieldsToLog = [
+    'custom_inflation', 'custom_withdrawal_rate', 'custom_drawdown_return_rate',
+    'custom_accumulation_return_rate', 'custom_monthly_sip_amount', 'custom_sip_step_up_rate',
+];
 foreach ($fieldsToLog as $field) {
     $oldValue = $existing[$field];
     $newValue = $resetData[$field];

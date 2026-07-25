@@ -73,6 +73,12 @@ echo json_encode([
         'inflation_rate'           => (float) $goal['inflation_rate'],
         'withdrawal_rate'          => $baseWithdrawalRate,
         'drawdown_return_rate'     => $goal['drawdown_return_rate'] !== null ? (float) $goal['drawdown_return_rate'] : null,
+        // docs/07 Session C / docs/06 Section A: accumulation-phase fields.
+        'accumulation_return_rate' => $goal['accumulation_return_rate'] !== null ? (float) $goal['accumulation_return_rate'] : null,
+        'current_age'              => $goal['current_age'] !== null ? (int) $goal['current_age'] : null,
+        'retirement_age'           => $goal['retirement_age'] !== null ? (int) $goal['retirement_age'] : null,
+        'monthly_sip_amount'       => $goal['monthly_sip_amount'] !== null ? (float) $goal['monthly_sip_amount'] : null,
+        'sip_step_up_rate'         => $goal['sip_step_up_rate'] !== null ? (float) $goal['sip_step_up_rate'] : null,
         // docs/07 Bet 1: which template/customization (if any) most recently
         // set drawdown_return_rate via goals_apply_template.php. The frontend
         // resolves the name from the templates it already has loaded rather

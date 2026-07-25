@@ -7,6 +7,7 @@ import ScenarioPanel from '../components/ScenarioPanel';
 import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
+import LifecycleChart from '../components/LifecycleChart';
 import {
   formatCurrency,
   formatPercent,
@@ -30,6 +31,11 @@ export default function GoalDetail() {
   const [baselineProjection, setBaselineProjection] = useState(null);
   const [applyModalOpen, setApplyModalOpen] = useState(false);
   const [appliedSourceName, setAppliedSourceName] = useState(null);
+  // docs/07 Session C / docs/06 Section A — accumulation-phase edit form.
+  const [editingAccumulation, setEditingAccumulation] = useState(false);
+  const [accForm, setAccForm] = useState(null);
+  const [accError, setAccError] = useState('');
+  const [accSaving, setAccSaving] = useState(false);
 
   function loadGoal() {
     return api.getGoal(id).then((res) => {
@@ -70,7 +76,11 @@ export default function GoalDetail() {
       .then((res) => { if (!cancelled) setBaselineProjection(res); })
       .catch(() => { if (!cancelled) setBaselineProjection(null); });
     return () => { cancelled = true; };
-  }, [goal?.id, goal?.withdrawal_rate, goal?.drawdown_return_rate, goal?.inflation_rate]);
+  }, [
+    goal?.id, goal?.withdrawal_rate, goal?.drawdown_return_rate, goal?.inflation_rate,
+    goal?.current_age, goal?.retirement_age, goal?.accumulation_return_rate,
+    goal?.monthly_sip_amount, goal?.sip_step_up_rate,
+  ]);
 
   // Resolve the currently-applied template/customization's display name
   // (docs/07 Bet 1) — goals_read.php only returns the ID, since a global
@@ -97,6 +107,49 @@ export default function GoalDetail() {
   async function handleTemplateApplied() {
     setApplyModalOpen(false);
     await loadGoal();
+  }
+
+  function startEditingAccumulation() {
+    setAccForm({
+      current_age: goal.current_age ?? '',
+      retirement_age: goal.retirement_age ?? '',
+      accumulation_return_rate: goal.accumulation_return_rate ?? '',
+      monthly_sip_amount: goal.monthly_sip_amount ?? '',
+      sip_step_up_rate: goal.sip_step_up_rate ?? '',
+    });
+    setAccError('');
+    setEditingAccumulation(true);
+  }
+
+  async function handleSaveAccumulation(e) {
+    e.preventDefault();
+    setAccError('');
+
+    const age = accForm.current_age !== '' ? Number(accForm.current_age) : null;
+    const retAge = accForm.retirement_age !== '' ? Number(accForm.retirement_age) : null;
+    if (age !== null && retAge !== null && retAge <= age) {
+      setAccError('Retirement age must be greater than current age.');
+      return;
+    }
+
+    const fields = {
+      current_age: age,
+      retirement_age: retAge,
+      accumulation_return_rate: accForm.accumulation_return_rate !== '' ? Number(accForm.accumulation_return_rate) : null,
+      monthly_sip_amount: accForm.monthly_sip_amount !== '' ? Number(accForm.monthly_sip_amount) : null,
+      sip_step_up_rate: accForm.sip_step_up_rate !== '' ? Number(accForm.sip_step_up_rate) : null,
+    };
+
+    setAccSaving(true);
+    try {
+      await api.updateGoal(goal.id, fields);
+      await loadGoal();
+      setEditingAccumulation(false);
+    } catch (err) {
+      setAccError(err.message || 'Could not save these changes.');
+    } finally {
+      setAccSaving(false);
+    }
   }
 
   function handleScenarioChanged(updated) {
@@ -213,6 +266,19 @@ export default function GoalDetail() {
                 {isRetirement && goal.drawdown_return_rate !== null && (
                   <Param label="Post-retirement return" value={formatPercent(goal.drawdown_return_rate)} />
                 )}
+                {isRetirement && goal.current_age !== null && goal.retirement_age !== null && (
+                  <Param label="Age now → retirement" value={`${goal.current_age} → ${goal.retirement_age}`} />
+                )}
+                {isRetirement && goal.accumulation_return_rate !== null && (
+                  <Param label="Pre-retirement return" value={formatPercent(goal.accumulation_return_rate)} />
+                )}
+                {isRetirement && goal.monthly_sip_amount !== null && (
+                  <Param
+                    label="Monthly SIP"
+                    value={formatCurrency(goal.monthly_sip_amount)}
+                    sub={goal.sip_step_up_rate !== null ? `+${formatPercent(goal.sip_step_up_rate)}/yr step-up` : null}
+                  />
+                )}
               </div>
             </Card>
 
@@ -245,6 +311,98 @@ export default function GoalDetail() {
                     ? <>Currently applied: <strong className="text-[var(--color-ink)]">{appliedSourceName}</strong> — sets the post-retirement return assumption above.</>
                     : 'No template applied yet — this goal\'s post-retirement return is set manually.'}
                 </p>
+              </Card>
+            )}
+
+            {/* Accumulation phase (docs/07 Session C / docs/06 Section A) — the
+                only base-goal fields with an edit-after-creation UI so far,
+                since age/SIP naturally drift year to year unlike a one-time
+                goal setup. */}
+            {isRetirement && (
+              <Card className="p-4 mb-4">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <h2 className="text-base font-semibold text-[var(--color-ink)]">Accumulation phase</h2>
+                  {!editingAccumulation && (
+                    <Button variant="outline" size="sm" onClick={startEditingAccumulation}>
+                      {goal.current_age !== null ? 'Edit' : 'Add saving years'}
+                    </Button>
+                  )}
+                </div>
+
+                {!editingAccumulation && goal.current_age === null && (
+                  <p className="text-xs text-[var(--color-ink-2)]">
+                    Not set — this goal projects decumulation only, starting from today's corpus.
+                  </p>
+                )}
+
+                {!editingAccumulation && goal.current_age !== null && baselineProjection?.lifecycle_series && (
+                  <div className="mt-2">
+                    <LifecycleChart
+                      series={baselineProjection.lifecycle_series}
+                      yearsToRetirement={baselineProjection.accumulation_assumptions.years_to_retirement}
+                    />
+                  </div>
+                )}
+
+                {editingAccumulation && (
+                  <form onSubmit={handleSaveAccumulation} className="mt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Current age</label>
+                        <input
+                          type="number" min="0" max="120" step="1" value={accForm.current_age}
+                          onChange={(e) => setAccForm((f) => ({ ...f, current_age: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Retirement age</label>
+                        <input
+                          type="number" min="0" max="120" step="1" value={accForm.retirement_age}
+                          onChange={(e) => setAccForm((f) => ({ ...f, retirement_age: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Pre-retirement return (%)</label>
+                        <input
+                          type="number" min="0" max="100" step="any" value={accForm.accumulation_return_rate}
+                          onChange={(e) => setAccForm((f) => ({ ...f, accumulation_return_rate: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Monthly SIP (₹)</label>
+                        <input
+                          type="number" min="0" step="any" value={accForm.monthly_sip_amount}
+                          onChange={(e) => setAccForm((f) => ({ ...f, monthly_sip_amount: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Annual SIP step-up (%)</label>
+                        <input
+                          type="number" min="0" max="100" step="any" value={accForm.sip_step_up_rate}
+                          onChange={(e) => setAccForm((f) => ({ ...f, sip_step_up_rate: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                    </div>
+
+                    {accError && (
+                      <p className="mt-3 text-sm" style={{ color: 'var(--color-alert)' }}>{accError}</p>
+                    )}
+
+                    <div className="flex gap-2 mt-3">
+                      <Button type="submit" size="sm" disabled={accSaving}>
+                        {accSaving ? 'Saving…' : 'Save'}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setEditingAccumulation(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </Card>
             )}
 

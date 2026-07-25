@@ -51,6 +51,10 @@ if ($goal['goal_type'] !== 'retirement') {
 $withdrawalRate = $goal['withdrawal_rate'] !== null ? (float) $goal['withdrawal_rate'] : null;
 $inflationRate = (float) $goal['inflation_rate'];
 $drawdownReturnRate = $goal['drawdown_return_rate'] !== null ? (float) $goal['drawdown_return_rate'] : null;
+// docs/07 Session C / docs/06 Section A — same effective-value pattern.
+$accumulationReturnRate = $goal['accumulation_return_rate'] !== null ? (float) $goal['accumulation_return_rate'] : null;
+$monthlySipAmount = $goal['monthly_sip_amount'] !== null ? (float) $goal['monthly_sip_amount'] : null;
+$sipStepUpRate = $goal['sip_step_up_rate'] !== null ? (float) $goal['sip_step_up_rate'] : null;
 
 $subScenarioId = (int) ($_GET['sub_scenario_id'] ?? 0);
 if ($subScenarioId > 0) {
@@ -70,6 +74,15 @@ if ($subScenarioId > 0) {
         }
         if ($sub['custom_drawdown_return_rate'] !== null) {
             $drawdownReturnRate = (float) $sub['custom_drawdown_return_rate'];
+        }
+        if ($sub['custom_accumulation_return_rate'] !== null) {
+            $accumulationReturnRate = (float) $sub['custom_accumulation_return_rate'];
+        }
+        if ($sub['custom_monthly_sip_amount'] !== null) {
+            $monthlySipAmount = (float) $sub['custom_monthly_sip_amount'];
+        }
+        if ($sub['custom_sip_step_up_rate'] !== null) {
+            $sipStepUpRate = (float) $sub['custom_sip_step_up_rate'];
         }
     }
 }
@@ -103,6 +116,49 @@ $response = [
     // series above plus the corpus multiple — no new inputs.
     'readiness_score'        => PlanMath::readinessScore($withdrawalRate, $steady, $adverse),
 ];
+
+// docs/07 Session C / docs/06 Section A: accumulation + combined lifecycle
+// series — only computed when the goal actually has ages + an accumulation
+// return set, so a goal that's still decumulation-only (every Phase 1 goal,
+// and any Phase 2 goal that never fills these in) gets exactly the response
+// shape it got before this session, unchanged.
+$currentAge = $goal['current_age'] !== null ? (int) $goal['current_age'] : null;
+$retirementAge = $goal['retirement_age'] !== null ? (int) $goal['retirement_age'] : null;
+if ($currentAge !== null && $retirementAge !== null && $accumulationReturnRate !== null) {
+    $yearsToRetirement = $retirementAge - $currentAge;
+    $sipAmount = $monthlySipAmount ?? 0.0;
+    $sipStepUp = $sipStepUpRate ?? 0.0;
+
+    $accumulationSeries = PlanMath::accumulationSeries(
+        $initialNetWorth,
+        $accumulationReturnRate,
+        $sipAmount,
+        $sipStepUp,
+        $yearsToRetirement
+    );
+    $lifecycleSeries = PlanMath::lifecycleSeries(
+        $initialNetWorth,
+        $accumulationReturnRate,
+        $sipAmount,
+        $sipStepUp,
+        $yearsToRetirement,
+        $withdrawalRate,
+        $inflationRate,
+        $drawdownReturnRate,
+        $horizonYears
+    );
+
+    $response['accumulation_series'] = $accumulationSeries;
+    $response['lifecycle_series'] = $lifecycleSeries;
+    $response['accumulation_assumptions'] = [
+        'accumulation_return_rate' => $accumulationReturnRate,
+        'current_age'              => $currentAge,
+        'retirement_age'           => $retirementAge,
+        'years_to_retirement'      => $yearsToRetirement,
+        'monthly_sip_amount'       => $sipAmount,
+        'sip_step_up_rate'         => $sipStepUp,
+    ];
+}
 
 // docs/07 Bet 2: optional third series — "what if you retired in [year]?"
 // Only computed when the caller asks for it, so the default projection
