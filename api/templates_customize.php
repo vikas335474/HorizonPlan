@@ -85,22 +85,40 @@ if (empty($changes)) {
     exit();
 }
 
+// docs/07 Bet 1: an approval covers the numbers as they stood at approval
+// time. Editing the fields that actually feed a plan's math after approval
+// invalidates that sign-off — reset to 'draft' so goals_apply_template.php
+// refuses to apply the changed numbers until someone re-approves them.
+// Cosmetic fields (name, description, sharing flags) don't affect the math
+// and don't reset approval.
+$approvalAffectingFields = ['allocation_json', 'return_assumption_pct'];
+$revertsApproval = $existing['approval_status'] === 'approved'
+    && !empty(array_intersect($approvalAffectingFields, array_keys($changes)));
+
 $updateData = array_combine(array_keys($changes), array_map(static fn($c) => $c[1], $changes));
+if ($revertsApproval) {
+    $updateData['approval_status'] = 'draft';
+    $updateData['approved_by_user_id'] = null;
+    $updateData['approved_at'] = null;
+}
 $scopedDb->update('template_customizations', $updateData, ['id' => $customizationId]);
+
+$auditDetails = array_map(static fn($c) => ['old' => $c[0], 'new' => $c[1]], $changes);
+if ($revertsApproval) {
+    $auditDetails['approval_status'] = ['old' => 'approved', 'new' => 'draft'];
+}
 
 $scopedDb->insert('template_audit_log', [
     'template_id'         => null,
     'customization_id'    => $customizationId,
     'user_id'             => $userId,
     'action'               => 'customized',
-    'entity_details_json' => json_encode(array_map(
-        static fn($c) => ['old' => $c[0], 'new' => $c[1]],
-        $changes
-    )),
+    'entity_details_json' => json_encode($auditDetails),
 ]);
 
 echo json_encode([
-    'status'           => 'success',
-    'customization_id' => $customizationId,
-    'changed_fields'   => array_keys($changes),
+    'status'            => 'success',
+    'customization_id'  => $customizationId,
+    'changed_fields'    => array_keys($changes),
+    'approval_reverted' => $revertsApproval,
 ]);

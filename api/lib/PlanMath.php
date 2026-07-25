@@ -109,4 +109,64 @@ final class PlanMath
 
         return $balances;
     }
+
+    /**
+     * docs/07 Bet 3: Retirement Readiness Score, 0-100. Deterministic, built
+     * entirely from numbers already computed elsewhere in this class — no new
+     * inputs, no schema, no DB access (still "pure computation only" per the
+     * class docblock). Three components:
+     *   - 40%: fraction of the horizon the steady-return series survives
+     *     (balance stays >= 0)
+     *   - 40%: fraction of the horizon the adverse-sequence series survives
+     *   - 20%: corpus multiple vs. the Indian-calibrated band from docs/02
+     *     §4.2 (2.5%-4% withdrawal rate -> ~25x-40x corpus multiple),
+     *     clamped a touch wider (20x-40x) so a rate slightly outside the
+     *     suggested range still yields a defined score rather than a
+     *     cliff-edge. Omitted (weights renormalized to 50/50) when the
+     *     withdrawal rate isn't set.
+     *
+     * Weights are named constants here, not a tenant-configurable table — no
+     * tenant has asked for that yet (docs/07 §5: no speculative per-tenant
+     * configurability before a tenant asks). This is a transparency score for
+     * illustration, not a recommendation — the "how is this calculated?" copy
+     * in the UI should state the formula, not just the number.
+     */
+    public static function readinessScore(?float $withdrawalRatePercent, array $steadySeries, array $adverseSeries): ?int
+    {
+        if (count($steadySeries) < 2 || count($adverseSeries) < 2) {
+            return null; // no horizon to measure survival over
+        }
+
+        $steadyFraction = self::survivalFraction($steadySeries);
+        $adverseFraction = self::survivalFraction($adverseSeries);
+
+        $multiple = self::corpusMultiple($withdrawalRatePercent);
+        if ($multiple !== null) {
+            $multipleFactor = max(0.0, min(1.0, ($multiple - 20.0) / (40.0 - 20.0)));
+            $score = ($steadyFraction * 0.4) + ($adverseFraction * 0.4) + ($multipleFactor * 0.2);
+        } else {
+            $score = ($steadyFraction * 0.5) + ($adverseFraction * 0.5);
+        }
+
+        return (int) round($score * 100);
+    }
+
+    /**
+     * Fraction of years 1..N (index 0 is the starting balance, excluded)
+     * that stayed non-negative. Depletes at the first negative year -> the
+     * fraction of years survived before that point. Never depletes -> 1.0.
+     */
+    private static function survivalFraction(array $series): float
+    {
+        $horizonYears = count($series) - 1;
+        if ($horizonYears <= 0) {
+            return 1.0;
+        }
+        for ($n = 1; $n <= $horizonYears; $n++) {
+            if ($series[$n] < 0) {
+                return ($n - 1) / $horizonYears;
+            }
+        }
+        return 1.0;
+    }
 }

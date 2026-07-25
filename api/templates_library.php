@@ -37,6 +37,7 @@ foreach ($scopedDb->selectGlobalPublishedTemplates() as $row) {
         'allocation_json'        => json_decode($row['allocation_json'], true),
         'return_assumption_pct'  => $row['return_assumption_pct'] !== null ? (float) $row['return_assumption_pct'] : null,
         'risk_profile_enum'      => $row['risk_profile_enum'],
+        'approval_status'        => $row['approval_status'],
     ];
 }
 
@@ -50,6 +51,7 @@ foreach ($scopedDb->select('template_strategies', ['is_system_template' => 0]) a
         'allocation_json'        => json_decode($row['allocation_json'], true),
         'return_assumption_pct'  => $row['return_assumption_pct'] !== null ? (float) $row['return_assumption_pct'] : null,
         'risk_profile_enum'      => $row['risk_profile_enum'],
+        'approval_status'        => $row['approval_status'],
     ];
 }
 
@@ -64,6 +66,7 @@ foreach ($scopedDb->select('template_customizations') as $row) {
         'allocation_json'        => $row['allocation_json'] !== null ? json_decode($row['allocation_json'], true) : null,
         'return_assumption_pct'  => $row['return_assumption_pct'] !== null ? (float) $row['return_assumption_pct'] : null,
         'risk_profile_enum'      => null,
+        'approval_status'        => $row['approval_status'],
     ];
 }
 

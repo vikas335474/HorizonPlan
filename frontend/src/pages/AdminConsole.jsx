@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
 import { Card, Badge, Button, EmptyState, Spinner } from '../components/ui';
-import { AllocationBar, RiskBadge, TemplateCreateModal } from '../components/TemplateUI';
+import { AllocationBar, RiskBadge, TemplateCreateModal, ApprovalBadge, ApproveButton } from '../components/TemplateUI';
 
 // Super Admin console: tabs for Firms and Strategy Templates. super_admin only —
 // enforced server-side on every endpoint; the client guard here is just UX.
@@ -231,6 +231,7 @@ function AdminTemplateRow({ template, onChanged }) {
             >
               {template.is_published ? 'published' : 'draft'}
             </Badge>
+            <ApprovalBadge status={template.approval_status} />
           </div>
           {template.description && (
             <p className="text-xs text-[var(--color-ink-2)] mb-2 max-w-lg">{template.description}</p>
@@ -244,6 +245,11 @@ function AdminTemplateRow({ template, onChanged }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ApproveButton
+            templateId={template.id}
+            approvalStatus={template.approval_status}
+            onApproved={onChanged}
+          />
           <Button
             variant="ghost"
             size="sm"

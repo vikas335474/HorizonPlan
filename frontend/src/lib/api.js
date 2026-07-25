@@ -229,6 +229,32 @@ export const api = {
       }),
     }),
 
+  // templates_approve.php: marks a template/customization ready for use on a
+  // real client plan (docs/07 Bet 1). Global templates require super_admin;
+  // own-tenant templates/customizations require an advisor in that tenant.
+  approveTemplate: (templateId, customizationId) =>
+    request('templates_approve.php', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(templateId ? { template_id: templateId } : {}),
+        ...(customizationId ? { customization_id: customizationId } : {}),
+      }),
+    }),
+
+  // goals_apply_template.php: the loop-closer — writes an approved
+  // template's/customization's return_assumption_pct into the goal's
+  // drawdown_return_rate, cascades to non-overridden sub-scenarios, and
+  // records provenance. Retirement-type goals only; 403s if unapproved.
+  applyTemplateToGoal: (goalId, { templateId, customizationId } = {}) =>
+    request('goals_apply_template.php', {
+      method: 'POST',
+      body: JSON.stringify({
+        goal_id: goalId,
+        ...(templateId ? { template_id: templateId } : {}),
+        ...(customizationId ? { customization_id: customizationId } : {}),
+      }),
+    }),
+
   // Retirement-type goals only — goals_projection.php 400s otherwise.
   // subScenarioId is optional: omit it to project the parent goal's own
   // values, pass it to project a specific (possibly overridden) scenario.

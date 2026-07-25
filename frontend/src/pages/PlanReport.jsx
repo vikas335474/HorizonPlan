@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import DisclosureBanner from '../components/DisclosureBanner';
 import SequenceRiskChart from '../components/SequenceRiskChart';
+import { ReadinessScoreCard } from '../components/ReadinessScore';
 import { Spinner } from '../components/ui';
 import {
   formatCurrency,
@@ -126,6 +127,15 @@ export default function PlanReport() {
                 <Figure label="Post-retirement return" value={formatPercent(goal.drawdown_return_rate)} />
               )}
             </section>
+
+            {/* Retirement Readiness Score (docs/07 Bet 3) — "the number a
+                client can hold onto" after the meeting ends, prominent in
+                the artefact that actually gets handed to them. */}
+            {isRetirement && projection?.readiness_score != null && (
+              <section className="mt-6">
+                <ReadinessScoreCard score={projection.readiness_score} />
+              </section>
+            )}
 
             {/* Projection */}
             {isRetirement && projection && (

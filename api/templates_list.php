@@ -30,6 +30,11 @@ function formatTemplate(array $row, int $usageCount): array
         'risk_profile_enum'      => $row['risk_profile_enum'],
         'is_system_template'     => (bool) $row['is_system_template'],
         'is_published'           => (bool) $row['is_published'],
+        // docs/07 Bet 1: whether this template has been signed off for use on
+        // a real client's plan — see goals_apply_template.php's enforcement.
+        'approval_status'        => $row['approval_status'],
+        'approved_by_user_id'    => $row['approved_by_user_id'] !== null ? (int) $row['approved_by_user_id'] : null,
+        'approved_at'            => $row['approved_at'],
         'creator_user_id'        => $row['creator_user_id'] !== null ? (int) $row['creator_user_id'] : null,
         'created_at'             => $row['created_at'],
         'published_at'           => $row['published_at'],
@@ -48,6 +53,9 @@ function formatCustomization(array $row, int $usageCount): array
         'return_assumption_pct'  => $row['return_assumption_pct'] !== null ? (float) $row['return_assumption_pct'] : null,
         'is_private'             => (bool) $row['is_private'],
         'is_shareable'           => (bool) $row['is_shareable'],
+        'approval_status'        => $row['approval_status'],
+        'approved_by_user_id'    => $row['approved_by_user_id'] !== null ? (int) $row['approved_by_user_id'] : null,
+        'approved_at'            => $row['approved_at'],
         'created_by_user_id'     => (int) $row['created_by_user_id'],
         'created_at'             => $row['created_at'],
         'last_modified_at'       => $row['last_modified_at'],

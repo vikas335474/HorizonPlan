@@ -24,12 +24,16 @@ function assertTrue(bool $cond, string $label): void
 $db = getPdo();
 
 // --- Setup: clean slate, two tenants (a system-template owner + an advisor tenant) ---
+// base_plans must be cleared BEFORE template_strategies/template_customizations —
+// migration 014 added applied_template_id/applied_customization_id FKs on
+// base_plans pointing at those tables, so deleting the referenced rows first
+// (the previous order) now fails with a FK violation.
 $db->exec("DELETE FROM template_audit_log");
-$db->exec("DELETE FROM template_customizations");
-$db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM change_log");
 $db->exec("DELETE FROM sub_scenarios");
 $db->exec("DELETE FROM base_plans");
+$db->exec("DELETE FROM template_customizations");
+$db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
@@ -184,5 +188,129 @@ assertTrue(validateAllocationJson(['equity' => -10, 'debt' => 110]) !== null, 'v
 assertTrue(validateAllocationJson([]) !== null, 'validateAllocationJson rejects an empty allocation');
 assertTrue(validateRiskProfile('moderate') === null, 'validateRiskProfile accepts a known profile');
 assertTrue(validateRiskProfile('yolo') !== null, 'validateRiskProfile rejects an unknown profile');
+
+// docs/07 Bet 1: approval workflow — an unapproved template/customization is
+// illustration-only until a deliberate second step marks it approved.
+
+// --- Test 14: every newly inserted row defaults to approval_status = 'draft' ---
+$freshGlobal = $dbSuperAdmin->select('template_strategies', ['id' => $globalTemplateId]);
+$freshCustomization = $dbAdvisorB->select('template_customizations', ['id' => $customizationId]);
+assertTrue(
+    $freshGlobal[0]['approval_status'] === 'draft' && $freshCustomization[0]['approval_status'] === 'draft',
+    'newly created templates/customizations default to approval_status = draft, even for a super_admin-created global template'
+);
+
+// --- Test 15: approveGlobalTemplate() is the one write exception — approves
+// across tenants, restricted to is_system_template = 1 rows ---
+$dbSuperAdmin->approveGlobalTemplate($globalTemplateId, 1);
+$approvedGlobal = $dbAdvisorB->findTemplateStrategyById($globalTemplateId); // unscoped read, any tenant can check
+assertTrue(
+    $approvedGlobal['approval_status'] === 'approved' && (int) $approvedGlobal['approved_by_user_id'] === 1,
+    'approveGlobalTemplate() marks a system template approved and records the approver, readable cross-tenant'
+);
+
+// approveGlobalTemplate() is guarded by is_system_template = 1 in its own SQL
+// — calling it against advisor A's non-system draft must not approve it.
+$dbSuperAdmin->approveGlobalTemplate($draftId, 1);
+$stillDraft = $dbAdvisorA->select('template_strategies', ['id' => $draftId]);
+assertTrue(
+    $stillDraft[0]['approval_status'] === 'draft',
+    'approveGlobalTemplate() refuses to approve a non-system template even if called directly (WHERE is_system_template = 1 guard)'
+);
+
+// --- Test 16: a non-system template is approved via the normal tenant-scoped
+// update() — advisor A can approve their own draft, advisor B cannot ---
+$affectedByOwner = $dbAdvisorA->update('template_strategies', [
+    'approval_status'     => 'approved',
+    'approved_by_user_id' => 2,
+    'approved_at'         => date('Y-m-d H:i:s'),
+], ['id' => $draftId]);
+assertTrue($affectedByOwner === 1, 'the owning tenant\'s advisor can approve their own non-system template via the normal tenant-scoped update()');
+
+$affectedByOtherTenant = $dbAdvisorB->update('template_strategies', [
+    'approval_status' => 'approved',
+], ['id' => $draftId]);
+assertTrue($affectedByOtherTenant === 0, 'a different tenant cannot approve advisor A\'s template — tenant-scoped update() naturally blocks it, same as any other cross-tenant write attempt');
+
+// --- Test 17: goals_apply_template.php's core sequence — approved-only gate,
+// cascade to non-overridden children, skip overridden ones, log usage ---
+$db->exec("INSERT INTO users (id, tenant_id, email, password_hash, role) VALUES (4, 3, 'client_b@example.com', 'hash', 'client')");
+$goalId = $dbAdvisorB->insert('base_plans', [
+    'client_id'                => 4,
+    'goal_type'                 => 'retirement',
+    'goal_label'                => 'Retirement — Apply Template Test',
+    'initial_net_worth'         => 10000000.00,
+    'inflation_rate'            => 6.0,
+    'withdrawal_rate'           => 3.5,
+    'drawdown_return_rate'      => null,
+    'projection_horizon_years'  => 30,
+]);
+$freeChildId = $dbAdvisorB->insert('sub_scenarios', ['base_plan_id' => $goalId, 'custom_inflation' => 6.0, 'is_overridden' => 0]);
+$protectedChildId = $dbAdvisorB->insert('sub_scenarios', ['base_plan_id' => $goalId, 'custom_drawdown_return_rate' => 5.0, 'is_overridden' => 1]);
+
+// The approval gate itself: an unapproved template must be refused before
+// any of the write steps below run — this mirrors the exact check
+// goals_apply_template.php makes before touching base_plans. Use a fresh
+// draft (still-published, so it's fork/apply-eligible on the ownership
+// check) rather than reusing $draftId, which Test 16 already approved.
+$stillDraftId = $dbAdvisorA->insert('template_strategies', [
+    'creator_user_id'      => 2,
+    'creator_org_id'        => 2,
+    'template_name'         => 'Advisor A Published But Unapproved',
+    'market_code'           => 'IN',
+    'allocation_json'       => json_encode(['equity' => 50, 'debt' => 50]),
+    'return_assumption_pct' => 9.0,
+    'is_system_template'    => 0,
+    'is_published'          => 1,
+]);
+$unapprovedCheck = $dbAdvisorB->findTemplateStrategyById($stillDraftId);
+assertTrue($unapprovedCheck['approval_status'] !== 'approved', 'an unapproved template is correctly identified as not applicable to a goal (the exact check goals_apply_template.php makes)');
+
+// Now apply the approved global template's return assumption to the goal —
+// same statements goals_apply_template.php runs.
+$appliedRate = (float) $approvedGlobal['return_assumption_pct'];
+$dbAdvisorB->update('base_plans', [
+    'drawdown_return_rate'     => $appliedRate,
+    'applied_template_id'      => $globalTemplateId,
+    'applied_customization_id' => null,
+], ['id' => $goalId]);
+$dbAdvisorB->update('sub_scenarios', ['custom_drawdown_return_rate' => $appliedRate], ['base_plan_id' => $goalId, 'is_overridden' => 0]);
+$dbAdvisorB->insert('template_audit_log', [
+    'template_id'         => $globalTemplateId,
+    'customization_id'    => null,
+    'user_id'             => 3,
+    'action'               => 'used_in_plan',
+    'entity_details_json' => json_encode(['goal_id' => $goalId]),
+]);
+
+$updatedGoal = $dbAdvisorB->select('base_plans', ['id' => $goalId]);
+assertTrue(
+    (float) $updatedGoal[0]['drawdown_return_rate'] === $appliedRate && (int) $updatedGoal[0]['applied_template_id'] === $globalTemplateId,
+    'applying a template writes its return_assumption_pct into drawdown_return_rate and records applied_template_id'
+);
+
+$freeChild = $dbAdvisorB->select('sub_scenarios', ['id' => $freeChildId]);
+$protectedChild = $dbAdvisorB->select('sub_scenarios', ['id' => $protectedChildId]);
+assertTrue(
+    (float) $freeChild[0]['custom_drawdown_return_rate'] === $appliedRate,
+    'a non-overridden sub-scenario inherits the applied template\'s return assumption, same cascade rule as goals_update.php'
+);
+assertTrue(
+    (float) $protectedChild[0]['custom_drawdown_return_rate'] === 5.0,
+    'an overridden (is_overridden=1) sub-scenario is untouched by the template application — the cascade skips it exactly like a normal goals_update.php cascade'
+);
+
+// countTemplateUsage($globalTemplateId, null) filters only on template_id
+// (customization_id param is null -> not filtered), so it picks up BOTH
+// Test 11's seeded used_in_plan row (which also happened to carry a
+// customization_id) and this apply's row: 2 total, both tenant 3.
+// countGlobalTemplateUsage is the same count with no tenant filter — since
+// both rows are tenant 3, it agrees.
+$usageAfterApply = $dbAdvisorB->countTemplateUsage($globalTemplateId, null);
+$globalUsageAfterApply = $dbAdvisorA->countGlobalTemplateUsage($globalTemplateId);
+assertTrue(
+    $usageAfterApply === 2 && $globalUsageAfterApply === 2,
+    'applying a template writes a used_in_plan audit row that the existing usage-count methods pick up — this is the loop Phase 1\'s template system left unclosed'
+);
 
 echo "\nAll template tests passed.\n";
