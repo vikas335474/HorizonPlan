@@ -16,10 +16,15 @@ function assertTrue(bool $cond, string $label): void
 $db = getPdo();
 
 // --- Setup: two tenants, one client user each ---
+$db->exec("DELETE FROM template_audit_log");
+$db->exec("DELETE FROM template_customizations");
+$db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM change_log");
 $db->exec("DELETE FROM sub_scenarios");
 $db->exec("DELETE FROM base_plans");
 $db->exec("DELETE FROM active_sessions");
+$db->exec("DELETE FROM mfa_pending");
+$db->exec("DELETE FROM password_resets");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
 $db->exec("DELETE FROM tenants");

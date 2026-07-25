@@ -184,6 +184,51 @@ export const api = {
   resetSubScenario: (id) =>
     request('subscenarios_reset.php', { method: 'POST', body: JSON.stringify({ id }) }),
 
+  // --- Strategy Templates (Phase 1) ---
+  // templates_list.php: returns { global_templates, my_templates, my_customizations }
+  listTemplates: () =>
+    request('templates_list.php', { method: 'POST' }),
+
+  // templates_library.php: searchable discovery (GET, no CSRF needed).
+  // q=search string, risk_profile=conservative|moderate|balanced|aggressive,
+  // market_code=IN (default).
+  searchTemplateLibrary: (q = '', riskProfile = '', marketCode = '') => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (riskProfile) params.set('risk_profile', riskProfile);
+    if (marketCode) params.set('market_code', marketCode);
+    const qs = params.toString();
+    return request(`templates_library.php${qs ? `?${qs}` : ''}`);
+  },
+
+  // templates_create.php: advisor or super_admin creates a new template.
+  // is_system_template is only honoured for super_admin sessions (server-enforced).
+  createTemplate: (fields) =>
+    request('templates_create.php', { method: 'POST', body: JSON.stringify(fields) }),
+
+  // templates_fork.php: advisor forks a published template into a customization.
+  // Returns { customization_id }.
+  forkTemplate: (baseTemplateId, fields = {}) =>
+    request('templates_fork.php', {
+      method: 'POST',
+      body: JSON.stringify({ base_template_id: baseTemplateId, ...fields }),
+    }),
+
+  // templates_customize.php: edit an existing customization (own-tenant only).
+  // Partial update — only keys present in fields are changed.
+  updateTemplateCustomization: (id, fields) =>
+    request('templates_customize.php', { method: 'POST', body: JSON.stringify({ id, ...fields }) }),
+
+  // templates_audit.php: full provenance trail for a template or customization.
+  getTemplateAudit: (templateId, customizationId) =>
+    request('templates_audit.php', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(templateId ? { template_id: templateId } : {}),
+        ...(customizationId ? { customization_id: customizationId } : {}),
+      }),
+    }),
+
   // Retirement-type goals only — goals_projection.php 400s otherwise.
   // subScenarioId is optional: omit it to project the parent goal's own
   // values, pass it to project a specific (possibly overridden) scenario.
