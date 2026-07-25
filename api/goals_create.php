@@ -58,6 +58,16 @@ if ($projectionHorizonYears < 1 || $projectionHorizonYears > 100) {
     exit();
 }
 
+// docs/07 Session C / docs/06 Section A: accumulation-phase fields, retirement
+// goals only, all optional (a goal can still be decumulation-only, same as today).
+$currentAge = $isRetirement ? ($input['current_age'] ?? null) : null;
+$retirementAge = $isRetirement ? ($input['retirement_age'] ?? null) : null;
+if ($currentAge !== null && $retirementAge !== null && (int) $retirementAge <= (int) $currentAge) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'retirement_age must be greater than current_age.']);
+    exit();
+}
+
 $data = [
     'client_id'                => $clientId,
     'goal_type'                => $goalType,
@@ -69,6 +79,11 @@ $data = [
     'withdrawal_rate'          => $isRetirement ? ($input['withdrawal_rate'] ?? 3.5) : null,
     'drawdown_return_rate'     => $isRetirement ? ($input['drawdown_return_rate'] ?? null) : null,
     'projection_horizon_years' => $projectionHorizonYears,
+    'accumulation_return_rate' => $isRetirement ? ($input['accumulation_return_rate'] ?? null) : null,
+    'current_age'              => $currentAge,
+    'retirement_age'           => $retirementAge,
+    'monthly_sip_amount'       => $isRetirement ? ($input['monthly_sip_amount'] ?? null) : null,
+    'sip_step_up_rate'         => $isRetirement ? ($input['sip_step_up_rate'] ?? null) : null,
 ];
 
 $goalId = $scopedDb->insert('base_plans', $data);

@@ -44,11 +44,15 @@ if ($session['role'] === 'client' && (int) $goal['client_id'] !== (int) $userId)
 // is_overridden = false, so it inherits future cascade updates until a
 // client/advisor actually customizes something on it.
 $data = [
-    'base_plan_id'                 => $goalId,
-    'custom_inflation'             => $goal['inflation_rate'],
-    'custom_withdrawal_rate'       => $goal['withdrawal_rate'],
-    'custom_drawdown_return_rate' => $goal['drawdown_return_rate'],
-    'is_overridden'                => 0,
+    'base_plan_id'                     => $goalId,
+    'custom_inflation'                 => $goal['inflation_rate'],
+    'custom_withdrawal_rate'           => $goal['withdrawal_rate'],
+    'custom_drawdown_return_rate'      => $goal['drawdown_return_rate'],
+    // docs/07 Session C — snapshotted the same way as the original three fields.
+    'custom_accumulation_return_rate' => $goal['accumulation_return_rate'],
+    'custom_monthly_sip_amount'       => $goal['monthly_sip_amount'],
+    'custom_sip_step_up_rate'         => $goal['sip_step_up_rate'],
+    'is_overridden'                    => 0,
 ];
 
 $subScenarioId = $scopedDb->insert('sub_scenarios', $data);
