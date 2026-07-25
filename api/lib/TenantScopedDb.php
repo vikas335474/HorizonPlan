@@ -4,8 +4,8 @@ declare(strict_types=1);
 /**
  * Every endpoint that touches tenant-scoped data (base_plans, sub_scenarios,
  * users, change_log, template_strategies, template_customizations,
- * template_audit_log, risk_question_sets, risk_profiles) must go through
- * this class instead of writing raw SQL
+ * template_audit_log, risk_question_sets, risk_profiles,
+ * client_portfolio_items) must go through this class instead of writing raw SQL
  * with a hand-typed "WHERE tenant_id = ..." clause. See docs/02 Section 3.1:
  * the whole point is that a forgotten WHERE clause in a future endpoint file
  * is a cross-tenant data leak, and centralizing this closes that off structurally
@@ -24,7 +24,7 @@ final class TenantScopedDb
     private const ALLOWED_TABLES = [
         'base_plans', 'sub_scenarios', 'change_log', 'users',
         'template_strategies', 'template_customizations', 'template_audit_log',
-        'risk_question_sets', 'risk_profiles',
+        'risk_question_sets', 'risk_profiles', 'client_portfolio_items',
     ];
 
     public function __construct(PDO $db, int $tenantId)

@@ -25,6 +25,11 @@ $db->exec("DELETE FROM sub_scenarios");
 $db->exec("DELETE FROM base_plans");
 $db->exec("DELETE FROM template_customizations");
 $db->exec("DELETE FROM template_strategies");
+// risk_profiles and client_portfolio_items (migrations 017/018) also FK to
+// users — must clear before DELETE FROM users.
+$db->exec("DELETE FROM risk_profiles");
+$db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM mfa_pending");
 $db->exec("DELETE FROM password_resets");

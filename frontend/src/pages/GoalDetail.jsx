@@ -36,6 +36,11 @@ export default function GoalDetail() {
   const [accForm, setAccForm] = useState(null);
   const [accError, setAccError] = useState('');
   const [accSaving, setAccSaving] = useState(false);
+  // docs/05 item 3 / docs/06 corpus composition — liquid/locked edit form.
+  const [editingCorpus, setEditingCorpus] = useState(false);
+  const [corpusForm, setCorpusForm] = useState(null);
+  const [corpusError, setCorpusError] = useState('');
+  const [corpusSaving, setCorpusSaving] = useState(false);
 
   function loadGoal() {
     return api.getGoal(id).then((res) => {
@@ -80,6 +85,7 @@ export default function GoalDetail() {
     goal?.id, goal?.withdrawal_rate, goal?.drawdown_return_rate, goal?.inflation_rate,
     goal?.current_age, goal?.retirement_age, goal?.accumulation_return_rate,
     goal?.monthly_sip_amount, goal?.sip_step_up_rate,
+    goal?.liquid_corpus_amount, goal?.locked_corpus_amount, goal?.locked_return_rate,
   ]);
 
   // Resolve the currently-applied template/customization's display name
@@ -149,6 +155,49 @@ export default function GoalDetail() {
       setAccError(err.message || 'Could not save these changes.');
     } finally {
       setAccSaving(false);
+    }
+  }
+
+  function startEditingCorpus() {
+    setCorpusForm({
+      liquid_corpus_amount: goal.liquid_corpus_amount ?? '',
+      locked_corpus_amount: goal.locked_corpus_amount ?? '',
+      locked_return_rate: goal.locked_return_rate ?? '',
+    });
+    setCorpusError('');
+    setEditingCorpus(true);
+  }
+
+  async function handleSaveCorpus(e) {
+    e.preventDefault();
+    setCorpusError('');
+
+    const liquid = corpusForm.liquid_corpus_amount !== '' ? Number(corpusForm.liquid_corpus_amount) : null;
+    const locked = corpusForm.locked_corpus_amount !== '' ? Number(corpusForm.locked_corpus_amount) : null;
+    if ((liquid === null) !== (locked === null)) {
+      setCorpusError('Provide both liquid and locked corpus amounts, or clear both.');
+      return;
+    }
+    if (liquid !== null && locked !== null && Math.abs(liquid + locked - goal.initial_net_worth) > 0.01) {
+      setCorpusError(`Liquid + locked (${liquid + locked}) must sum to the starting corpus (${goal.initial_net_worth}).`);
+      return;
+    }
+
+    const fields = {
+      liquid_corpus_amount: liquid,
+      locked_corpus_amount: locked,
+      locked_return_rate: corpusForm.locked_return_rate !== '' ? Number(corpusForm.locked_return_rate) : null,
+    };
+
+    setCorpusSaving(true);
+    try {
+      await api.updateGoal(goal.id, fields);
+      await loadGoal();
+      setEditingCorpus(false);
+    } catch (err) {
+      setCorpusError(err.message || 'Could not save these changes.');
+    } finally {
+      setCorpusSaving(false);
     }
   }
 
@@ -279,6 +328,16 @@ export default function GoalDetail() {
                     sub={goal.sip_step_up_rate !== null ? `+${formatPercent(goal.sip_step_up_rate)}/yr step-up` : null}
                   />
                 )}
+                {isRetirement && goal.liquid_corpus_amount !== null && (
+                  <Param label="Liquid corpus" value={formatCurrency(goal.liquid_corpus_amount)} />
+                )}
+                {isRetirement && goal.locked_corpus_amount !== null && (
+                  <Param
+                    label="Locked corpus"
+                    value={formatCurrency(goal.locked_corpus_amount)}
+                    sub={goal.locked_return_rate !== null ? `${formatPercent(goal.locked_return_rate)} return` : null}
+                  />
+                )}
               </div>
             </Card>
 
@@ -398,6 +457,82 @@ export default function GoalDetail() {
                         {accSaving ? 'Saving…' : 'Save'}
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setEditingAccumulation(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </Card>
+            )}
+
+            {/* Corpus composition (docs/05 item 3 / docs/06 corpus composition) —
+                liquid vs locked split of the starting corpus. Withdrawals draw
+                from liquid first, then locked, once both amounts are set. */}
+            {isRetirement && (
+              <Card className="p-4 mb-4">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <h2 className="text-base font-semibold text-[var(--color-ink)]">Corpus composition</h2>
+                  {!editingCorpus && (
+                    <Button variant="outline" size="sm" onClick={startEditingCorpus}>
+                      {goal.liquid_corpus_amount !== null ? 'Edit' : 'Split corpus'}
+                    </Button>
+                  )}
+                </div>
+
+                {!editingCorpus && goal.liquid_corpus_amount === null && (
+                  <p className="text-xs text-[var(--color-ink-2)]">
+                    Not set — the full starting corpus is treated as a single liquid pool.
+                  </p>
+                )}
+                {!editingCorpus && goal.liquid_corpus_amount !== null && (
+                  <p className="text-xs text-[var(--color-ink-2)]">
+                    {formatCurrency(goal.liquid_corpus_amount)} liquid, {formatCurrency(goal.locked_corpus_amount)} locked
+                    {goal.locked_return_rate !== null ? ` (locked bucket assumed at ${formatPercent(goal.locked_return_rate)})` : ''} —
+                    withdrawals draw from liquid first.
+                  </p>
+                )}
+
+                {editingCorpus && (
+                  <form onSubmit={handleSaveCorpus} className="mt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Liquid corpus (₹)</label>
+                        <input
+                          type="number" min="0" step="any" value={corpusForm.liquid_corpus_amount}
+                          onChange={(e) => setCorpusForm((f) => ({ ...f, liquid_corpus_amount: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Locked corpus (₹)</label>
+                        <input
+                          type="number" min="0" step="any" value={corpusForm.locked_corpus_amount}
+                          onChange={(e) => setCorpusForm((f) => ({ ...f, locked_corpus_amount: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Locked bucket return (%)</label>
+                        <input
+                          type="number" min="0" max="100" step="any" value={corpusForm.locked_return_rate}
+                          onChange={(e) => setCorpusForm((f) => ({ ...f, locked_return_rate: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-[var(--color-ink-3)]">
+                      Must sum to the starting corpus ({formatCurrency(goal.initial_net_worth)}). Clear both fields to remove the split.
+                    </p>
+
+                    {corpusError && (
+                      <p className="mt-3 text-sm" style={{ color: 'var(--color-alert)' }}>{corpusError}</p>
+                    )}
+
+                    <div className="flex gap-2 mt-3">
+                      <Button type="submit" size="sm" disabled={corpusSaving}>
+                        {corpusSaving ? 'Saving…' : 'Save'}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setEditingCorpus(false)}>
                         Cancel
                       </Button>
                     </div>

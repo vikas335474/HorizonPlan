@@ -63,6 +63,7 @@ $resetData = [
     'custom_accumulation_return_rate' => $goal['accumulation_return_rate'],
     'custom_monthly_sip_amount'       => $goal['monthly_sip_amount'],
     'custom_sip_step_up_rate'         => $goal['sip_step_up_rate'],
+    'custom_locked_return_rate'       => $goal['locked_return_rate'],
     'is_overridden'                    => 0,
 ];
 
@@ -71,6 +72,7 @@ $scopedDb->update('sub_scenarios', $resetData, ['id' => $subScenarioId]);
 $fieldsToLog = [
     'custom_inflation', 'custom_withdrawal_rate', 'custom_drawdown_return_rate',
     'custom_accumulation_return_rate', 'custom_monthly_sip_amount', 'custom_sip_step_up_rate',
+    'custom_locked_return_rate',
 ];
 foreach ($fieldsToLog as $field) {
     $oldValue = $existing[$field];
