@@ -10,6 +10,7 @@ import GoalsList from './pages/GoalsList';
 import GoalDetail from './pages/GoalDetail';
 import PlanReport from './pages/PlanReport';
 import AdminConsole from './pages/AdminConsole';
+import AdvisorTemplates from './pages/AdvisorTemplates';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -53,6 +54,10 @@ export default function App() {
           {/* Super Admin console — role is enforced server-side on every
               endpoint; AdminConsole also client-guards and redirects non-admins. */}
           <Route path="/admin" element={<ProtectedRoute><AdminConsole /></ProtectedRoute>} />
+
+          {/* Strategy Templates — advisor/super_admin view; client-side guard in page,
+              server-side gate on every API call. */}
+          <Route path="/templates" element={<ProtectedRoute><AdvisorTemplates /></ProtectedRoute>} />
 
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

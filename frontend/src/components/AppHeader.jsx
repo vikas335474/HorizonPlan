@@ -50,6 +50,14 @@ export default function AppHeader() {
               Firms
             </Link>
           )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <Link
+              to="/templates"
+              className="text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
+            >
+              Templates
+            </Link>
+          )}
           {user && (
             <span className="hidden sm:inline text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}

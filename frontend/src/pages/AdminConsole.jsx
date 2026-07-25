@@ -5,11 +5,55 @@ import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
 import { Card, Badge, Button, EmptyState, Spinner } from '../components/ui';
+import { AllocationBar, RiskBadge, TemplateCreateModal } from '../components/TemplateUI';
 
-// Super Admin console: onboard advisory firms (tenants), add their advisors,
-// set the compliance mode, and manage white-label branding. super_admin only —
+// Super Admin console: tabs for Firms and Strategy Templates. super_admin only —
 // enforced server-side on every endpoint; the client guard here is just UX.
 export default function AdminConsole() {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('firms');
+
+  if (user && user.role !== 'super_admin') return <Navigate to="/" replace />;
+
+  return (
+    <div className="min-h-screen">
+      <AppHeader />
+
+      <div className="border-b border-[var(--color-line)] bg-[var(--color-surface)]">
+        <div className="mx-auto max-w-5xl px-5">
+          <nav className="flex gap-1 pt-4">
+            {[
+              { key: 'firms', label: 'Firms' },
+              { key: 'templates', label: 'Strategy Templates' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className="px-4 pb-3 pt-1 text-sm font-medium border-b-2 transition-colors"
+                style={
+                  activeTab === key
+                    ? { borderColor: 'var(--color-ink)', color: 'var(--color-ink)' }
+                    : { borderColor: 'transparent', color: 'var(--color-ink-3)' }
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-5xl px-5 py-8">
+        {activeTab === 'firms' && <FirmsTab />}
+        {activeTab === 'templates' && <AdminTemplatesTab />}
+      </main>
+    </div>
+  );
+}
+
+// ─── Firms tab (unchanged logic, extracted from former AdminConsole body) ─────
+
+function FirmsTab() {
   const { user } = useAuth();
   const [tenants, setTenants] = useState(null);
   const [error, setError] = useState('');
@@ -30,56 +74,208 @@ export default function AdminConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]);
 
-  // Client-side guard; the API is the real gate.
-  if (user && user.role !== 'super_admin') return <Navigate to="/" replace />;
-
   return (
-    <div className="min-h-screen">
-      <AppHeader />
-      <main className="mx-auto max-w-5xl px-5 py-8">
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Firms</h1>
-            <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
-              Onboard advisory firms, manage advisors, compliance mode, and branding.
-            </p>
-          </div>
-          <Button onClick={() => setCreateOpen(true)}>+ New firm</Button>
+    <>
+      <div className="mb-5 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Firms</h2>
+          <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
+            Onboard advisory firms, manage advisors, compliance mode, and branding.
+          </p>
         </div>
+        <Button onClick={() => setCreateOpen(true)}>+ New firm</Button>
+      </div>
 
-        {loading && <Spinner label="Loading firms…" />}
-        {error && (
-          <Card className="p-4 border-[var(--color-alert)]">
-            <p className="text-sm" style={{ color: 'var(--color-alert)' }}>{error}</p>
-          </Card>
-        )}
-
-        {tenants && tenants.length === 0 && (
-          <Card>
-            <EmptyState
-              title="No firms yet"
-              action={<Button onClick={() => setCreateOpen(true)}>Onboard the first firm</Button>}
-            >
-              Create an advisory firm and its first advisor to get started.
-            </EmptyState>
-          </Card>
-        )}
-
-        {tenants && tenants.length > 0 && (
-          <div className="space-y-3">
-            {tenants.map((t) => (
-              <TenantRow key={t.id} tenant={t} onChanged={load} />
-            ))}
-          </div>
-        )}
-      </main>
+      {loading && <Spinner label="Loading firms…" />}
+      {error && (
+        <Card className="p-4 border-[var(--color-alert)]">
+          <p className="text-sm" style={{ color: 'var(--color-alert)' }}>{error}</p>
+        </Card>
+      )}
+      {tenants && tenants.length === 0 && (
+        <Card>
+          <EmptyState title="No firms yet" action={<Button onClick={() => setCreateOpen(true)}>Onboard the first firm</Button>}>
+            Create an advisory firm and its first advisor to get started.
+          </EmptyState>
+        </Card>
+      )}
+      {tenants && tenants.length > 0 && (
+        <div className="space-y-3">
+          {tenants.map((t) => <TenantRow key={t.id} tenant={t} onChanged={load} />)}
+        </div>
+      )}
 
       <CreateFirmModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={() => { setCreateOpen(false); load(); }}
       />
-    </div>
+    </>
+  );
+}
+
+// ─── Strategy Templates tab (Super Admin view) ────────────────────────────────
+
+function AdminTemplatesTab() {
+  const [templates, setTemplates] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  function load() {
+    setLoading(true);
+    api.listTemplates()
+      .then((res) => setTemplates(res.global_templates ?? []))
+      .catch((err) => setError(err.message || 'Could not load templates.'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = templates
+    ? templates.filter((t) =>
+        query === '' ||
+        t.template_name.toLowerCase().includes(query.toLowerCase()) ||
+        (t.description ?? '').toLowerCase().includes(query.toLowerCase())
+      )
+    : [];
+
+  return (
+    <>
+      <div className="mb-5 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Strategy Templates</h2>
+          <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
+            Global SaaS templates offered to all advisory firms.
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>+ New template</Button>
+      </div>
+
+      {templates && templates.length > 0 && (
+        <div className="mb-4">
+          <input
+            type="search"
+            className="field max-w-xs"
+            placeholder="Search templates…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      )}
+
+      {loading && <Spinner label="Loading templates…" />}
+      {error && (
+        <Card className="p-4 border-[var(--color-alert)]">
+          <p className="text-sm" style={{ color: 'var(--color-alert)' }}>{error}</p>
+        </Card>
+      )}
+
+      {templates && templates.length === 0 && (
+        <Card>
+          <EmptyState title="No global templates yet" action={<Button onClick={() => setCreateOpen(true)}>Create the first template</Button>}>
+            Global templates are offered to all advisory firms. Create one to get started.
+          </EmptyState>
+        </Card>
+      )}
+
+      {filtered.length > 0 && (
+        <div className="space-y-3">
+          {filtered.map((t) => <AdminTemplateRow key={t.id} template={t} onChanged={load} />)}
+        </div>
+      )}
+      {templates && templates.length > 0 && filtered.length === 0 && (
+        <p className="text-sm text-[var(--color-ink-3)] py-8 text-center">No templates match "{query}".</p>
+      )}
+
+      <TemplateCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => { setCreateOpen(false); load(); }}
+        isGlobal
+      />
+    </>
+  );
+}
+
+function AdminTemplateRow({ template, onChanged }) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [audit, setAudit] = useState(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  async function loadAudit() {
+    if (audit) { setAuditOpen(true); return; }
+    setAuditLoading(true);
+    try {
+      const res = await api.getTemplateAudit(template.id, null);
+      setAudit(res.audit_log ?? []);
+      setAuditOpen(true);
+    } catch {
+      // swallow — not blocking
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-[var(--color-ink)]">{template.template_name}</h3>
+            {template.risk_profile_enum && <RiskBadge profile={template.risk_profile_enum} />}
+            <Badge
+              fg="var(--color-teal-ink)"
+              bg="var(--color-teal-soft)"
+            >
+              {template.is_published ? 'published' : 'draft'}
+            </Badge>
+          </div>
+          {template.description && (
+            <p className="text-xs text-[var(--color-ink-2)] mb-2 max-w-lg">{template.description}</p>
+          )}
+          <AllocationBar allocation={template.allocation_json} />
+          <div className="mt-1.5 flex gap-4 text-xs text-[var(--color-ink-3)]">
+            {template.return_assumption_pct != null && (
+              <span>Return assumption: <strong className="text-[var(--color-ink)]">{template.return_assumption_pct}%</strong></span>
+            )}
+            <span>Usage: <strong className="text-[var(--color-ink)]">{template.usage_count}</strong></span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadAudit}
+            disabled={auditLoading}
+          >
+            {auditLoading ? 'Loading…' : 'Audit trail'}
+          </Button>
+        </div>
+      </div>
+
+      {auditOpen && audit && (
+        <div className="mt-4 pt-4 border-t border-[var(--color-line)]">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-ink-3)]">Audit trail</h4>
+            <button className="text-xs text-[var(--color-ink-3)] hover:text-[var(--color-ink)]" onClick={() => setAuditOpen(false)}>Close</button>
+          </div>
+          {audit.length === 0 && <p className="text-xs text-[var(--color-ink-3)]">No history yet.</p>}
+          <ol className="space-y-2">
+            {audit.map((entry) => (
+              <li key={entry.id} className="text-xs text-[var(--color-ink-2)] flex gap-2">
+                <span className="shrink-0 text-[var(--color-ink-3)]">{entry.created_at.slice(0, 16)}</span>
+                <span>
+                  <strong className="text-[var(--color-ink)]">{entry.action}</strong>
+                  {entry.entity_details?.base_template_name && ` from "${entry.entity_details.base_template_name}"`}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </Card>
   );
 }
 

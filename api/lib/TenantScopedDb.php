@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 /**
  * Every endpoint that touches tenant-scoped data (base_plans, sub_scenarios,
- * users, change_log) must go through this class instead of writing raw SQL
+ * users, change_log, template_strategies, template_customizations,
+ * template_audit_log) must go through this class instead of writing raw SQL
  * with a hand-typed "WHERE tenant_id = ..." clause. See docs/02 Section 3.1:
  * the whole point is that a forgotten WHERE clause in a future endpoint file
  * is a cross-tenant data leak, and centralizing this closes that off structurally
@@ -19,7 +20,10 @@ final class TenantScopedDb
     private int $tenantId;
 
     /** @var string[] tables this class is allowed to touch — guards against typos silently querying an unscoped table */
-    private const ALLOWED_TABLES = ['base_plans', 'sub_scenarios', 'change_log', 'users'];
+    private const ALLOWED_TABLES = [
+        'base_plans', 'sub_scenarios', 'change_log', 'users',
+        'template_strategies', 'template_customizations', 'template_audit_log',
+    ];
 
     public function __construct(PDO $db, int $tenantId)
     {
@@ -176,5 +180,89 @@ final class TenantScopedDb
             ':new_value'         => $newValue,
             ':changed_by_user_id' => $changedByUserId,
         ]);
+    }
+
+    // --- Strategy Templates (Phase 1) -------------------------------------
+    // The template system needs cross-tenant reads that don't fit this
+    // class's normal contract — a "global" template is by definition visible
+    // outside the tenant that owns its row, and forking needs to read a
+    // template that may live in someone else's tenant to check whether it's
+    // eligible to fork. The three methods below are the deliberate, narrow
+    // exceptions to tenant scoping in this class. Each is read-only, scoped
+    // to a single table, and documented at the point of use for why it's
+    // safe: either it returns aggregate counts only, or it's restricted to
+    // rows already flagged is_published = 1.
+
+    /**
+     * Fetch one template_strategies row by ID with NO tenant filter. Needed
+     * because fork-eligibility checks must be able to see a template that
+     * lives in a different tenant (a global SaaS template, or another
+     * advisor's published template). Callers MUST check is_published /
+     * tenant ownership themselves before trusting the row for anything
+     * beyond that eligibility check — this method does not enforce it.
+     */
+    public function findTemplateStrategyById(int $id): ?array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM template_strategies WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * Cross-tenant by design: every tenant must be able to see globally
+     * published templates. Restricted to is_system_template = 1 AND
+     * is_published = 1 — never returns a draft or a private advisor-created
+     * template, so it can't be used to leak another tenant's unpublished work.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function selectGlobalPublishedTemplates(): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT * FROM template_strategies WHERE is_system_template = 1 AND is_published = 1'
+        );
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Aggregate-only cross-tenant read: returns a COUNT, never row data, so
+     * it can't leak which other tenants used a global template — only how
+     * many times, which is the point of a usage-count stat on a template
+     * shared across every tenant.
+     */
+    public function countGlobalTemplateUsage(int $templateId): int
+    {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) FROM template_audit_log WHERE template_id = :id AND action = 'used_in_plan'"
+        );
+        $stmt->execute([':id' => $templateId]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Tenant-scoped usage count for the caller's own templates/customizations
+     * — how many times THIS tenant has used a given template/customization
+     * in a plan, per the template_audit_log 'used_in_plan' action.
+     */
+    public function countTemplateUsage(?int $templateId = null, ?int $customizationId = null): int
+    {
+        $where = ['tenant_id = :tenant_id', "action = 'used_in_plan'"];
+        $params = [':tenant_id' => $this->tenantId];
+
+        if ($templateId !== null) {
+            $where[] = 'template_id = :template_id';
+            $params[':template_id'] = $templateId;
+        }
+        if ($customizationId !== null) {
+            $where[] = 'customization_id = :customization_id';
+            $params[':customization_id'] = $customizationId;
+        }
+
+        $sql = 'SELECT COUNT(*) FROM template_audit_log WHERE ' . implode(' AND ', $where);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int) $stmt->fetchColumn();
     }
 }
