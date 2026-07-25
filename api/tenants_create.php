@@ -13,6 +13,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/Mailer.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -92,6 +93,24 @@ try {
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => 'Could not create the firm.']);
     exit();
+}
+
+// Best-effort invite email — never blocks the response on mail() failing.
+// The temporary password is still returned in the JSON response below so the
+// super_admin has a fallback if Hostinger's local MTA doesn't deliver (see
+// Mailer.php's own docblock on why there's no SMTP dependency yet).
+if ($advisorEmail !== null) {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+    sendMail(
+        $advisorEmail,
+        "You've been added to HorizonPlan — {$companyName}",
+        "An advisor account was created for you at {$companyName} on HorizonPlan.\n\n"
+        . "Sign in here: {$scheme}://{$host}/login\n"
+        . "Email: {$advisorEmail}\n"
+        . "Temporary password: {$advisorPass}\n\n"
+        . "You'll be able to change this password after signing in."
+    );
 }
 
 echo json_encode([

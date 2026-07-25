@@ -104,6 +104,9 @@ export const api = {
   // List every advisory firm with mode, branding, and head-counts.
   listTenants: () => request('tenants_list.php'),
 
+  // Full profile for one firm: the actual advisor list (not just a count) plus a goal count.
+  getTenantDetail: (tenantId) => request(`tenant_detail.php?tenant_id=${encodeURIComponent(tenantId)}`),
+
   // Create a firm, optionally with its first advisor in the same step.
   // `firstAdvisor` (optional): { email, temporary_password }.
   createTenant: (companyName, advisoryMode = 'distribution', firstAdvisor) =>

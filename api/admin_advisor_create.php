@@ -9,6 +9,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/Mailer.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -42,9 +43,10 @@ if (strlen($password) < 8) {
     exit();
 }
 
-$tenant = $db->prepare("SELECT id FROM tenants WHERE id = :id LIMIT 1");
+$tenant = $db->prepare("SELECT id, company_name FROM tenants WHERE id = :id LIMIT 1");
 $tenant->execute([':id' => $tenantId]);
-if (!$tenant->fetch()) {
+$tenantRow = $tenant->fetch();
+if (!$tenantRow) {
     http_response_code(404);
     echo json_encode(['status' => 'error', 'message' => 'Tenant not found.']);
     exit();
@@ -66,5 +68,18 @@ $advisorId = $scopedDb->insert('users', [
 ]);
 $scopedDb->logChange('user', $advisorId, 'created', null,
     json_encode(['email' => $email, 'role' => 'advisor']), (int) $session['user_id']);
+
+// Best-effort invite email — same non-blocking pattern as tenants_create.php.
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host   = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+sendMail(
+    $email,
+    "You've been added to HorizonPlan — {$tenantRow['company_name']}",
+    "An advisor account was created for you at {$tenantRow['company_name']} on HorizonPlan.\n\n"
+    . "Sign in here: {$scheme}://{$host}/login\n"
+    . "Email: {$email}\n"
+    . "Temporary password: {$password}\n\n"
+    . "You'll be able to change this password after signing in."
+);
 
 echo json_encode(['status' => 'success', 'advisor_id' => $advisorId, 'email' => $email]);

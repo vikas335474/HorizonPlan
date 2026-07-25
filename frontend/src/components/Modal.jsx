@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 
-export default function Modal({ open, onClose, title, description, children }) {
+const SIZES = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+};
+
+export default function Modal({ open, onClose, title, description, children, size = 'md' }) {
   const panelRef = useRef(null);
 
   // onClose is a fresh function reference on every call site's re-render
@@ -50,7 +56,7 @@ export default function Modal({ open, onClose, title, description, children }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-md bg-[var(--color-surface)] rounded-[var(--radius-card)] shadow-[0_20px_60px_-12px_rgba(15,23,41,0.35)] border border-[var(--color-line)] outline-none animate-[popIn_0.18s_cubic-bezier(0.34,1.56,0.64,1)]"
+        className={`relative w-full ${SIZES[size] || SIZES.md} max-h-[85vh] overflow-y-auto bg-[var(--color-surface)] rounded-[var(--radius-card)] shadow-[0_20px_60px_-12px_rgba(15,23,41,0.35)] border border-[var(--color-line)] outline-none animate-[popIn_0.18s_cubic-bezier(0.34,1.56,0.64,1)]`}
       >
         <div className="p-6">
           {title && (
