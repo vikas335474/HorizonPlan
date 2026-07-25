@@ -99,4 +99,7 @@ echo json_encode([
     ],
     'steady_return_series'   => $steady,
     'adverse_sequence_series' => $adverse,
+    // docs/07 Bet 3: one deterministic 0-100 number, computed from the two
+    // series above plus the corpus multiple — no new inputs.
+    'readiness_score'        => PlanMath::readinessScore($withdrawalRate, $steady, $adverse),
 ]);

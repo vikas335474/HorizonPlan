@@ -73,6 +73,12 @@ echo json_encode([
         'inflation_rate'           => (float) $goal['inflation_rate'],
         'withdrawal_rate'          => $baseWithdrawalRate,
         'drawdown_return_rate'     => $goal['drawdown_return_rate'] !== null ? (float) $goal['drawdown_return_rate'] : null,
+        // docs/07 Bet 1: which template/customization (if any) most recently
+        // set drawdown_return_rate via goals_apply_template.php. The frontend
+        // resolves the name from the templates it already has loaded rather
+        // than this endpoint doing a cross-tenant join for a global template.
+        'applied_template_id'      => $goal['applied_template_id'] !== null ? (int) $goal['applied_template_id'] : null,
+        'applied_customization_id' => $goal['applied_customization_id'] !== null ? (int) $goal['applied_customization_id'] : null,
         'projection_horizon_years' => (int) $goal['projection_horizon_years'],
         // Computed, never stored — docs/02 Section 4.2.
         'corpus_multiple'          => PlanMath::corpusMultiple($effectiveWithdrawalRate),

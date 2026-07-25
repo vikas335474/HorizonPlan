@@ -187,11 +187,13 @@ final class TenantScopedDb
     // class's normal contract — a "global" template is by definition visible
     // outside the tenant that owns its row, and forking needs to read a
     // template that may live in someone else's tenant to check whether it's
-    // eligible to fork. The three methods below are the deliberate, narrow
-    // exceptions to tenant scoping in this class. Each is read-only, scoped
-    // to a single table, and documented at the point of use for why it's
-    // safe: either it returns aggregate counts only, or it's restricted to
-    // rows already flagged is_published = 1.
+    // eligible to fork. The methods below are the deliberate, narrow
+    // exceptions to tenant scoping in this class. Each is scoped to a single
+    // table and documented at the point of use for why it's safe: read
+    // exceptions return either aggregate counts only or rows already flagged
+    // is_published = 1; the one write exception (approveGlobalTemplate) is
+    // restricted to is_system_template = 1 rows and the caller must have
+    // already verified the session is super_admin before calling it.
 
     /**
      * Fetch one template_strategies row by ID with NO tenant filter. Needed
@@ -264,5 +266,28 @@ final class TenantScopedDb
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * docs/07 Bet 1: approve a global (is_system_template=1) template. This
+     * is the one deliberate WRITE exception to tenant scoping in this class —
+     * a system template's row lives under whichever tenant its creating
+     * super_admin belonged to, which is not necessarily the tenant of the
+     * super_admin approving it later (there is no reserved "tenant 0"; see
+     * docs/02 §3.1 for why every table still carries a real tenant_id).
+     * Restricted with a WHERE is_system_template = 1 guard so it can never be
+     * used to reach across into an advisor-owned (non-system) row — approving
+     * those goes through the normal tenant-scoped update() instead. Callers
+     * MUST verify the acting session's role === 'super_admin' before calling
+     * this; it enforces the table-shape restriction, not the caller's role.
+     */
+    public function approveGlobalTemplate(int $templateId, int $approvedByUserId): void
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE template_strategies
+                SET approval_status = 'approved', approved_by_user_id = :uid, approved_at = NOW()
+              WHERE id = :id AND is_system_template = 1"
+        );
+        $stmt->execute([':uid' => $approvedByUserId, ':id' => $templateId]);
     }
 }
