@@ -71,6 +71,12 @@ echo json_encode([
         'mfa_enrolled'      => true,
         'mfa_totp_enrolled' => true,
         'google_linked'     => false,
+        // True by construction — resolveDemoFirmAdmin() only ever resolves a
+        // *.demo.horizonplan.in account. Drives the guided demo tour
+        // (DemoTour.jsx); session.php recomputes the same flag from the
+        // user's email on every subsequent session check, so this is just
+        // the immediate value before that first refresh lands.
+        'is_demo'           => true,
     ],
     'company_name' => $demoUser['company_name'],
 ]);
