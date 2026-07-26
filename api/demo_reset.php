@@ -7,19 +7,18 @@ declare(strict_types=1);
 // production dataset just because the caller happens to be a super_admin.
 //
 // Deletes ONLY the 4 demo firms' tenant-scoped data (identified by tenant
-// company_name matching tools/seed_demo_data_full.php's FIRMS list, not by
-// email domain — company_name is the same identity the seeder itself uses
-// for its per-firm idempotency check, so the two can never drift apart) and
-// never touches the acting super_admin's own account, the platform admin
-// tenant, platform_settings, or the shared global system template (it lives
-// under a separate "HorizonPlan System" tenant, never in the demo tenant
-// list built below). After deleting, it requires seed_demo_data_full.php
-// in-process (SEED_DEMO_DATA_FULL_NO_AUTORUN defined first so the file's own
-// CLI entry point doesn't try to run) and calls seedDemoDataFull($db)
-// directly — that function is idempotent per firm, so it recreates exactly
-// the 4 firms just deleted without touching the platform admin account
-// (which was never deleted) or refusing to run because a platform admin
-// already exists.
+// company_name matching api/lib/DemoSeeder.php's FIRMS list, not by email
+// domain — company_name is the same identity the seeder itself uses for its
+// per-firm idempotency check, so the two can never drift apart) and never
+// touches the acting super_admin's own account, the platform admin tenant,
+// platform_settings, or the shared global system template (it lives under a
+// separate "HorizonPlan System" tenant, never in the demo tenant list built
+// below). After deleting, it calls seedDemoDataFull($db) directly (from
+// api/lib/DemoSeeder.php — NOT tools/seed_demo_data_full.php, which is
+// CLI-only and never deployed to production, see that file's own docblock)
+// — that function is idempotent per firm, so it recreates exactly the 4
+// firms just deleted without touching the platform admin account (which was
+// never deleted) or refusing to run because a platform admin already exists.
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
@@ -55,8 +54,7 @@ if ($settings['demo_mode'] !== 'on') {
     exit();
 }
 
-define('SEED_DEMO_DATA_FULL_NO_AUTORUN', true);
-require_once __DIR__ . '/../tools/seed_demo_data_full.php';
+require_once __DIR__ . '/lib/DemoSeeder.php';
 
 // The exact 4 company names tools/seed_demo_data_full.php's FIRMS constant
 // seeds — deliberately not derived from email-domain matching, so this can
