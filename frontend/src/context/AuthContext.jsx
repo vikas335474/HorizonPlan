@@ -136,9 +136,17 @@ export function AuthProvider({ children }) {
 
     const normalized = normalizeUser(res.user);
     setUser(normalized);
-    // login.php doesn't carry the tenant block; pull it in the background so the
-    // compliance disclosure and branding are correct without blocking routing.
-    refreshSession();
+    // login.php doesn't carry the tenant/platform blocks — awaited (not
+    // fire-and-forget) so platform.mfaEnforcement is the real value by the
+    // time the caller navigates. A prior fire-and-forget version here left a
+    // real window where ProtectedRoute would see `user` already set but
+    // `platform` still on its conservative "assume enforced" default,
+    // wrongly bouncing a just-logged-in user (most visibly a freshly
+    // invited advisor's very first login, see docs/09 Session 4/5) to
+    // /settings even when mfa_enforcement was actually 'disabled'. Found by
+    // actually driving a fresh login in a real browser, not by reading the
+    // code — the redirect is silent, there's no error to grep for.
+    await refreshSession();
     return { mfaRequired: false, user: normalized };
   }, [refreshSession]);
 
@@ -149,7 +157,7 @@ export function AuthProvider({ children }) {
     const res = await api.mfaVerify(code);
     const normalized = normalizeUser(res.user);
     setUser(normalized);
-    refreshSession(); // pull the tenant block in the background, as login() does
+    await refreshSession(); // must resolve before navigation — see login()'s comment
     return normalized;
   }, [refreshSession]);
 
@@ -162,7 +170,7 @@ export function AuthProvider({ children }) {
     const res = await api.authGoogle(credential);
     const normalized = normalizeUser(res.user);
     setUser(normalized);
-    refreshSession(); // pull the tenant block in the background, as login() does
+    await refreshSession(); // must resolve before navigation — see login()'s comment
     return normalized;
   }, [refreshSession]);
 
@@ -174,7 +182,7 @@ export function AuthProvider({ children }) {
     const res = await api.signup(companyName, email, password);
     const normalized = normalizeUser(res.user);
     setUser(normalized);
-    refreshSession();
+    await refreshSession(); // must resolve before navigation — see login()'s comment
     return normalized;
   }, [refreshSession]);
 
@@ -186,7 +194,7 @@ export function AuthProvider({ children }) {
     const res = await api.demoLogin(firmSlug);
     const normalized = normalizeUser(res.user);
     setUser(normalized);
-    refreshSession();
+    await refreshSession(); // must resolve before navigation — see login()'s comment
     return normalized;
   }, [refreshSession]);
 
