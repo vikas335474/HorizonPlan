@@ -302,11 +302,11 @@ export default function RiskQuestionnaireBuilder() {
                   Bands map a total score to a suggested return assumption. Ranges are inclusive of both min and max.
                 </p>
                 <Card className="p-4 mb-4">
-                  <div className="grid grid-cols-[1fr_5rem_5rem_6rem_2rem] gap-2 mb-2 text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">
+                  <div className="grid grid-cols-[1fr_3.5rem_3.5rem_4.5rem_1.5rem] sm:grid-cols-[1fr_5rem_5rem_6rem_2rem] gap-2 mb-2 text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">
                     <span>Band name</span><span>Min</span><span>Max</span><span>Return %</span><span />
                   </div>
                   {bands.map((b, bi) => (
-                    <div key={bi} className="grid grid-cols-[1fr_5rem_5rem_6rem_2rem] gap-2 mb-2">
+                    <div key={bi} className="grid grid-cols-[1fr_3.5rem_3.5rem_4.5rem_1.5rem] sm:grid-cols-[1fr_5rem_5rem_6rem_2rem] gap-2 mb-2">
                       <input type="text" value={b.name} onChange={(e) => updateBand(bi, 'name', e.target.value)} placeholder="e.g. moderate" className="field" />
                       <input type="number" value={b.min} onChange={(e) => updateBand(bi, 'min', e.target.value)} className="field" />
                       <input type="number" value={b.max} onChange={(e) => updateBand(bi, 'max', e.target.value)} className="field" />
