@@ -117,6 +117,34 @@ to build up manually. Staging is exactly where to point anything that would
 be too risky to run against production first — a new migration, the demo
 reset endpoint, a rate-limit change — before it goes anywhere near real data.
 
+## Daily MF NAV price-sync cron
+
+`tools/mf_nav_sync.php` keeps mutual fund holdings' displayed value current by
+pulling AMFI's daily NAV export — scoped, on purpose, to only the schemes
+actually held in someone's portfolio (`client_portfolio_items.amfi_scheme_code`),
+never AMFI's entire scheme universe. See `api/lib/MfNavSync.php` for the full
+design writeup and `CLAUDE.md`'s "Daily MF NAV price-sync cron" session for
+the reasoning.
+
+**hPanel → Advanced → Cron Jobs → Create a new cron job:**
+- Command: `php /home/<your-hostinger-user>/public_html/tools/mf_nav_sync.php`
+  (adjust the path to wherever `public_html` actually is — check hPanel's own
+  cron-job form, which usually shows the exact absolute path for you).
+- Schedule: once daily, after AMFI typically publishes the day's NAVs — e.g.
+  `30 21 * * *` (9:30 PM server time). AMFI does not publish on a fixed
+  minute, so a run that finds no new NAV for a scheme yet just means try
+  again tomorrow — it never overwrites the existing cache with a guess.
+- A failed run (AMFI unreachable, network blip) is a safe no-op — it leaves
+  the existing `mf_nav_cache` and every portfolio's displayed value exactly
+  as they were, logged to the cron's own output/stderr, never silently
+  zeroed or guessed at.
+
+This is CLI-only, same as `tools/bootstrap_admin.php` and
+`tools/seed_demo_data_full.php` — never reachable over HTTP, and never
+shipped by the deploy pipeline (only `api/lib/MfNavSync.php`, which the two
+API endpoints that need it in-request also `require_once`, is; `tools/`
+itself stays server-side-only, run via cron or SSH).
+
 ## Google Sign-In setup
 
 Google Sign-In (api/auth_google.php) needs one OAuth 2.0 Client ID, created
