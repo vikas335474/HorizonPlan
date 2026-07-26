@@ -375,6 +375,11 @@ export const api = {
   importPortfolioItems: (clientId, items) =>
     request('client_portfolio_import.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items }) }),
 
+  // MF NAV price-sync — recomputes NAV-tracked holdings from whatever the
+  // daily cron already cached (no live AMFI call from this request).
+  refreshClientPortfolio: (clientId) =>
+    request('client_portfolio_refresh.php', { method: 'POST', body: JSON.stringify({ client_id: clientId }) }),
+
   // --- Jr -> Sr Advisor Plan-Approval Workflow ---
   // Puts a goal into (or back into) the pending_review queue. Most goals get
   // here automatically on an advice-field edit; this covers the cases that

@@ -26,15 +26,39 @@ $bucket = $input['bucket'] ?? null;
 $category = trim((string) ($input['category'] ?? ''));
 $description = isset($input['description']) ? trim((string) $input['description']) : null;
 $value = $input['value'] ?? null;
+$schemeCode = isset($input['amfi_scheme_code']) && trim((string) $input['amfi_scheme_code']) !== ''
+    ? trim((string) $input['amfi_scheme_code'])
+    : null;
+$unitsHeld = $input['units_held'] ?? null;
 
-if ($clientId <= 0 || !in_array($itemKind, ['asset', 'liability'], true) || $category === '' || $value === null) {
+// NAV tracking is both-or-neither, same precedent as liquid/locked corpus
+// composition on base_plans — a row can't be "half" NAV-tracked.
+if (($schemeCode !== null) !== ($unitsHeld !== null && $unitsHeld !== '')) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'client_id, item_kind (asset|liability), category, and value are required.']);
+    echo json_encode(['status' => 'error', 'message' => 'amfi_scheme_code and units_held must both be provided, or neither.']);
     exit();
 }
-if (!is_numeric($value) || (float) $value < 0) {
+if ($schemeCode !== null && (!preg_match('/^[A-Za-z0-9]{1,20}$/', $schemeCode) || !is_numeric($unitsHeld) || (float) $unitsHeld <= 0)) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'amfi_scheme_code must be alphanumeric (max 20 chars) and units_held must be a positive number.']);
+    exit();
+}
+// value is optional once NAV-tracked (the price sync populates it once the
+// scheme is cached — "price pending" until then, per CLAUDE.md); still
+// required for a plain manually-entered item.
+if ($schemeCode === null && $value === null) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'value is required unless the item is NAV-tracked (amfi_scheme_code + units_held).']);
+    exit();
+}
+if ($value !== null && (!is_numeric($value) || (float) $value < 0)) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'value must be a non-negative number.']);
+    exit();
+}
+if ($clientId <= 0 || !in_array($itemKind, ['asset', 'liability'], true) || $category === '') {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'client_id, item_kind (asset|liability), and category are required.']);
     exit();
 }
 
@@ -59,13 +83,30 @@ if (empty($clientMatches)) {
     exit();
 }
 
+// A NAV-tracked row's value: seed it from whatever is already cached for
+// this scheme code right now (e.g. a second client holding a fund already
+// tracked elsewhere on the platform) — never a live AMFI fetch inside this
+// request. A genuinely brand-new scheme code has no cache entry yet and
+// stays "price pending" (value 0) until the next daily cron run.
+$resolvedValue = (float) ($value ?? 0);
+if ($schemeCode !== null) {
+    $cacheStmt = $db->prepare('SELECT nav_value FROM mf_nav_cache WHERE amfi_scheme_code = :code');
+    $cacheStmt->execute([':code' => $schemeCode]);
+    $navValue = $cacheStmt->fetchColumn();
+    if ($navValue !== false) {
+        $resolvedValue = round((float) $unitsHeld * (float) $navValue, 2);
+    }
+}
+
 $id = $scopedDb->insert('client_portfolio_items', [
     'client_id'          => $clientId,
     'item_kind'          => $itemKind,
     'bucket'             => $bucket,
     'category'           => $category,
     'description'        => $description,
-    'value'              => (float) $value,
+    'value'              => $resolvedValue,
+    'amfi_scheme_code'   => $schemeCode,
+    'units_held'         => $schemeCode !== null ? (float) $unitsHeld : null,
     'created_by_user_id' => $userId,
 ]);
 

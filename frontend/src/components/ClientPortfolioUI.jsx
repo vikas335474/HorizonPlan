@@ -35,6 +35,21 @@ function categoryLabel(kind, category) {
   return list.find((c) => c.value === category)?.label || category;
 }
 
+// Same shape as PlanReviewUI.jsx's/ChangeLogUI.jsx's own local formatTimestamp
+// — small enough that this codebase's own precedent is a per-file copy, not a
+// shared helper.
+function formatTimestamp(ts) {
+  if (!ts) return '';
+  try {
+    return new Date(ts.replace(' ', 'T') + 'Z').toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  } catch {
+    return ts;
+  }
+}
+
 export function ClientPortfolioCard({ clientId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +57,8 @@ export function ClientPortfolioCard({ clientId }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState('');
 
   function load() {
     setLoading(true);
@@ -64,8 +81,31 @@ export function ClientPortfolioCard({ clientId }) {
     }
   }
 
+  // Recomputes NAV-tracked holdings from whatever the daily cron already
+  // cached — no live AMFI call happens from this click, per the user's own
+  // "using the cached data locally" instruction.
+  async function handleRefresh() {
+    setRefreshing(true);
+    setRefreshMsg('');
+    setError('');
+    try {
+      const res = await api.refreshClientPortfolio(clientId);
+      setRefreshMsg(
+        res.updated_count > 0
+          ? `Updated ${res.updated_count} holding${res.updated_count === 1 ? '' : 's'} from cached prices.`
+          : 'No holdings needed updating.'
+      );
+      load();
+    } catch (err) {
+      setError(err.message || 'Could not refresh prices.');
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const items = data?.items ?? [];
   const totals = data?.totals;
+  const navTrackedCount = items.filter((it) => it.amfi_scheme_code).length;
 
   return (
     <Card className="p-4 mb-4">
@@ -73,14 +113,31 @@ export function ClientPortfolioCard({ clientId }) {
         <h2 className="text-base font-semibold text-[var(--color-ink)]">Portfolio &amp; net worth</h2>
         {!adding && !importing && (
           <div className="flex gap-2">
+            {navTrackedCount > 0 && (
+              <Button variant="ghost" size="sm" disabled={refreshing} onClick={handleRefresh}>
+                {refreshing ? 'Refreshing…' : 'Refresh prices'}
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setImporting(true)}>Import CAS/MFCentral CSV</Button>
             <Button variant="outline" size="sm" onClick={() => setAdding(true)}>+ Add item</Button>
           </div>
         )}
       </div>
-      <p className="text-xs text-[var(--color-ink-2)] mb-3">
+      <p className="text-xs text-[var(--color-ink-2)] mb-1">
         What the client already owns — a starting point, not a shared pool any one goal automatically draws from.
       </p>
+
+      {/* Freshness is always shown once there's at least one NAV-tracked
+          holding — never hidden just because it happens to be stale. */}
+      {navTrackedCount > 0 && (
+        <p className="text-[11px] text-[var(--color-ink-3)] mb-2">
+          MF prices {data?.portfolio_nav_freshness
+            ? <>as of <span className="font-medium">{formatTimestamp(data.portfolio_nav_freshness)}</span></>
+            : 'not yet synced — price pending on the next daily update'}
+          .
+        </p>
+      )}
+      {refreshMsg && <p className="text-[11px] mb-2" style={{ color: 'var(--color-teal-ink)' }}>{refreshMsg}</p>}
 
       {loading && <Spinner label="Loading…" />}
       {error && <p className="text-xs mb-2" style={{ color: 'var(--color-alert)' }}>{error}</p>}
@@ -123,6 +180,14 @@ export function ClientPortfolioCard({ clientId }) {
                     )}
                   </div>
                   {item.description && <div className="text-[11px] text-[var(--color-ink-3)]">{item.description}</div>}
+                  {item.amfi_scheme_code && (
+                    <div className="text-[11px] text-[var(--color-ink-3)]">
+                      {item.units_held} units · scheme {item.amfi_scheme_code}
+                      {item.nav_value != null
+                        ? ` · NAV ₹${item.nav_value} (${formatTimestamp(item.nav_fetched_at)})`
+                        : ' · price pending'}
+                    </div>
+                  )}
                 </div>
                 <span className="tnum text-sm text-[var(--color-ink)]">{formatCurrency(item.value)}</span>
                 <div className="flex gap-1 shrink-0">
@@ -422,10 +487,17 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
   const [bucket, setBucket] = useState(existing?.bucket || ASSET_CATEGORIES[0].bucket);
   const [description, setDescription] = useState(existing?.description || '');
   const [value, setValue] = useState(existing?.value != null ? String(existing.value) : '');
+  const [schemeCode, setSchemeCode] = useState(existing?.amfi_scheme_code || '');
+  const [unitsHeld, setUnitsHeld] = useState(existing?.units_held != null ? String(existing.units_held) : '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const categories = itemKind === 'liability' ? LIABILITY_CATEGORIES : ASSET_CATEGORIES;
+  // NAV tracking (docs "session 2" MF NAV price-sync) only makes sense for a
+  // mutual fund asset — its value then comes from units × the synced NAV,
+  // not a number the advisor keeps typing in by hand.
+  const navEligible = itemKind === 'asset' && category === 'mutual_fund';
+  const navTracked = navEligible && schemeCode.trim() !== '' && unitsHeld.trim() !== '';
 
   function handleKindChange(kind) {
     setItemKind(kind);
@@ -443,29 +515,43 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue) || numericValue < 0) {
-      setError('Enter a valid amount (0 or more).');
+
+    if (navEligible && (schemeCode.trim() !== '') !== (unitsHeld.trim() !== '')) {
+      setError('Enter both an AMFI scheme code and units held, or leave both blank.');
       return;
     }
+    const unitsNumeric = unitsHeld.trim() !== '' ? Number(unitsHeld) : null;
+    if (navTracked && (!Number.isFinite(unitsNumeric) || unitsNumeric <= 0)) {
+      setError('Units held must be a positive number.');
+      return;
+    }
+
+    let numericValue = null;
+    if (!navTracked) {
+      numericValue = Number(value);
+      if (!Number.isFinite(numericValue) || numericValue < 0) {
+        setError('Enter a valid amount (0 or more).');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
+      const payload = {
+        bucket: itemKind === 'asset' ? bucket : undefined,
+        category,
+        description: description || null,
+        // When NAV-tracked, omit `value` entirely (undefined keys are
+        // dropped by JSON.stringify) so the backend computes it from
+        // units × the cached NAV instead of us sending a stale/empty number.
+        value: navTracked ? undefined : numericValue,
+        amfi_scheme_code: navTracked ? schemeCode.trim() : null,
+        units_held: navTracked ? unitsNumeric : null,
+      };
       if (existing) {
-        await api.updatePortfolioItem(existing.id, {
-          bucket: itemKind === 'asset' ? bucket : undefined,
-          category,
-          description: description || null,
-          value: numericValue,
-        });
+        await api.updatePortfolioItem(existing.id, payload);
       } else {
-        await api.createPortfolioItem({
-          client_id: clientId,
-          item_kind: itemKind,
-          bucket: itemKind === 'asset' ? bucket : undefined,
-          category,
-          description: description || null,
-          value: numericValue,
-        });
+        await api.createPortfolioItem({ client_id: clientId, item_kind: itemKind, ...payload });
       }
       onSaved();
     } catch (err) {
@@ -476,7 +562,7 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] p-3 mb-2">
+    <form onSubmit={handleSubmit} noValidate className="rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] p-3 mb-2">
       <div className="grid grid-cols-2 gap-2 mb-2">
         {!existing && (
           <div className="col-span-2 flex gap-2">
@@ -510,12 +596,36 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
           </select>
         )}
 
-        <input
-          type="number" min="0" step="any" required value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Value (₹)"
-          className={`field text-sm ${itemKind === 'liability' ? 'col-span-2' : ''}`}
-        />
+        {navEligible && (
+          <>
+            <input
+              type="text" value={schemeCode}
+              onChange={(e) => setSchemeCode(e.target.value)}
+              placeholder="AMFI scheme code (optional)"
+              className="field text-sm"
+            />
+            <input
+              type="number" min="0" step="any" value={unitsHeld}
+              onChange={(e) => setUnitsHeld(e.target.value)}
+              placeholder="Units held"
+              className="field text-sm"
+            />
+          </>
+        )}
+
+        {navTracked ? (
+          <div className="col-span-2 text-[11px] text-[var(--color-ink-3)] px-1 py-1.5">
+            Value is computed from units × the synced NAV — no manual entry needed. It'll show
+            "price pending" until the daily sync (or a Refresh) first prices this scheme.
+          </div>
+        ) : (
+          <input
+            type="number" min="0" step="any" value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Value (₹)"
+            className={`field text-sm ${itemKind === 'liability' ? 'col-span-2' : ''}`}
+          />
+        )}
         <input
           type="text" value={description}
           onChange={(e) => setDescription(e.target.value)}
