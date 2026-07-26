@@ -16,6 +16,7 @@ import AdminConsole from './pages/AdminConsole';
 import AdvisorTemplates from './pages/AdvisorTemplates';
 import RiskQuestionnaireBuilder from './pages/RiskQuestionnaireBuilder';
 import ActivityLog from './pages/ActivityLog';
+import PlanReviewQueue from './pages/PlanReviewQueue';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -81,6 +82,12 @@ export default function App() {
           {/* docs/09 Session 6 — firm-wide read-only audit trail; advisor/super_admin
               view, server-enforced (verifyAccessAny ['advisor', 'super_admin']). */}
           <Route path="/activity" element={<ProtectedRoute><ActivityLog /></ProtectedRoute>} />
+
+          {/* Jr -> Sr Advisor Plan-Approval Workflow — advisor/super_admin
+              view; server-enforced (verifyAccessAny ['advisor', 'super_admin']
+              on goals_review_queue.php, requireFirmRole on the actual
+              approve/request-changes action in goals_review.php). */}
+          <Route path="/reviews" element={<ProtectedRoute><PlanReviewQueue /></ProtectedRoute>} />
 
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

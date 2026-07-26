@@ -5,6 +5,7 @@ require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/GoalFieldValidation.php';
+require_once __DIR__ . '/lib/PlanReview.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -165,6 +166,15 @@ $cascadeMap = [
     'sip_step_up_rate'         => 'custom_sip_step_up_rate',
     'locked_return_rate'       => 'custom_locked_return_rate',
 ];
+
+// Jr -> Sr Advisor Plan-Approval Workflow (decision #1/#6): an edit to either
+// advice field can move the goal into (or back into) pending_review — a
+// no-op if this tenant hasn't opted into plan review, or if the field(s)
+// touched aren't advice fields at all (goal_label, target_date, etc. never
+// affect review_status).
+if (array_intersect(PLAN_REVIEW_ADVICE_FIELDS, array_keys($changes)) !== []) {
+    applyPlanReviewTransitionOnAdviceEdit($scopedDb, $db, $tenantId, $goalId, $existing, $userId);
+}
 
 $cascadedFields = array_intersect_key($cascadeMap, $changes);
 

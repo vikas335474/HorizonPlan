@@ -31,7 +31,8 @@ for t in \
   tests/test_risk_profiles_db.php \
   tests/test_client_portfolio_db.php \
   tests/test_platform_settings.php \
-  tests/test_firm_roles.php
+  tests/test_firm_roles.php \
+  tests/test_plan_review_db.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"

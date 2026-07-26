@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/PlanReview.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -149,6 +150,11 @@ $scopedDb->logChange(
     (string) $newRate,
     $userId
 );
+
+// Jr -> Sr Advisor Plan-Approval Workflow (decision #1): applying a template
+// is explicitly one of the "advice" actions that can trigger review, same as
+// hand-editing drawdown_return_rate in goals_update.php.
+applyPlanReviewTransitionOnAdviceEdit($scopedDb, $db, $tenantId, $goalId, $goal, $userId);
 
 // Global Inheritance Engine cascade — identical rule to goals_update.php:
 // only non-overridden children inherit, so a protected what-if scenario
