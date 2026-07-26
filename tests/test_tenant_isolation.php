@@ -15,6 +15,16 @@ function assertTrue(bool $cond, string $label): void
 
 $db = getPdo();
 
+// Non-destructive: everything below runs inside one transaction, rolled back
+// at the very end (docs/09 Session 2) — this file used to run its DELETE
+// FROM tenants/users/... cleanup + hardcoded-ID fixture INSERTs directly
+// against whatever database it was pointed at, which is only safe against an
+// empty/disposable test DB and silently destroys real or demo data
+// otherwise. On a failed assertion, assertTrue() calls exit() directly —
+// killing the process mid-transaction drops the connection, and MySQL
+// implicitly rolls back, so there's no try/finally needed.
+$db->beginTransaction();
+
 // --- Setup: two tenants, one client user each ---
 // base_plans must be cleared BEFORE template_strategies/template_customizations
 // — migration 014 added applied_template_id/applied_customization_id FKs on
@@ -117,5 +127,7 @@ assertTrue($allowed === false, 'checkLoginRateLimit() blocks after 5 failed atte
 
 $allowedOtherUser = checkLoginRateLimit($db, 'someone_else@example.com', '203.0.113.5');
 assertTrue($allowedOtherUser === true, 'checkLoginRateLimit() does not block an unrelated email/IP');
+
+$db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll tests passed.\n";

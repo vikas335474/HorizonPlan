@@ -135,7 +135,10 @@ export const api = {
   getTenantDetail: (tenantId) => request(`tenant_detail.php?tenant_id=${encodeURIComponent(tenantId)}`),
 
   // Create a firm, optionally with its first advisor in the same step.
-  // `firstAdvisor` (optional): { email, temporary_password }.
+  // `firstAdvisor` (optional): { email, firm_role? } — no password: the
+  // advisor is emailed an invite link (docs/09 Session 4) and sets their own
+  // password via /accept-invite. Response carries `invite_link` as a
+  // copyable fallback if email delivery doesn't land.
   createTenant: (companyName, advisoryMode = 'distribution', firstAdvisor) =>
     request('tenants_create.php', {
       method: 'POST',
@@ -157,11 +160,13 @@ export const api = {
 
   // Add an advisor to an existing firm. firmRole (docs/09 Piece 2) is
   // optional — omit for the pre-migration default (treated as sr_advisor).
-  createAdvisor: (tenantId, email, temporaryPassword, firmRole) =>
+  // No password: the advisor is emailed an invite link (docs/09 Session 4);
+  // response carries `invite_link` as a copyable fallback.
+  createAdvisor: (tenantId, email, firmRole) =>
     request('admin_advisor_create.php', {
       method: 'POST',
       body: JSON.stringify({
-        tenant_id: tenantId, email, temporary_password: temporaryPassword,
+        tenant_id: tenantId, email,
         ...(firmRole ? { firm_role: firmRole } : {}),
       }),
     }),

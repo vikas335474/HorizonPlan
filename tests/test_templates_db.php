@@ -23,6 +23,13 @@ function assertTrue(bool $cond, string $label): void
 
 $db = getPdo();
 
+// Non-destructive: everything below runs inside one transaction, rolled back
+// at the very end (docs/09 Session 2) — see test_tenant_isolation.php for the
+// full reasoning. On a failed assertion, assertTrue() calls exit() directly —
+// killing the process mid-transaction drops the connection, and MySQL
+// implicitly rolls back, so there's no try/finally needed.
+$db->beginTransaction();
+
 // --- Setup: clean slate, two tenants (a system-template owner + an advisor tenant) ---
 // base_plans must be cleared BEFORE template_strategies/template_customizations —
 // migration 014 added applied_template_id/applied_customization_id FKs on
@@ -317,5 +324,7 @@ assertTrue(
     $usageAfterApply === 2 && $globalUsageAfterApply === 2,
     'applying a template writes a used_in_plan audit row that the existing usage-count methods pick up — this is the loop Phase 1\'s template system left unclosed'
 );
+
+$db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll template tests passed.\n";

@@ -21,12 +21,32 @@ function assertTrue(bool $cond, string $label): void
 
 $db = getPdo();
 
+// Non-destructive: everything below runs inside one transaction, rolled back
+// at the very end (docs/09 Session 2) — see test_tenant_isolation.php for the
+// full reasoning (this file had the same blanket-DELETE-against-whatever-DB
+// issue). On a failed assertion, assertTrue() calls exit() directly — killing
+// the process mid-transaction drops the connection, and MySQL implicitly
+// rolls back, so there's no try/finally needed.
+$db->beginTransaction();
+
 $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
+// template_audit_log/template_strategies/template_customizations also FK to
+// users (approved_by_user_id/created_by_user_id) and base_plans FKs to the
+// latter two (applied_template_id/applied_customization_id, migration 014) —
+// this file didn't clear any of the three, which only ever worked by
+// accident: in the full tests/run_all.sh sequence, test_risk_profiles_db.php
+// (which does clear them) always ran immediately before this file. Running
+// this file standalone against a database that already has real committed
+// template rows (e.g. the demo dataset) surfaced the FK violation for real —
+// same class of bug the other four sibling tests already guard against.
+$db->exec("DELETE FROM template_audit_log");
 $db->exec("DELETE FROM change_log");
 $db->exec("DELETE FROM sub_scenarios");
 $db->exec("DELETE FROM base_plans");
+$db->exec("DELETE FROM template_customizations");
+$db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
@@ -105,5 +125,7 @@ assertTrue(count($dbAdvisorA->select('client_portfolio_items', ['id' => $liabili
 
 $dbAdvisorA->delete('client_portfolio_items', ['id' => $liabilityId]);
 assertTrue(count($dbAdvisorA->select('client_portfolio_items', ['client_id' => 2])) === 2, 'the owning tenant can delete its own portfolio item');
+
+$db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll client portfolio DB tests passed.\n";

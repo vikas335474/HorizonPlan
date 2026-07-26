@@ -20,6 +20,13 @@ function assertTrue(bool $cond, string $label): void
 
 $db = getPdo();
 
+// Non-destructive: everything below runs inside one transaction, rolled back
+// at the very end (docs/09 Session 2) — see test_tenant_isolation.php for the
+// full reasoning. On a failed assertion, assertTrue() calls exit() directly —
+// killing the process mid-transaction drops the connection, and MySQL
+// implicitly rolls back, so there's no try/finally needed.
+$db->beginTransaction();
+
 // base_plans must be cleared BEFORE template_strategies/template_customizations
 // — migration 014 added applied_template_id/applied_customization_id FKs on
 // base_plans pointing at those tables.
@@ -134,5 +141,7 @@ $rowAAfterLocked = $scopedDb->select('sub_scenarios', ['id' => $rowA])[0];
 $rowBAfterLocked = $scopedDb->select('sub_scenarios', ['id' => $rowB])[0];
 assertTrue((float) $rowAAfterLocked['custom_locked_return_rate'] === 6.50, 'Row A (not overridden) received the cascaded locked_return_rate update');
 assertTrue($rowBAfterLocked['custom_locked_return_rate'] === null, 'Row B (overridden) did NOT receive the locked_return_rate cascade');
+
+$db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll cascade tests passed.\n";

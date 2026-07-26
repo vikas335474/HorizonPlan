@@ -10,6 +10,7 @@ require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/Mailer.php';
+require_once __DIR__ . '/lib/InviteTokens.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -25,7 +26,6 @@ $session = verifyAccess($db, 'super_admin');
 $input    = json_decode(file_get_contents('php://input'), true) ?? [];
 $tenantId = (int) ($input['tenant_id'] ?? 0);
 $email    = strtolower(trim((string) ($input['email'] ?? '')));
-$password = (string) ($input['temporary_password'] ?? '');
 // docs/09 Piece 2: optional firm-level role — NULL (unset) behaves exactly
 // as before this feature existed (treated as sr_advisor by requireFirmRole()).
 $firmRole = isset($input['firm_role']) ? (string) $input['firm_role'] : null;
@@ -43,11 +43,6 @@ if ($firmRole !== null && !in_array($firmRole, ['jr_advisor', 'sr_advisor', 'fir
 if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'A valid email is required.']);
-    exit();
-}
-if (strlen($password) < 8) {
-    http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Temporary password must be at least 8 characters.']);
     exit();
 }
 
@@ -69,9 +64,12 @@ if ($existing->fetch()) {
 }
 
 $scopedDb  = new TenantScopedDb($db, $tenantId);
+// An unusable, never-known password — the account is only reachable by
+// redeeming the invite token below (or a later real password reset). See
+// InviteTokens.php's own docblock.
 $advisorId = $scopedDb->insert('users', [
     'email'         => $email,
-    'password_hash' => password_hash($password, PASSWORD_BCRYPT),
+    'password_hash' => unusablePasswordHash(),
     'role'          => 'advisor',
     'firm_role'     => $firmRole,
 ]);
@@ -79,16 +77,15 @@ $scopedDb->logChange('user', $advisorId, 'created', null,
     json_encode(['email' => $email, 'role' => 'advisor']), (int) $session['user_id']);
 
 // Best-effort invite email — same non-blocking pattern as tenants_create.php.
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host   = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+// inviteLink is also returned below as a copyable fallback if delivery
+// doesn't land.
+$rawToken   = issueInviteToken($db, $advisorId);
+$inviteLink = buildInviteLink($rawToken);
 sendMail(
     $email,
     "You've been added to HorizonPlan — {$tenantRow['company_name']}",
     "An advisor account was created for you at {$tenantRow['company_name']} on HorizonPlan.\n\n"
-    . "Sign in here: {$scheme}://{$host}/login\n"
-    . "Email: {$email}\n"
-    . "Temporary password: {$password}\n\n"
-    . "You'll be able to change this password after signing in."
+    . "Set your password and sign in here (link expires in 7 days):\n{$inviteLink}\n"
 );
 
-echo json_encode(['status' => 'success', 'advisor_id' => $advisorId, 'email' => $email]);
+echo json_encode(['status' => 'success', 'advisor_id' => $advisorId, 'email' => $email, 'invite_link' => $inviteLink]);

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
 import { Card, Button, Badge } from '../components/ui';
 import { ReadinessScoreBadge, bandFor } from '../components/ReadinessScore';
+import OnboardingChecklist, { isOnboardingDismissed, dismissOnboarding } from '../components/OnboardingChecklist';
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/format';
 
 // docs/08 gap #5 — the client list previously only showed goal count and
@@ -31,6 +33,7 @@ const SORT_OPTIONS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,6 +41,10 @@ export default function Dashboard() {
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [addOpen, setAddOpen] = useState(false);
+  // docs/09 Group 3 Session 5 — re-read on every render rather than cached in
+  // state: the only way it changes is dismissOnboarding() below, and this is
+  // cheap enough (one localStorage read) not to need memoizing.
+  const [dismissed, setDismissed] = useState(() => isOnboardingDismissed(user?.userId));
 
   function load() {
     setLoading(true);
@@ -122,6 +129,21 @@ export default function Dashboard() {
 
         {data && !loading && (
           <>
+            {/* docs/09 Group 3 Session 5 — first-run guidance. Shown until the
+                advisor has at least one client AND at least one goal, or
+                until they dismiss it early, whichever comes first; a client
+                list of zero clients (or clients with zero goals between
+                them) IS the first-run signal, no has_completed_onboarding
+                column needed. */}
+            {!dismissed && !(data.stats.total_clients > 0 && data.stats.total_goals > 0) && (
+              <OnboardingChecklist
+                clients={clients}
+                onAddClient={() => setAddOpen(true)}
+                onGoToClient={(clientId) => navigate(`/clients/${clientId}`)}
+                onDismiss={() => { dismissOnboarding(user?.userId); setDismissed(true); }}
+              />
+            )}
+
             {/* Stat band */}
             <div className="stagger-children grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
               <MetricCard

@@ -54,6 +54,29 @@ if ($settings['demo_mode'] !== 'on') {
     exit();
 }
 
+// docs/09 Group 1 Session 3 — cooldown so a repeated call can't repeatedly
+// wipe-and-reseed 160 clients back to back (~40s each), a self-inflicted DoS
+// even from a legitimate super_admin session. claimDemoResetSlot() stamps
+// last_reset_at atomically in the same UPDATE it checks, so this doubles as
+// the concurrency guard for two near-simultaneous calls. Checked before
+// requiring DemoSeeder.php — no point loading 40s of seeding logic for a
+// call that's about to be rejected.
+if (!claimDemoResetSlot($db)) {
+    $row = $db->query("SELECT last_reset_at FROM platform_settings WHERE id = 1 LIMIT 1")->fetch();
+    $retryAfterSeconds = null;
+    if (!empty($row['last_reset_at'])) {
+        $elapsedSeconds = time() - strtotime((string) $row['last_reset_at']);
+        $retryAfterSeconds = max(0, (DEMO_RESET_COOLDOWN_MINUTES * 60) - $elapsedSeconds);
+    }
+    http_response_code(429);
+    echo json_encode([
+        'status'  => 'error',
+        'message' => 'A demo reset already ran recently. Please wait before trying again.',
+        'retry_after_seconds' => $retryAfterSeconds,
+    ]);
+    exit();
+}
+
 require_once __DIR__ . '/lib/DemoSeeder.php';
 
 // The exact 4 company names tools/seed_demo_data_full.php's FIRMS constant

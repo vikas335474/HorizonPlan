@@ -37,6 +37,9 @@ export default function App() {
               the whole point is reaching it while locked out of a session. */}
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          {/* Advisor invite activation (docs/09 Session 4) — same redemption
+              mechanism as password reset, different landing-page copy. */}
+          <Route path="/accept-invite" element={<ResetPassword mode="invite" />} />
 
           <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
 
