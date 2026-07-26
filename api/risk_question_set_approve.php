@@ -18,11 +18,17 @@ $session = verifyAccess($db, 'advisor');
 $userId = (int) $session['user_id'];
 $scopedDb = new TenantScopedDb($db, (int) $session['tenant_id']);
 
+// docs/09 Piece 2: approval now requires sr_advisor or firm_admin (or
+// super_admin) — a jr_advisor can create/edit a question set but not approve
+// it. Superseded documented limitation below: docs/06 has no *global*
+// question set the way template_strategies does, but there IS now a firm
+// role distinction, closing the "no separate firm principal role" gap this
+// endpoint used to have.
+requireFirmRole($db, $session, ['sr_advisor', 'firm_admin']);
+
 // docs/06 Section B has no global/system risk question set — every set is
 // tenant-owned from the start (unlike template_strategies), so this is
-// always a plain tenant-scoped update. Same documented limitation as
-// templates_approve.php: Phase 1 has no separate "firm principal" role, so
-// the approving advisor and the set's editor may be the same person today.
+// always a plain tenant-scoped update.
 $rows = $scopedDb->select('risk_question_sets', []);
 if (empty($rows)) {
     http_response_code(404);

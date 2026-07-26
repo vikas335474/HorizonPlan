@@ -128,12 +128,26 @@ export const api = {
       body: JSON.stringify({ tenant_id: tenantId, ...changes }),
     }),
 
-  // Add an advisor to an existing firm.
-  createAdvisor: (tenantId, email, temporaryPassword) =>
+  // Add an advisor to an existing firm. firmRole (docs/09 Piece 2) is
+  // optional — omit for the pre-migration default (treated as sr_advisor).
+  createAdvisor: (tenantId, email, temporaryPassword, firmRole) =>
     request('admin_advisor_create.php', {
       method: 'POST',
-      body: JSON.stringify({ tenant_id: tenantId, email, temporary_password: temporaryPassword }),
+      body: JSON.stringify({
+        tenant_id: tenantId, email, temporary_password: temporaryPassword,
+        ...(firmRole ? { firm_role: firmRole } : {}),
+      }),
     }),
+
+  // --- Platform settings (docs/09 Piece 1, super_admin only) ---
+  getPlatformSettings: () => request('platform_settings_read.php'),
+
+  // changes: a subset of { mfa_enforcement: 'enabled'|'disabled', demo_mode: 'off'|'on' }
+  updatePlatformSettings: (changes) =>
+    request('platform_settings_update.php', { method: 'POST', body: JSON.stringify(changes) }),
+
+  // Only works when demo_mode is 'on' (403 otherwise). Returns demo login credentials.
+  resetDemoData: () => request('demo_reset.php', { method: 'POST' }),
 
   // Advisor dashboard: all clients in the tenant + aggregate stats.
   listClients: () => request('clients_list.php'),

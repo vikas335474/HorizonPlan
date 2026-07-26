@@ -23,6 +23,7 @@ export default function AdminConsole() {
         <div className="mx-auto max-w-5xl px-5">
           <nav className="flex gap-1 pt-4">
             {[
+              { key: 'platform', label: 'Platform' },
               { key: 'firms', label: 'Firms' },
               { key: 'templates', label: 'Strategy Templates' },
             ].map(({ key, label }) => (
@@ -44,9 +45,179 @@ export default function AdminConsole() {
       </div>
 
       <main className="mx-auto max-w-5xl px-5 py-8">
+        {activeTab === 'platform' && <PlatformTab />}
         {activeTab === 'firms' && <FirmsTab />}
         {activeTab === 'templates' && <AdminTemplatesTab />}
       </main>
+    </div>
+  );
+}
+
+// ─── Platform tab (docs/09 Piece 1) ────────────────────────────────────────
+// Platform-wide knobs: MFA enforcement and demo mode. Both are independent —
+// demo_mode='on' implies MFA is skipped regardless of mfa_enforcement, but
+// mfa_enforcement can be disabled on its own too (see sql/019's comment).
+function PlatformTab() {
+  const { refreshSession } = useAuth();
+  const [settings, setSettings] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
+  const [resetError, setResetError] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
+
+  function load() {
+    setLoading(true); setError('');
+    api.getPlatformSettings()
+      .then((res) => setSettings({ mfa_enforcement: res.mfa_enforcement, demo_mode: res.demo_mode }))
+      .catch((e) => setError(e.message || 'Could not load platform settings.'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function update(changes) {
+    setBusy(true); setError('');
+    try {
+      const res = await api.updatePlatformSettings(changes);
+      setSettings({ mfa_enforcement: res.mfa_enforcement, demo_mode: res.demo_mode });
+      // The acting super_admin's own session is affected by these toggles too
+      // (e.g. the MFA gate) — refresh so the header/route guard picks it up
+      // immediately instead of waiting for the next session.php poll.
+      refreshSession();
+    } catch (e) {
+      setError(e.message || 'Could not update platform settings.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runReset() {
+    setResetBusy(true); setResetError(''); setResetResult(null);
+    try {
+      const res = await api.resetDemoData();
+      setResetResult(res);
+    } catch (e) {
+      setResetError(e.message || 'Could not reset demo data.');
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl">
+      <div className="mb-5">
+        <h2 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Platform</h2>
+        <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
+          Platform-wide settings — MFA enforcement and demo mode. Changes apply to every firm immediately.
+        </p>
+      </div>
+
+      {loading && <Spinner label="Loading platform settings…" />}
+      {error && (
+        <Card className="p-4 mb-4 border-[var(--color-alert)]">
+          <p className="text-sm" style={{ color: 'var(--color-alert)' }}>{error}</p>
+        </Card>
+      )}
+
+      {settings && (
+        <div className="space-y-4">
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-ink)]">MFA enforcement</h3>
+                <p className="mt-1 text-xs text-[var(--color-ink-2)] max-w-md">
+                  When enabled, every session is blocked from the rest of the app until two-factor
+                  authentication is set up. Disabling this removes that requirement platform-wide —
+                  use only for testing, not for a real advisory firm's production accounts.
+                </p>
+                {settings.mfa_enforcement === 'disabled' && (
+                  <p className="mt-2 text-xs font-medium" style={{ color: 'var(--color-amber)' }}>
+                    ⚠ MFA enforcement is currently disabled — accounts are not required to enroll.
+                  </p>
+                )}
+              </div>
+              <div className="inline-flex rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] overflow-hidden text-sm shrink-0">
+                {['enabled', 'disabled'].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => update({ mfa_enforcement: v })}
+                    className="px-3 py-1.5 font-medium transition-colors"
+                    style={
+                      settings.mfa_enforcement === v
+                        ? { backgroundColor: 'var(--color-ink)', color: 'white' }
+                        : { color: 'var(--color-ink-2)' }
+                    }
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-ink)]">Demo mode</h3>
+                <p className="mt-1 text-xs text-[var(--color-ink-2)] max-w-md">
+                  Skips MFA enrollment for every account, suppresses all outbound emails, and enables
+                  a one-click reset of demo data. Turn this on only for a demo/sandbox environment.
+                </p>
+                {settings.demo_mode === 'on' && (
+                  <p className="mt-2 text-xs font-medium" style={{ color: 'var(--color-amber)' }}>
+                    ⚠ Demo mode is on — the app shows an amber "DEMO ENVIRONMENT" banner to every user.
+                  </p>
+                )}
+              </div>
+              <div className="inline-flex rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] overflow-hidden text-sm shrink-0">
+                {['off', 'on'].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => update({ demo_mode: v })}
+                    className="px-3 py-1.5 font-medium transition-colors"
+                    style={
+                      settings.demo_mode === v
+                        ? { backgroundColor: 'var(--color-ink)', color: 'white' }
+                        : { color: 'var(--color-ink-2)' }
+                    }
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {settings.demo_mode === 'on' && (
+            <Card className="p-5">
+              <h3 className="text-sm font-semibold text-[var(--color-ink)]">Reset demo data</h3>
+              <p className="mt-1 text-xs text-[var(--color-ink-2)] max-w-md">
+                Deletes every demo-seeded firm/advisor/client and re-seeds fresh data. Does not touch
+                your own Super Admin account or these platform settings.
+              </p>
+              <div className="mt-3">
+                <Button variant="outline" onClick={runReset} disabled={resetBusy}>
+                  {resetBusy ? 'Resetting…' : 'Reset demo data'}
+                </Button>
+              </div>
+              {resetError && (
+                <p className="mt-3 text-xs" style={{ color: 'var(--color-alert)' }}>{resetError}</p>
+              )}
+              {resetResult && (
+                <p className="mt-3 text-xs text-[var(--color-ink-2)]">
+                  Demo data reset. {resetResult.message || 'Fresh demo accounts are ready.'}
+                </p>
+              )}
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -461,7 +632,10 @@ function FirmDetailModal({ tenantId, onClose, onChanged }) {
               <ul className="mb-4 divide-y divide-[var(--color-line)] rounded-[var(--radius-ctrl)] border border-[var(--color-line)]">
                 {detail.advisors.map((a) => (
                   <li key={a.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="text-[var(--color-ink)]">{a.email}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-[var(--color-ink)]">{a.email}</span>
+                      <FirmRoleBadge firmRole={a.firm_role} />
+                    </span>
                     <span className="text-xs text-[var(--color-ink-3)]">since {a.created_at.slice(0, 10)}</span>
                   </li>
                 ))}
@@ -550,9 +724,19 @@ function BrandingForm({ tenant, onSaved }) {
   );
 }
 
+const FIRM_ROLE_LABELS = { jr_advisor: 'Jr. Advisor', sr_advisor: 'Sr. Advisor', firm_admin: 'Firm Admin' };
+
+function FirmRoleBadge({ firmRole }) {
+  const label = FIRM_ROLE_LABELS[firmRole] || 'Sr. Advisor'; // NULL treated as sr_advisor, same as the server
+  return (
+    <Badge fg="var(--color-ink-2)" bg="var(--color-surface-2)">{label}</Badge>
+  );
+}
+
 function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(() => GENERATED());
+  const [firmRole, setFirmRole] = useState('sr_advisor');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
@@ -562,7 +746,7 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
-      await api.createAdvisor(tenant.id, email.trim(), password);
+      await api.createAdvisor(tenant.id, email.trim(), password, firmRole);
       setDone({ email: email.trim(), password });
     } catch (e2) {
       setErr(e2.message || 'Could not add advisor.');
@@ -592,6 +776,14 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
       <div>
         <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Temporary password</label>
         <input type="text" required minLength={8} className="field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="min 8 characters" />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Firm role</label>
+        <select className="field" value={firmRole} onChange={(e) => setFirmRole(e.target.value)}>
+          <option value="jr_advisor">Jr. Advisor</option>
+          <option value="sr_advisor">Sr. Advisor</option>
+          <option value="firm_admin">Firm Admin</option>
+        </select>
       </div>
       {err && <p className="sm:col-span-2 text-xs" style={{ color: 'var(--color-alert)' }}>{err}</p>}
       <div className="sm:col-span-2">
@@ -624,6 +816,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
   const [addAdvisor, setAddAdvisor] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(() => GENERATED());
+  const [firmRole, setFirmRole] = useState('firm_admin');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
@@ -631,7 +824,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
   function reset() {
     setStep(0); setCompanyName(''); setAdvisoryMode('distribution');
     setLogoUrl(''); setPrimaryColor('#0f766e'); setBrandingSkipped(false);
-    setAddAdvisor(true); setEmail(''); setPassword(GENERATED()); setErr(''); setDone(null);
+    setAddAdvisor(true); setEmail(''); setPassword(GENERATED()); setFirmRole('firm_admin'); setErr(''); setDone(null);
   }
   function closeAndReset() { onClose(); setTimeout(reset, 200); }
 
@@ -639,7 +832,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
     setBusy(true); setErr('');
     try {
       const firstAdvisor = addAdvisor && email.trim()
-        ? { email: email.trim(), temporary_password: password }
+        ? { email: email.trim(), temporary_password: password, firm_role: firmRole }
         : undefined;
       const res = await api.createTenant(companyName.trim(), advisoryMode, firstAdvisor);
 
@@ -798,6 +991,14 @@ function CreateFirmModal({ open, onClose, onCreated }) {
                   <div>
                     <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Temporary password</label>
                     <input type="text" minLength={8} className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Firm role</label>
+                    <select className="field" value={firmRole} onChange={(e) => setFirmRole(e.target.value)}>
+                      <option value="jr_advisor">Jr. Advisor</option>
+                      <option value="sr_advisor">Sr. Advisor</option>
+                      <option value="firm_admin">Firm Admin</option>
+                    </select>
                   </div>
                 </div>
               )}

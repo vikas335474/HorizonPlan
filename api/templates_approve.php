@@ -64,6 +64,11 @@ if ($templateId !== null && $templateId > 0) {
         }
         $scopedDb->approveGlobalTemplate($templateId, $userId);
     } else {
+        // docs/09 Piece 2: approving a firm's own (non-system) template
+        // requires sr_advisor/firm_admin — a jr_advisor can still create and
+        // fork templates, just not approve them for real client use.
+        requireFirmRole($db, $session, ['sr_advisor', 'firm_admin']);
+
         // Tenant-scoped update — naturally 0 rows affected (not a 404 vs 403
         // distinction, same "acts like nonexistent" pattern templates_customize.php
         // already uses) if this template belongs to a different tenant, even
@@ -95,6 +100,8 @@ if ($templateId !== null && $templateId > 0) {
 }
 
 // --- customization branch: always tenant-owned, never system-level ---
+requireFirmRole($db, $session, ['sr_advisor', 'firm_admin']);
+
 $rows = $scopedDb->select('template_customizations', ['id' => $customizationId]);
 if (empty($rows)) {
     http_response_code(404);

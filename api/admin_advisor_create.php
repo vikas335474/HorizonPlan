@@ -26,10 +26,18 @@ $input    = json_decode(file_get_contents('php://input'), true) ?? [];
 $tenantId = (int) ($input['tenant_id'] ?? 0);
 $email    = strtolower(trim((string) ($input['email'] ?? '')));
 $password = (string) ($input['temporary_password'] ?? '');
+// docs/09 Piece 2: optional firm-level role — NULL (unset) behaves exactly
+// as before this feature existed (treated as sr_advisor by requireFirmRole()).
+$firmRole = isset($input['firm_role']) ? (string) $input['firm_role'] : null;
 
 if ($tenantId <= 0) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'tenant_id is required.']);
+    exit();
+}
+if ($firmRole !== null && !in_array($firmRole, ['jr_advisor', 'sr_advisor', 'firm_admin'], true)) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => "firm_role must be 'jr_advisor', 'sr_advisor', or 'firm_admin'."]);
     exit();
 }
 if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -65,6 +73,7 @@ $advisorId = $scopedDb->insert('users', [
     'email'         => $email,
     'password_hash' => password_hash($password, PASSWORD_BCRYPT),
     'role'          => 'advisor',
+    'firm_role'     => $firmRole,
 ]);
 $scopedDb->logChange('user', $advisorId, 'created', null,
     json_encode(['email' => $email, 'role' => 'advisor']), (int) $session['user_id']);

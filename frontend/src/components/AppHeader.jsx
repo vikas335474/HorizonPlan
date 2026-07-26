@@ -7,8 +7,17 @@ const ROLE_LABELS = {
   client: 'Client',
 };
 
+// docs/09 Piece 2 — only meaningful for role === 'advisor'; shown next to the
+// role label so a logged-in advisor knows their own permission level (e.g.
+// whether they can approve templates/risk questionnaires).
+const FIRM_ROLE_LABELS = {
+  jr_advisor: 'Jr. Advisor',
+  sr_advisor: 'Sr. Advisor',
+  firm_admin: 'Firm Admin',
+};
+
 export default function AppHeader() {
-  const { user, tenant, logout } = useAuth();
+  const { user, tenant, platform, logout } = useAuth();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -23,7 +32,19 @@ export default function AppHeader() {
   const brandName = tenant?.whiteLabel?.company_name || 'HorizonPlan';
 
   return (
-    <header className="surface-glass sticky top-0 z-20 border-b border-[var(--color-line)]">
+    <>
+      {/* docs/09 Piece 1: a demo environment must never be mistaken for
+          production data — this banner renders on every authenticated page
+          (AppHeader mounts on all of them) whenever platform.demoMode is on. */}
+      {platform?.demoMode === 'on' && (
+        <div
+          className="sticky top-0 z-30 px-4 py-1.5 text-center text-xs font-semibold"
+          style={{ backgroundColor: 'var(--color-amber)', color: '#1a1200' }}
+        >
+          DEMO ENVIRONMENT — data is illustrative, not real client information.
+        </div>
+      )}
+      <header className="surface-glass sticky top-0 z-20 border-b border-[var(--color-line)]">
       <div className="mx-auto max-w-6xl px-5 h-14 flex items-center justify-between">
         <Link to={homePath} className="flex items-center gap-2.5 group">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden transition-colors group-hover:bg-[var(--color-surface-2)]">
@@ -69,6 +90,9 @@ export default function AppHeader() {
           {user && (
             <span className="hidden sm:inline text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}
+              {user.role === 'advisor' && user.firmRole && FIRM_ROLE_LABELS[user.firmRole] && (
+                <> · {FIRM_ROLE_LABELS[user.firmRole]}</>
+              )}
             </span>
           )}
           {user && (
@@ -97,6 +121,7 @@ export default function AppHeader() {
           </button>
         </div>
       </div>
-    </header>
+      </header>
+    </>
   );
 }

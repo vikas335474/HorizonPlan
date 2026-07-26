@@ -1,10 +1,15 @@
 <?php
 declare(strict_types=1);
 
-// Super Admin updates a firm's compliance mode and/or white-label branding.
-// advisory_mode is a compliance control (docs/02 3.6) — this endpoint is
-// super_admin-gated, so the mode can never be flipped from an advisor/client
-// session regardless of what any frontend sends.
+// Super Admin (any tenant) or a firm_admin (their own tenant only) updates a
+// firm's compliance mode and/or white-label branding. advisory_mode is a
+// compliance control (docs/02 3.6) — restricting who can flip it matters
+// regardless of which role does the flipping.
+//
+// docs/09 Piece 2 widened this from super_admin-only to also allow
+// firm_admin, but only for their own tenant — verifyAccessAny() lets an
+// 'advisor' role through here now, so the tenant-ownership + firm_role check
+// below is what actually enforces the restriction, not the role gate alone.
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
@@ -18,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db = getPdo();
-verifyAccess($db, 'super_admin');
+$session = verifyAccessAny($db, ['super_admin', 'advisor']);
 
 $input    = json_decode(file_get_contents('php://input'), true) ?? [];
 $tenantId = (int) ($input['tenant_id'] ?? 0);
@@ -26,6 +31,18 @@ if ($tenantId <= 0) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'tenant_id is required.']);
     exit();
+}
+
+if ($session['role'] === 'advisor') {
+    // A firm_admin may only touch their own tenant, and only as firm_admin —
+    // jr_advisor/sr_advisor get the same 403 an advisor would have gotten
+    // before this endpoint was widened at all.
+    if ((int) $session['tenant_id'] !== $tenantId) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'Cannot update a different firm.']);
+        exit();
+    }
+    requireFirmRole($db, $session, ['firm_admin']);
 }
 
 $exists = $db->prepare("SELECT id FROM tenants WHERE id = :id LIMIT 1");
@@ -40,6 +57,14 @@ $set = [];
 $params = [':id' => $tenantId];
 
 if (array_key_exists('advisory_mode', $input)) {
+    if ($session['role'] !== 'super_admin') {
+        // advisory_mode is compliance-critical (docs/02 3.6) — the widening
+        // to firm_admin is for branding self-service only, never the
+        // compliance mode itself. Non-negotiable rule #2 in CLAUDE.md.
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'Only a Super Admin can change advisory_mode.']);
+        exit();
+    }
     $mode = (string) $input['advisory_mode'];
     if (!in_array($mode, ['distribution', 'advisory'], true)) {
         http_response_code(400);

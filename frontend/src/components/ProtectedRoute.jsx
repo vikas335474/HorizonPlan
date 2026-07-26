@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 // gate exists to land the user somewhere coherent instead of a screen full
 // of 403s. /settings itself is exempt — it's where enrollment happens.
 export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, platform, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -24,7 +24,14 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!user.mfaEnrolled && location.pathname !== '/settings') {
+  // docs/09 Piece 1: mirrors the server-side skip in requireMfaEnrollment() —
+  // demo_mode='on' implies MFA is skipped regardless of mfa_enforcement, and
+  // mfa_enforcement='disabled' on its own also skips it. The server already
+  // wouldn't 403 in either case, so redirecting here would just be a UX dead
+  // end with nothing to actually enroll against being enforced.
+  const mfaIsEnforced = platform.demoMode !== 'on' && platform.mfaEnforcement !== 'disabled';
+
+  if (mfaIsEnforced && !user.mfaEnrolled && location.pathname !== '/settings') {
     return <Navigate to="/settings" state={{ mfaRequired: true, from: location }} replace />;
   }
 
