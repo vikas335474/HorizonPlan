@@ -19,6 +19,16 @@ const SESSION_TTL_SECONDS = 3600 * 8; // 8 hours
 const LOGIN_RATE_LIMIT_WINDOW_MINUTES = 15;
 const LOGIN_RATE_LIMIT_MAX_ATTEMPTS   = 5;
 
+// docs/09 Group 1 Session 3 — demo_reset.php cooldown. Every goals_*/
+// subscenarios_*/platform_settings_* endpoint already requires an
+// authenticated, CSRF-verified session, and at this app's scale an
+// authenticated user hammering the DB is a low-probability, low-blast-radius
+// risk — general rate limiting on those is deliberately deferred (not
+// built), per the decision recorded in CLAUDE.md. demo_reset.php is the one
+// real exception: a repeated call re-seeds 160 clients (~40s each), a
+// genuine self-inflicted DoS even from a legitimate super_admin session.
+const DEMO_RESET_COOLDOWN_MINUTES = 5;
+
 // MFA-pending token: lives in the mfa_pending table, ties a completed
 // password-check to the subsequent OTP-verify step. Short-lived by design.
 const MFA_PENDING_COOKIE_NAME = 'hp_mfa_pending';
@@ -76,6 +86,36 @@ function recordLoginAttempt(PDO $db, string $email, string $ipAddress, bool $suc
         ':ip'         => $ipAddress,
         ':successful' => $successful ? 1 : 0,
     ]);
+}
+
+/**
+ * Atomically claim a demo_reset.php run. Succeeds (and stamps
+ * platform_settings.last_reset_at = NOW() in the same statement) only if
+ * the last reset was outside DEMO_RESET_COOLDOWN_MINUTES, or has never run.
+ * The UPDATE's WHERE clause IS the whole mechanism — there's no separate
+ * read-then-write, so two near-simultaneous calls can't both pass a "read"
+ * check before either writes: the second call's UPDATE simply matches zero
+ * rows once the first has committed its stamp. Stamping happens at claim
+ * time (before the reset's ~40s of work runs), not after, so a reset that's
+ * still in flight doesn't leave a window for a concurrent second call.
+ * Returns true if claimed (caller may proceed), false if still cooling down.
+ */
+function claimDemoResetSlot(PDO $db): bool
+{
+    // Same INTERVAL-inlining reasoning as checkLoginRateLimit(): MySQL native
+    // prepared statements reject a parameter marker inside "INTERVAL ? MINUTE".
+    // The value is a hardcoded integer constant, cast defensively, so
+    // inlining carries no injection risk.
+    $minutes = (int) DEMO_RESET_COOLDOWN_MINUTES;
+    $stmt = $db->prepare(
+        "UPDATE platform_settings
+         SET last_reset_at = NOW()
+         WHERE id = 1
+           AND (last_reset_at IS NULL OR last_reset_at <= NOW() - INTERVAL {$minutes} MINUTE)"
+    );
+    $stmt->execute();
+
+    return $stmt->rowCount() === 1;
 }
 
 /**

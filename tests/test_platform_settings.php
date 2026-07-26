@@ -119,6 +119,34 @@ $bypassed = ($settings['demo_mode'] === 'on' || $settings['mfa_enforcement'] ===
 assertTrue($bypassed === true,
     'demo_mode=on alone bypasses the check for an unenrolled user, even with enforcement enabled');
 
+// --- demo_reset.php cooldown (docs/09 Group 1 Session 3) -------------------
+// claimDemoResetSlot() is the whole mechanism: an atomic UPDATE that only
+// matches (and stamps last_reset_at = NOW()) when the prior reset is outside
+// the cooldown window or has never run. Exercised directly against the same
+// platform_settings row the real endpoint uses, still inside this test's
+// outer transaction so nothing here escapes the rollback either.
+$db->exec("UPDATE platform_settings SET last_reset_at = NULL WHERE id = 1");
+assertTrue(claimDemoResetSlot($db) === true, 'a fresh (never-reset) row can claim the demo reset slot');
+
+$stamped = $db->query("SELECT last_reset_at FROM platform_settings WHERE id = 1")->fetch();
+assertTrue($stamped['last_reset_at'] !== null, 'claiming the slot stamps last_reset_at with the current time');
+
+assertTrue(claimDemoResetSlot($db) === false, 'an immediate second claim, still inside the cooldown window, is rejected');
+
+// Back-date last_reset_at to just past the cooldown window and confirm a
+// claim succeeds again — proves the window boundary itself, not just "never
+// reset" vs. "just reset".
+$db->prepare("UPDATE platform_settings SET last_reset_at = NOW() - INTERVAL :m MINUTE - INTERVAL 1 SECOND WHERE id = 1")
+   ->execute([':m' => DEMO_RESET_COOLDOWN_MINUTES]);
+assertTrue(claimDemoResetSlot($db) === true, 'a claim succeeds again once the cooldown window has elapsed');
+
+// And a claim made 1 second inside the window (rather than 1 second past it)
+// must still be rejected — confirms the boundary isn't off-by-one in the
+// permissive direction.
+$db->prepare("UPDATE platform_settings SET last_reset_at = NOW() - INTERVAL :m MINUTE + INTERVAL 1 SECOND WHERE id = 1")
+   ->execute([':m' => DEMO_RESET_COOLDOWN_MINUTES]);
+assertTrue(claimDemoResetSlot($db) === false, 'a claim 1 second inside the cooldown window is still rejected');
+
 $db->rollBack(); // leave platform_settings and the fixture tenant/user exactly as found
 
 echo "\nAll platform settings tests passed.\n";
