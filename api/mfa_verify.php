@@ -65,7 +65,7 @@ $pending = verifyMfaPendingToken($db, 'login');
 $userId  = $pending['user_id'];
 
 // Fetch the user's MFA secret and full session fields
-$stmt = $db->prepare("SELECT id, tenant_id, role, mfa_secret FROM users WHERE id = :id LIMIT 1");
+$stmt = $db->prepare("SELECT id, tenant_id, role, mfa_secret, google_sub FROM users WHERE id = :id LIMIT 1");
 $stmt->execute([':id' => $userId]);
 $user = $stmt->fetch();
 
@@ -95,11 +95,13 @@ issueSession($db, (int) $user['id'], (int) $user['tenant_id'], $user['role']);
 echo json_encode([
     'status' => 'success',
     'user'   => [
-        'id'           => (int) $user['id'],
-        'tenant_id'    => (int) $user['tenant_id'],
-        'role'         => $user['role'],
+        'id'                => (int) $user['id'],
+        'tenant_id'         => (int) $user['tenant_id'],
+        'role'              => $user['role'],
         // True here by construction — this path only runs for MFA-enrolled users
-        // whose OTP just verified. Derived from the same column for consistency.
-        'mfa_enrolled' => !empty($user['mfa_secret']),
+        // whose OTP just verified.
+        'mfa_enrolled'      => true,
+        'mfa_totp_enrolled' => !empty($user['mfa_secret']),
+        'google_linked'     => !empty($user['google_sub']),
     ],
 ]);
