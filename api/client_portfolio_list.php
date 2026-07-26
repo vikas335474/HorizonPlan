@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/MfNavSync.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -32,17 +33,29 @@ if ($clientId <= 0) {
 
 $rows = $scopedDb->select('client_portfolio_items', ['client_id' => $clientId]);
 
+// docs "session 2" MF NAV price-sync: attach each NAV-tracked row's cached
+// price/date/freshness, plus the single oldest fetched_at across all of them
+// as the card's own "data as of ..." claim — always present per the user's
+// own instruction, not just shown when everything happens to be fresh.
+$navAttached = attachNavFreshness($db, $rows);
+$rowsWithNav = $navAttached['rows'];
+
 $items = array_map(static function (array $r): array {
     return [
-        'id'          => (int) $r['id'],
-        'item_kind'   => $r['item_kind'],
-        'bucket'      => $r['bucket'],
-        'category'    => $r['category'],
-        'description' => $r['description'],
-        'value'       => (float) $r['value'],
-        'updated_at'  => $r['updated_at'],
+        'id'               => (int) $r['id'],
+        'item_kind'        => $r['item_kind'],
+        'bucket'           => $r['bucket'],
+        'category'         => $r['category'],
+        'description'      => $r['description'],
+        'value'            => (float) $r['value'],
+        'amfi_scheme_code' => $r['amfi_scheme_code'],
+        'units_held'       => $r['units_held'] !== null ? (float) $r['units_held'] : null,
+        'nav_value'        => $r['nav_value'],
+        'nav_date'         => $r['nav_date'],
+        'nav_fetched_at'   => $r['nav_fetched_at'],
+        'updated_at'       => $r['updated_at'],
     ];
-}, $rows);
+}, $rowsWithNav);
 
 // docs/05 item 3: liquid vs locked totals, plus net worth (assets - liabilities)
 // — computed here, never stored, same "computed on every read" posture as
@@ -71,4 +84,5 @@ echo json_encode([
         'liabilities_total' => round($liabilitiesTotal, 2),
         'net_worth'         => round($liquidTotal + $lockedTotal - $liabilitiesTotal, 2),
     ],
+    'portfolio_nav_freshness' => $navAttached['portfolio_nav_freshness'],
 ]);

@@ -67,6 +67,43 @@ if (array_key_exists('value', $input)) {
     $updateData['value'] = (float) $input['value'];
 }
 
+// NAV tracking fields — both-or-neither, same rule as client_portfolio_create.php.
+// Only validated/applied when the request actually touches one of them; an
+// edit to, say, just `description` leaves NAV tracking completely untouched.
+if (array_key_exists('amfi_scheme_code', $input) || array_key_exists('units_held', $input)) {
+    $newSchemeCode = array_key_exists('amfi_scheme_code', $input)
+        ? (trim((string) ($input['amfi_scheme_code'] ?? '')) !== '' ? trim((string) $input['amfi_scheme_code']) : null)
+        : $existing['amfi_scheme_code'];
+    $newUnitsHeld = array_key_exists('units_held', $input)
+        ? ($input['units_held'] !== null && $input['units_held'] !== '' ? $input['units_held'] : null)
+        : $existing['units_held'];
+
+    if (($newSchemeCode !== null) !== ($newUnitsHeld !== null)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'amfi_scheme_code and units_held must both be set, or neither.']);
+        exit();
+    }
+    if ($newSchemeCode !== null && (!preg_match('/^[A-Za-z0-9]{1,20}$/', $newSchemeCode) || !is_numeric($newUnitsHeld) || (float) $newUnitsHeld <= 0)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'amfi_scheme_code must be alphanumeric (max 20 chars) and units_held must be a positive number.']);
+        exit();
+    }
+
+    $updateData['amfi_scheme_code'] = $newSchemeCode;
+    $updateData['units_held'] = $newSchemeCode !== null ? (float) $newUnitsHeld : null;
+
+    // Re-seed value from whatever is currently cached for the (possibly new)
+    // scheme code, same as create — no live AMFI fetch inside this request.
+    if ($newSchemeCode !== null && !array_key_exists('value', $input)) {
+        $cacheStmt = $db->prepare('SELECT nav_value FROM mf_nav_cache WHERE amfi_scheme_code = :code');
+        $cacheStmt->execute([':code' => $newSchemeCode]);
+        $navValue = $cacheStmt->fetchColumn();
+        if ($navValue !== false) {
+            $updateData['value'] = round((float) $newUnitsHeld * (float) $navValue, 2);
+        }
+    }
+}
+
 if (empty($updateData)) {
     echo json_encode(['status' => 'success', 'message' => 'No changes.', 'item_id' => $itemId]);
     exit();
