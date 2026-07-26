@@ -22,6 +22,16 @@ function assertTrue(bool $cond, string $label): void
 
 $db = getPdo();
 
+// Non-destructive: everything below runs inside one transaction, rolled back
+// at the very end (docs/09 Session 2) — see test_tenant_isolation.php for the
+// full reasoning. Test 4 below deliberately triggers a UNIQUE-constraint
+// PDOException; MySQL/InnoDB (unlike Postgres) does not abort the whole
+// transaction on a caught statement-level error, so this is safe to catch
+// and continue within the same transaction. On a failed assertion,
+// assertTrue() calls exit() directly — killing the process mid-transaction
+// drops the connection, and MySQL implicitly rolls back.
+$db->beginTransaction();
+
 // --- Setup: clean slate, two tenants ---
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
@@ -161,5 +171,7 @@ assertTrue(
 // --- Test 8: risk_profiles rows are tenant-scoped ---
 assertTrue(count($dbAdvisorB->select('risk_profiles', ['client_id' => 2])) === 0, 'risk_profiles rows are tenant-scoped — advisor B cannot see advisor A\'s client profile');
 assertTrue(count($dbAdvisorA->select('risk_profiles', ['client_id' => 2])) === 1, 'advisor A can see their own client\'s risk profile');
+
+$db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll risk profile DB tests passed.\n";
