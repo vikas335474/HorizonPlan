@@ -467,6 +467,17 @@ function BrandPanel() {
           Model corpus, inflation, and withdrawal rates built for Indian markets — and
           show clients the sequence-of-returns risk that spreadsheets hide.
         </p>
+
+        {/* First thing a prospect sees before deciding whether to try the demo
+            or sign up — a short, honest list of what's actually built, not
+            marketing filler. Kept to 5 so it reads at a glance. */}
+        <ul className="mt-6 space-y-2.5">
+          <FeatureBullet>Retirement Readiness Score — one number a client can hold onto</FeatureBullet>
+          <FeatureBullet>Real historical sequence replay — what a bad early decade actually does</FeatureBullet>
+          <FeatureBullet>Meeting Mode — a guided, presentation-ready walkthrough for the room</FeatureBullet>
+          <FeatureBullet>Your own risk questionnaire &amp; strategy templates, approval-gated</FeatureBullet>
+          <FeatureBullet>Clients log in anytime to see their own goals, portfolio, and reports</FeatureBullet>
+        </ul>
       </div>
 
       <div className="relative flex items-center gap-6 text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>
@@ -475,6 +486,17 @@ function BrandPanel() {
         <TrustPoint>SEBI-aware disclosures</TrustPoint>
       </div>
     </div>
+  );
+}
+
+function FeatureBullet({ children }) {
+  return (
+    <li className="flex items-start gap-2.5 text-[13px] leading-snug" style={{ color: 'rgba(255,255,255,0.8)' }}>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="mt-0.5 shrink-0" aria-hidden="true">
+        <path d="M3 7.5l2.5 2.5L11 4" stroke="#3FD6BD" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {children}
+    </li>
   );
 }
 

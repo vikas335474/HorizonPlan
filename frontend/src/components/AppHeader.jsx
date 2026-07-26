@@ -143,6 +143,14 @@ export default function AppHeader() {
               Reviews
             </Link>
           )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <Link
+              to="/guide"
+              className="text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
+            >
+              Guide
+            </Link>
+          )}
           {user && (
             <span className="text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}
@@ -228,6 +236,12 @@ export default function AppHeader() {
           )}
           {(user?.role === 'advisor' || user?.role === 'super_admin') && (
             <button onClick={() => go('/activity')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Activity</button>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <button onClick={() => go('/reviews')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Reviews</button>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <button onClick={() => go('/guide')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Guide</button>
           )}
           {tourAvailable && (
             <button

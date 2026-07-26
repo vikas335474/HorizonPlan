@@ -35,7 +35,14 @@ function categoryLabel(kind, category) {
   return list.find((c) => c.value === category)?.label || category;
 }
 
-export function ClientPortfolioCard({ clientId }) {
+// readOnly: the client's own view of their own portfolio (GoalsList.jsx) —
+// client_portfolio_list.php already permits a 'client' session to read their
+// own rows (forced to their own id server-side, clientId is only meaningful
+// for an advisor caller), but every mutation endpoint this card otherwise
+// wires up (create/update/delete/import) is verifyAccess($db, 'advisor')-only
+// — so a client session must never see those actions, not just have them
+// fail if clicked.
+export function ClientPortfolioCard({ clientId, readOnly = false }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -71,7 +78,7 @@ export function ClientPortfolioCard({ clientId }) {
     <Card className="p-4 mb-4">
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-base font-semibold text-[var(--color-ink)]">Portfolio &amp; net worth</h2>
-        {!adding && !importing && (
+        {!readOnly && !adding && !importing && (
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => setImporting(true)}>Import CAS/MFCentral CSV</Button>
             <Button variant="outline" size="sm" onClick={() => setAdding(true)}>+ Add item</Button>
@@ -79,7 +86,9 @@ export function ClientPortfolioCard({ clientId }) {
         )}
       </div>
       <p className="text-xs text-[var(--color-ink-2)] mb-3">
-        What the client already owns — a starting point, not a shared pool any one goal automatically draws from.
+        {readOnly
+          ? 'What you already own, as recorded by your advisor — a starting point, not a shared pool any one goal automatically draws from.'
+          : 'What the client already owns — a starting point, not a shared pool any one goal automatically draws from.'}
       </p>
 
       {loading && <Spinner label="Loading…" />}
@@ -101,7 +110,7 @@ export function ClientPortfolioCard({ clientId }) {
       {items.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {items.map((item) =>
-            editingId === item.id ? (
+            !readOnly && editingId === item.id ? (
               <PortfolioItemForm
                 key={item.id}
                 clientId={clientId}
@@ -125,17 +134,19 @@ export function ClientPortfolioCard({ clientId }) {
                   {item.description && <div className="text-[11px] text-[var(--color-ink-3)]">{item.description}</div>}
                 </div>
                 <span className="tnum text-sm text-[var(--color-ink)]">{formatCurrency(item.value)}</span>
-                <div className="flex gap-1 shrink-0">
-                  <button type="button" onClick={() => setEditingId(item.id)} className="text-xs text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:underline">Edit</button>
-                  <button type="button" onClick={() => handleDelete(item.id)} className="text-xs text-[var(--color-ink-3)] hover:text-[var(--color-alert)] hover:underline">Remove</button>
-                </div>
+                {!readOnly && (
+                  <div className="flex gap-1 shrink-0">
+                    <button type="button" onClick={() => setEditingId(item.id)} className="text-xs text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:underline">Edit</button>
+                    <button type="button" onClick={() => handleDelete(item.id)} className="text-xs text-[var(--color-ink-3)] hover:text-[var(--color-alert)] hover:underline">Remove</button>
+                  </div>
+                )}
               </div>
             )
           )}
         </div>
       )}
 
-      {adding && (
+      {!readOnly && adding && (
         <PortfolioItemForm
           clientId={clientId}
           onSaved={() => { setAdding(false); load(); }}
@@ -143,7 +154,7 @@ export function ClientPortfolioCard({ clientId }) {
         />
       )}
 
-      {importing && (
+      {!readOnly && importing && (
         <ImportCasCsv
           clientId={clientId}
           onImported={() => { setImporting(false); load(); }}
