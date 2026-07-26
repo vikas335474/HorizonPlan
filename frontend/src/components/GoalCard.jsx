@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Badge } from './ui';
+import { ReadinessScoreBadge } from './ReadinessScore';
 import {
   formatCurrency,
   formatDate,
@@ -25,9 +26,16 @@ export default function GoalCard({ goal }) {
         <div className="min-w-0">
           <h3 className="text-[15px] font-semibold text-[var(--color-ink)] truncate">{goal.goal_label}</h3>
         </div>
-        <Badge fg={accent.fg} bg={accent.bg}>
-          {GOAL_TYPE_LABELS[goal.goal_type] || goal.goal_type}
-        </Badge>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* goals_list.php only sends readiness_score for retirement goals
+              with enough set to project — null (omitted visually) otherwise. */}
+          {goal.readiness_score !== null && goal.readiness_score !== undefined && (
+            <ReadinessScoreBadge score={goal.readiness_score} />
+          )}
+          <Badge fg={accent.fg} bg={accent.bg}>
+            {GOAL_TYPE_LABELS[goal.goal_type] || goal.goal_type}
+          </Badge>
+        </div>
       </div>
 
       {/* Key figures — tabular, aligned */}

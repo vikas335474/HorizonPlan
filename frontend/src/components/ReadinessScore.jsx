@@ -4,7 +4,10 @@
 // formula lives in one place (PlanMath), not duplicated here.
 import { useState } from 'react';
 
-function bandFor(score) {
+// Exported so other views needing the same "what counts as low" cutoff (the
+// Dashboard client list's needs-attention filter) read off one definition
+// instead of a second hardcoded threshold that could drift from this one.
+export function bandFor(score) {
   if (score >= 70) return { color: 'var(--color-teal-ink)', bg: 'var(--color-teal-soft)', label: 'Strong' };
   if (score >= 40) return { color: 'var(--color-amber)', bg: 'var(--color-amber-soft)', label: 'On track' };
   return { color: 'var(--color-alert)', bg: 'var(--color-alert-soft)', label: 'Needs attention' };

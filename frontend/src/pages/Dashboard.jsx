@@ -1,10 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
-import { Card, Button } from '../components/ui';
+import { Card, Button, Badge } from '../components/ui';
+import { ReadinessScoreBadge, bandFor } from '../components/ReadinessScore';
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/format';
+
+// docs/08 gap #5 — the client list previously only showed goal count and
+// corpus, with no signal for which clients actually need the advisor's
+// attention. A client needs it if they have no goals yet, haven't taken a
+// risk profile, or their worst goal's readiness score reads "Needs
+// attention" per ReadinessScore.jsx's own band (score < 40) — reusing that
+// band definition rather than a second hardcoded cutoff.
+function needsAttention(client) {
+  if (client.goal_count === 0) return true;
+  if (client.risk_band === null) return true;
+  if (client.min_readiness_score !== null && bandFor(client.min_readiness_score).label === 'Needs attention') {
+    return true;
+  }
+  return false;
+}
+
+const SORT_OPTIONS = [
+  { value: 'recent', label: 'Recently added' },
+  { value: 'attention', label: 'Needs attention first' },
+  { value: 'readiness', label: 'Lowest readiness first' },
+  { value: 'corpus', label: 'Highest corpus first' },
+];
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -12,6 +35,8 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [sortBy, setSortBy] = useState('recent');
   const [addOpen, setAddOpen] = useState(false);
 
   function load() {
@@ -25,10 +50,42 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, []);
 
-  const clients = data?.clients ?? [];
-  const filtered = query
-    ? clients.filter((c) => c.email.toLowerCase().includes(query.toLowerCase()))
-    : clients;
+  // Memoized so its reference is stable across renders where `data` hasn't
+  // changed — otherwise `data?.clients ?? []` mints a fresh array on every
+  // render while `data` is still null (the loading phase), which would
+  // needlessly re-run the filtered/sorted useMemo below on every render.
+  const clients = useMemo(() => data?.clients ?? [], [data]);
+
+  const filtered = useMemo(() => {
+    let list = query
+      ? clients.filter((c) => c.email.toLowerCase().includes(query.toLowerCase()))
+      : clients;
+
+    if (attentionOnly) {
+      list = list.filter(needsAttention);
+    }
+
+    if (sortBy === 'recent') return list;
+
+    const sorted = [...list];
+    if (sortBy === 'attention') {
+      // Stable partition — needs-attention clients first, original order
+      // preserved within each group (Array.sort is stable per spec).
+      sorted.sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
+    } else if (sortBy === 'readiness') {
+      // Nulls (no computable retirement goal) sort last, not first — an
+      // unscored client isn't necessarily "fine," but it's not the same
+      // signal as a scored-and-struggling one, so it shouldn't crowd it out.
+      sorted.sort((a, b) => {
+        if (a.min_readiness_score === null) return 1;
+        if (b.min_readiness_score === null) return -1;
+        return a.min_readiness_score - b.min_readiness_score;
+      });
+    } else if (sortBy === 'corpus') {
+      sorted.sort((a, b) => b.total_net_worth - a.total_net_worth);
+    }
+    return sorted;
+  }, [clients, query, attentionOnly, sortBy]);
 
   return (
     <div className="min-h-screen">
@@ -108,20 +165,40 @@ export default function Dashboard() {
               </Card>
             ) : (
               <Card className="overflow-hidden">
-                <div className="flex items-center justify-between gap-3 p-3.5 border-b border-[var(--color-line)]">
-                  <div className="relative flex-1 max-w-xs">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-                         className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true">
-                      <circle cx="7" cy="7" r="4.5" stroke="var(--color-ink-3)" strokeWidth="1.4" />
-                      <path d="M10.5 10.5L14 14" stroke="var(--color-ink-3)" strokeWidth="1.4" strokeLinecap="round" />
-                    </svg>
-                    <input
-                      type="search"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search clients"
-                      className="field pl-9"
-                    />
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 border-b border-[var(--color-line)]">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="relative">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                           className="absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true">
+                        <circle cx="7" cy="7" r="4.5" stroke="var(--color-ink-3)" strokeWidth="1.4" />
+                        <path d="M10.5 10.5L14 14" stroke="var(--color-ink-3)" strokeWidth="1.4" strokeLinecap="round" />
+                      </svg>
+                      <input
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search clients"
+                        className="field pl-9 w-full sm:w-56"
+                      />
+                    </div>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="field w-auto py-1.5 text-sm"
+                      aria-label="Sort clients"
+                    >
+                      {SORT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <label className="flex items-center gap-1.5 text-sm text-[var(--color-ink-2)] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={attentionOnly}
+                        onChange={(e) => setAttentionOnly(e.target.checked)}
+                      />
+                      Needs attention only
+                    </label>
                   </div>
                   <span className="text-xs text-[var(--color-ink-3)] tabular-nums">
                     {filtered.length} of {clients.length}
@@ -145,7 +222,10 @@ export default function Dashboard() {
                           <Avatar email={c.email} />
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium text-[var(--color-ink)]">{c.email}</div>
-                            <div className="text-xs text-[var(--color-ink-3)]">Client since {formatDate(c.client_since)}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className="text-xs text-[var(--color-ink-3)]">Client since {formatDate(c.client_since)}</span>
+                              <ClientHealthBadges client={c} />
+                            </div>
                           </div>
                         </div>
                         <div className="col-span-6 md:col-span-2 md:text-right">
@@ -180,6 +260,27 @@ export default function Dashboard() {
         onCreated={() => { setAddOpen(false); load(); }}
       />
     </div>
+  );
+}
+
+// At-a-glance health signal on each client row: risk-profile band, the
+// client's worst-goal readiness score, and a "No goals yet" flag — the
+// concrete gap docs/08 named ("at-a-glance client status"). Deliberately
+// terse (small badges, not the full ReadinessScoreCard) since this renders
+// once per row in a list, not as the page's own subject.
+function ClientHealthBadges({ client }) {
+  if (client.goal_count === 0) {
+    return <Badge fg="var(--color-ink-3)" bg="var(--color-surface-2)">No goals yet</Badge>;
+  }
+  return (
+    <>
+      {client.min_readiness_score !== null && <ReadinessScoreBadge score={client.min_readiness_score} />}
+      {client.risk_band !== null ? (
+        <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">{client.risk_band}</Badge>
+      ) : (
+        <Badge fg="var(--color-ink-3)" bg="var(--color-surface-2)">Not risk-assessed</Badge>
+      )}
+    </>
   );
 }
 

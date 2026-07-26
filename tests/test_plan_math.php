@@ -71,6 +71,41 @@ assertTrue(PlanMath::readinessScore(2.5, $steadyStrong, $adverseStrong) === 100,
 // horizon to measure survival over -> null, not a division by zero.
 assertTrue(PlanMath::readinessScore(3.5, [10000000.0], [10000000.0]) === null, 'readinessScore returns null when there is no horizon to measure survival over');
 
+// --- decumulationSeriesForGoal / readinessScoreForGoal (advisor dashboard
+// client-health signal — shares the same corpus-composition branch
+// goals_projection.php uses, extracted so the two can't drift) ---
+[$goalSteady, $goalAdverse] = PlanMath::decumulationSeriesForGoal(10000000.0, 3.5, 6.0, 7.0, 30);
+assertTrue($goalSteady === $steady, 'decumulationSeriesForGoal with no corpus composition returns the same steady series as steadyReturnSeries directly');
+assertTrue($goalAdverse === $adverse, 'decumulationSeriesForGoal with no corpus composition returns the same adverse series as adverseSequenceSeries directly');
+
+[$goalSteadyTwoBucket, $goalAdverseTwoBucket] = PlanMath::decumulationSeriesForGoal(
+    10000000.0, 4.0, 6.0, 7.0, 5, 6000000.0, 4000000.0, 6.0
+);
+assertTrue(
+    $goalSteadyTwoBucket === PlanMath::twoBucketDecumulationSeries(6000000.0, 4000000.0, 4.0, 6.0, 7.0, 6.0, 5),
+    'decumulationSeriesForGoal with a full liquid/locked split matches twoBucketDecumulationSeries directly'
+);
+assertTrue(
+    $goalAdverseTwoBucket === PlanMath::twoBucketAdverseSequenceSeries(6000000.0, 4000000.0, 4.0, 6.0, 7.0, 6.0, 5),
+    'decumulationSeriesForGoal with a full liquid/locked split matches twoBucketAdverseSequenceSeries directly'
+);
+
+// A partial composition (only liquidCorpusAmount set, lockedReturnRate
+// missing) must NOT trip the two-bucket branch — same both-or-all-three
+// guard as goals_projection.php's own hasCorpusComposition check.
+[$goalSteadyPartial] = PlanMath::decumulationSeriesForGoal(10000000.0, 3.5, 6.0, 7.0, 30, 6000000.0, null, null);
+assertTrue($goalSteadyPartial === $steady, 'decumulationSeriesForGoal falls back to the single-bucket series when the corpus composition is only partially set');
+
+assertTrue(
+    PlanMath::readinessScoreForGoal(10000000.0, 3.5, 6.0, 7.0, 30) === PlanMath::readinessScore(3.5, $steady, $adverse),
+    'readinessScoreForGoal without composition matches readinessScore computed from the same standalone series'
+);
+assertTrue(
+    PlanMath::readinessScoreForGoal(10000000.0, 4.0, 6.0, 7.0, 5, 6000000.0, 4000000.0, 6.0)
+        === PlanMath::readinessScore(4.0, PlanMath::twoBucketDecumulationSeries(6000000.0, 4000000.0, 4.0, 6.0, 7.0, 6.0, 5), PlanMath::twoBucketAdverseSequenceSeries(6000000.0, 4000000.0, 4.0, 6.0, 7.0, 6.0, 5)),
+    'readinessScoreForGoal with composition matches readinessScore computed from the two-bucket series'
+);
+
 // --- historicalSequenceSeries (docs/07 Bet 2) ---
 // A 3-year mock history: 2000 (+10% equity, 5% inflation), 2001 (-10%, 3%),
 // 2002 (+20%, 2%). All values below hand-verified: annualWithdrawal =
