@@ -41,6 +41,14 @@ export default function GoalDetail() {
   const [corpusForm, setCorpusForm] = useState(null);
   const [corpusError, setCorpusError] = useState('');
   const [corpusSaving, setCorpusSaving] = useState(false);
+  // docs/09 Pre-Launch Hardening Session 1 — the goal's own core fields
+  // (starting corpus, inflation, target, withdrawal/drawdown rates, horizon)
+  // had no edit UI at all before this session; only accumulation and corpus
+  // composition (added in later sessions) were ever editable post-creation.
+  const [editingBasics, setEditingBasics] = useState(false);
+  const [basicsForm, setBasicsForm] = useState(null);
+  const [basicsError, setBasicsError] = useState('');
+  const [basicsSaving, setBasicsSaving] = useState(false);
 
   function loadGoal() {
     return api.getGoal(id).then((res) => {
@@ -201,6 +209,83 @@ export default function GoalDetail() {
     }
   }
 
+  function startEditingBasics() {
+    setBasicsForm({
+      initial_net_worth: goal.initial_net_worth ?? '',
+      target_amount: goal.target_amount ?? '',
+      target_date: goal.target_date ?? '',
+      inflation_rate: goal.inflation_rate ?? '',
+      projection_horizon_years: goal.projection_horizon_years ?? '',
+      withdrawal_rate: goal.withdrawal_rate ?? '',
+      drawdown_return_rate: goal.drawdown_return_rate ?? '',
+    });
+    setBasicsError('');
+    setEditingBasics(true);
+  }
+
+  // Client-side validation mirrors GoalFieldValidation.php's rules so the
+  // advisor gets immediate feedback; the server remains the source of truth.
+  async function handleSaveBasics(e) {
+    e.preventDefault();
+    setBasicsError('');
+
+    const netWorth = Number(basicsForm.initial_net_worth);
+    if (!Number.isFinite(netWorth) || netWorth <= 0) {
+      return setBasicsError('Starting corpus must be greater than 0.');
+    }
+    const inflation = Number(basicsForm.inflation_rate);
+    if (!Number.isFinite(inflation) || inflation < 0 || inflation > 100) {
+      return setBasicsError('Inflation rate must be between 0 and 100%.');
+    }
+    const horizon = Number(basicsForm.projection_horizon_years);
+    if (!Number.isInteger(horizon) || horizon < 1 || horizon > 100) {
+      return setBasicsError('Projection horizon must be a whole number between 1 and 100 years.');
+    }
+    if (basicsForm.target_amount !== '' && (!Number.isFinite(Number(basicsForm.target_amount)) || Number(basicsForm.target_amount) <= 0)) {
+      return setBasicsError('Target amount must be greater than 0, or left blank.');
+    }
+
+    const fields = {
+      initial_net_worth: netWorth,
+      inflation_rate: inflation,
+      projection_horizon_years: horizon,
+      target_amount: basicsForm.target_amount !== '' ? Number(basicsForm.target_amount) : null,
+      target_date: basicsForm.target_date !== '' ? basicsForm.target_date : null,
+    };
+
+    if (isRetirement) {
+      if (basicsForm.withdrawal_rate !== '') {
+        const wd = Number(basicsForm.withdrawal_rate);
+        if (!Number.isFinite(wd) || wd < 0 || wd > 100) {
+          return setBasicsError('Withdrawal rate must be between 0 and 100%.');
+        }
+        fields.withdrawal_rate = wd;
+      } else {
+        fields.withdrawal_rate = null;
+      }
+      if (basicsForm.drawdown_return_rate !== '') {
+        const dd = Number(basicsForm.drawdown_return_rate);
+        if (!Number.isFinite(dd) || dd < 0 || dd > 100) {
+          return setBasicsError('Post-retirement return must be between 0 and 100%.');
+        }
+        fields.drawdown_return_rate = dd;
+      } else {
+        fields.drawdown_return_rate = null;
+      }
+    }
+
+    setBasicsSaving(true);
+    try {
+      await api.updateGoal(goal.id, fields);
+      await loadGoal();
+      setEditingBasics(false);
+    } catch (err) {
+      setBasicsError(err.message || 'Could not save these changes.');
+    } finally {
+      setBasicsSaving(false);
+    }
+  }
+
   function handleScenarioChanged(updated) {
     setSubScenarios((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
   }
@@ -296,49 +381,142 @@ export default function GoalDetail() {
               </div>
             </div>
 
-            {/* Plan parameters — key figures grid */}
+            {/* Plan parameters — key figures grid, editable (docs/09
+                Pre-Launch Hardening Session 1: these core fields had no edit
+                UI at all before this session). */}
             <Card className="p-5 mb-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4">
-                <Param label="Starting corpus" value={formatCurrency(goal.initial_net_worth)} />
-                {goal.target_amount !== null && (
-                  <Param label="Target" value={formatCurrency(goal.target_amount)} />
-                )}
-                {goal.target_date && <Param label="Target date" value={formatDate(goal.target_date)} />}
-                <Param label="Inflation" value={formatPercent(goal.inflation_rate)} />
-                {isRetirement && goal.withdrawal_rate !== null && (
-                  <Param
-                    label="Withdrawal rate"
-                    value={formatPercent(goal.withdrawal_rate)}
-                    sub={corpusMultiple(goal.withdrawal_rate) ? `${corpusMultiple(goal.withdrawal_rate)}× expenses` : null}
-                  />
-                )}
-                {isRetirement && goal.drawdown_return_rate !== null && (
-                  <Param label="Post-retirement return" value={formatPercent(goal.drawdown_return_rate)} />
-                )}
-                {isRetirement && goal.current_age !== null && goal.retirement_age !== null && (
-                  <Param label="Age now → retirement" value={`${goal.current_age} → ${goal.retirement_age}`} />
-                )}
-                {isRetirement && goal.accumulation_return_rate !== null && (
-                  <Param label="Pre-retirement return" value={formatPercent(goal.accumulation_return_rate)} />
-                )}
-                {isRetirement && goal.monthly_sip_amount !== null && (
-                  <Param
-                    label="Monthly SIP"
-                    value={formatCurrency(goal.monthly_sip_amount)}
-                    sub={goal.sip_step_up_rate !== null ? `+${formatPercent(goal.sip_step_up_rate)}/yr step-up` : null}
-                  />
-                )}
-                {isRetirement && goal.liquid_corpus_amount !== null && (
-                  <Param label="Liquid corpus" value={formatCurrency(goal.liquid_corpus_amount)} />
-                )}
-                {isRetirement && goal.locked_corpus_amount !== null && (
-                  <Param
-                    label="Locked corpus"
-                    value={formatCurrency(goal.locked_corpus_amount)}
-                    sub={goal.locked_return_rate !== null ? `${formatPercent(goal.locked_return_rate)} return` : null}
-                  />
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <h2 className="text-base font-semibold text-[var(--color-ink)]">Plan parameters</h2>
+                {!editingBasics && (
+                  <Button variant="outline" size="sm" onClick={startEditingBasics}>
+                    Edit
+                  </Button>
                 )}
               </div>
+
+              {!editingBasics && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 mt-3">
+                  <Param label="Starting corpus" value={formatCurrency(goal.initial_net_worth)} />
+                  {goal.target_amount !== null && (
+                    <Param label="Target" value={formatCurrency(goal.target_amount)} />
+                  )}
+                  {goal.target_date && <Param label="Target date" value={formatDate(goal.target_date)} />}
+                  <Param label="Inflation" value={formatPercent(goal.inflation_rate)} />
+                  {isRetirement && goal.withdrawal_rate !== null && (
+                    <Param
+                      label="Withdrawal rate"
+                      value={formatPercent(goal.withdrawal_rate)}
+                      sub={corpusMultiple(goal.withdrawal_rate) ? `${corpusMultiple(goal.withdrawal_rate)}× expenses` : null}
+                    />
+                  )}
+                  {isRetirement && goal.drawdown_return_rate !== null && (
+                    <Param label="Post-retirement return" value={formatPercent(goal.drawdown_return_rate)} />
+                  )}
+                  {isRetirement && goal.current_age !== null && goal.retirement_age !== null && (
+                    <Param label="Age now → retirement" value={`${goal.current_age} → ${goal.retirement_age}`} />
+                  )}
+                  {isRetirement && goal.accumulation_return_rate !== null && (
+                    <Param label="Pre-retirement return" value={formatPercent(goal.accumulation_return_rate)} />
+                  )}
+                  {isRetirement && goal.monthly_sip_amount !== null && (
+                    <Param
+                      label="Monthly SIP"
+                      value={formatCurrency(goal.monthly_sip_amount)}
+                      sub={goal.sip_step_up_rate !== null ? `+${formatPercent(goal.sip_step_up_rate)}/yr step-up` : null}
+                    />
+                  )}
+                  {isRetirement && goal.liquid_corpus_amount !== null && (
+                    <Param label="Liquid corpus" value={formatCurrency(goal.liquid_corpus_amount)} />
+                  )}
+                  {isRetirement && goal.locked_corpus_amount !== null && (
+                    <Param
+                      label="Locked corpus"
+                      value={formatCurrency(goal.locked_corpus_amount)}
+                      sub={goal.locked_return_rate !== null ? `${formatPercent(goal.locked_return_rate)} return` : null}
+                    />
+                  )}
+                </div>
+              )}
+
+              {editingBasics && (
+                <form onSubmit={handleSaveBasics} className="mt-2" noValidate>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Starting corpus (₹)</label>
+                      <input
+                        type="number" min="0.01" step="any" value={basicsForm.initial_net_worth}
+                        onChange={(e) => setBasicsForm((f) => ({ ...f, initial_net_worth: e.target.value }))}
+                        className="field"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Inflation rate (%)</label>
+                      <input
+                        type="number" min="0" max="100" step="any" value={basicsForm.inflation_rate}
+                        onChange={(e) => setBasicsForm((f) => ({ ...f, inflation_rate: e.target.value }))}
+                        className="field"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Target amount (₹, optional)</label>
+                      <input
+                        type="number" min="0.01" step="any" value={basicsForm.target_amount}
+                        onChange={(e) => setBasicsForm((f) => ({ ...f, target_amount: e.target.value }))}
+                        className="field"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Target date (optional)</label>
+                      <input
+                        type="date" value={basicsForm.target_date}
+                        onChange={(e) => setBasicsForm((f) => ({ ...f, target_date: e.target.value }))}
+                        className="field"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Projection horizon (years)</label>
+                      <input
+                        type="number" min="1" max="100" step="1" value={basicsForm.projection_horizon_years}
+                        onChange={(e) => setBasicsForm((f) => ({ ...f, projection_horizon_years: e.target.value }))}
+                        className="field"
+                      />
+                    </div>
+                    {isRetirement && (
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Withdrawal rate (%, optional)</label>
+                        <input
+                          type="number" min="0" max="100" step="any" value={basicsForm.withdrawal_rate}
+                          onChange={(e) => setBasicsForm((f) => ({ ...f, withdrawal_rate: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                    )}
+                    {isRetirement && (
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Post-retirement return (%, optional)</label>
+                        <input
+                          type="number" min="0" max="100" step="any" value={basicsForm.drawdown_return_rate}
+                          onChange={(e) => setBasicsForm((f) => ({ ...f, drawdown_return_rate: e.target.value }))}
+                          className="field"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {basicsError && (
+                    <p className="mt-3 text-sm" style={{ color: 'var(--color-alert)' }}>{basicsError}</p>
+                  )}
+
+                  <div className="flex gap-2 mt-3">
+                    <Button type="submit" size="sm" disabled={basicsSaving}>
+                      {basicsSaving ? 'Saving…' : 'Save'}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setEditingBasics(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
             </Card>
 
             {/* Retirement Readiness Score (docs/07 Bet 3) — the goal's own
@@ -404,7 +582,7 @@ export default function GoalDetail() {
                 )}
 
                 {editingAccumulation && (
-                  <form onSubmit={handleSaveAccumulation} className="mt-2">
+                  <form onSubmit={handleSaveAccumulation} className="mt-2" noValidate>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Current age</label>
@@ -493,7 +671,7 @@ export default function GoalDetail() {
                 )}
 
                 {editingCorpus && (
-                  <form onSubmit={handleSaveCorpus} className="mt-2">
+                  <form onSubmit={handleSaveCorpus} className="mt-2" noValidate>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Liquid corpus (₹)</label>

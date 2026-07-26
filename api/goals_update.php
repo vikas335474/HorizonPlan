@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/GoalFieldValidation.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -67,10 +68,20 @@ if (empty($changes)) {
     exit();
 }
 
-// Only field with a hard range check today — see CLAUDE.md Phase 8 notes:
-// the rest of $updatableFields (initial_net_worth, inflation_rate, etc.) has
-// no type/range validation at all in this endpoint, which is a real gap
-// flagged there but not fixed here, to avoid quietly widening this change.
+// docs/09 Pre-Launch Hardening Session 1: per-field range/type validation,
+// only for fields actually being changed here (partial-update semantics —
+// a field present but unchanged writes nothing, so there's nothing new to
+// validate). Shared with goals_create.php via GoalFieldValidation.php so the
+// two entry points to this data can't drift.
+foreach ($changes as $field => [, $newValue]) {
+    $fieldError = validateGoalField($field, $newValue);
+    if ($fieldError !== null) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => $fieldError]);
+        exit();
+    }
+}
+
 if (array_key_exists('projection_horizon_years', $changes)) {
     $newHorizon = (int) $changes['projection_horizon_years'][1];
     if ($newHorizon < 1 || $newHorizon > 100) {

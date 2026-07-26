@@ -11,6 +11,7 @@ status=0
 for t in \
   tests/test_plan_math.php \
   tests/test_accumulation.php \
+  tests/test_goal_field_validation.php \
   tests/test_risk_profile_scoring.php \
   tests/test_corpus_composition.php \
   tests/test_totp.php \
