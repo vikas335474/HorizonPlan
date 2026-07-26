@@ -42,18 +42,15 @@ function isDemoAccountEmail(string $email): bool
 
 /**
  * The FIRMS blueprint (name/slug/advisory_mode/color) lives in
- * tools/seed_demo_data_full.php — read from there rather than duplicated
- * here, same reasoning api/demo_reset.php already uses: one source of truth
- * that can't drift. The NO_AUTORUN guard is what lets this require() the
- * tools script safely from a web request without tripping its CLI-only entry
- * point at the bottom of the file.
+ * api/lib/DemoSeeder.php — read from there rather than duplicated here, same
+ * reasoning api/demo_reset.php already uses: one source of truth that can't
+ * drift. NOT tools/seed_demo_data_full.php — that file is CLI-only and never
+ * deployed to production (see its own docblock), so requiring it from here
+ * would 500 on a real deploy with "failed to open stream".
  */
 function loadDemoFirmsBlueprint(): array
 {
-    if (!defined('SEED_DEMO_DATA_FULL_NO_AUTORUN')) {
-        define('SEED_DEMO_DATA_FULL_NO_AUTORUN', true);
-    }
-    require_once __DIR__ . '/../../tools/seed_demo_data_full.php';
+    require_once __DIR__ . '/DemoSeeder.php';
     return FIRMS;
 }
 
