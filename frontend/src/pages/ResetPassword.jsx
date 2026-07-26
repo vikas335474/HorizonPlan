@@ -5,10 +5,17 @@ import { api } from '../lib/api';
 // Step 2 of the self-service recovery flow: the token from the emailed link
 // (query param, never a route param — it must not get logged as part of the
 // route path in any server access log) is redeemed for a new password.
-export default function ResetPassword() {
+//
+// Also doubles as the invite-acceptance landing page (docs/09 Session 4,
+// route /accept-invite, mode="invite") — same token/redemption mechanism
+// (password_reset_confirm.php doesn't branch on purpose, see
+// InviteTokens.php), only the copy differs: "welcome, set your password"
+// instead of "reset your password."
+export default function ResetPassword({ mode = 'reset' }) {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
   const navigate = useNavigate();
+  const isInvite = mode === 'invite';
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -31,9 +38,11 @@ export default function ResetPassword() {
     setSubmitting(true);
     try {
       await api.confirmPasswordReset(token, newPassword);
-      navigate('/login', { replace: true, state: { passwordResetDone: true } });
+      navigate('/login', { replace: true, state: { passwordResetDone: !isInvite, inviteAccepted: isInvite } });
     } catch (err) {
-      setError(err.message || 'This reset link is invalid or has expired. Request a new one.');
+      setError(err.message || (isInvite
+        ? 'This invite link is invalid or has expired. Ask your admin to send a new one.'
+        : 'This reset link is invalid or has expired. Request a new one.'));
     } finally {
       setSubmitting(false);
     }
@@ -43,8 +52,12 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center px-5 py-10" style={{ backgroundColor: 'var(--color-canvas)' }}>
       <div className="w-full max-w-sm animate-rise">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-ink)]">Set a new password</h1>
-          <p className="mt-1.5 text-sm text-[var(--color-ink-2)]">Choose a new password for your account.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-ink)]">
+            {isInvite ? 'Welcome to HorizonPlan' : 'Set a new password'}
+          </h1>
+          <p className="mt-1.5 text-sm text-[var(--color-ink-2)]">
+            {isInvite ? 'Set a password to activate your account.' : 'Choose a new password for your account.'}
+          </p>
         </div>
 
         <div
@@ -56,10 +69,17 @@ export default function ResetPassword() {
               className="text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5"
               style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}
             >
-              This link is missing its reset token. Request a new one from the sign-in page.
+              {isInvite
+                ? 'This link is missing its invite token. Ask your admin to send a new one.'
+                : 'This link is missing its reset token. Request a new one from the sign-in page.'}
             </p>
           ) : (
-            <form onSubmit={handleSubmit}>
+            // noValidate: without it, the browser's own constraint validation
+            // (minLength=8 below) silently blocks the submit before
+            // handleSubmit's own matching length check ever runs, leaving no
+            // visible error at all — the same class of bug found and fixed
+            // on GoalDetail.jsx's edit forms (see CLAUDE.md).
+            <form onSubmit={handleSubmit} noValidate>
               <label className="block text-sm font-medium mb-1.5 text-[var(--color-ink-2)]" htmlFor="new-password">
                 New password
               </label>
@@ -106,7 +126,7 @@ export default function ResetPassword() {
                 className="w-full rounded-[var(--radius-ctrl)] py-2.5 text-sm font-semibold text-white transition-all duration-150 active:translate-y-px disabled:opacity-60"
                 style={{ background: 'var(--grad-ink)', boxShadow: 'var(--shadow-sm)' }}
               >
-                {submitting ? 'Updating…' : 'Update password'}
+                {submitting ? 'Saving…' : isInvite ? 'Activate account' : 'Update password'}
               </button>
             </form>
           )}

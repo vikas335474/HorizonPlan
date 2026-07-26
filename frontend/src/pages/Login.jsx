@@ -31,6 +31,8 @@ export default function Login() {
   // Set by ResetPassword.jsx after a successful reset — shown once, not
   // persisted, so a refresh of /login doesn't keep re-displaying it.
   const passwordResetDone = location.state?.passwordResetDone;
+  // Same mechanism, invite-acceptance variant (docs/09 Session 4).
+  const inviteAccepted = location.state?.inviteAccepted;
 
   function destinationFor(user) {
     if (fromPath) return fromPath;
@@ -134,6 +136,14 @@ export default function Login() {
                     style={{ backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }}
                   >
                     Password updated. Sign in with your new password.
+                  </p>
+                )}
+                {inviteAccepted && (
+                  <p
+                    className="mb-4 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5"
+                    style={{ backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }}
+                  >
+                    Account activated. Sign in with your new password.
                   </p>
                 )}
 

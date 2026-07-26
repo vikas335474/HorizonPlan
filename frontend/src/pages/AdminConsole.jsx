@@ -771,7 +771,6 @@ function FirmRoleBadge({ firmRole }) {
 
 function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(() => GENERATED());
   const [firmRole, setFirmRole] = useState('sr_advisor');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -782,8 +781,8 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
-      await api.createAdvisor(tenant.id, email.trim(), password, firmRole);
-      setDone({ email: email.trim(), password });
+      const res = await api.createAdvisor(tenant.id, email.trim(), firmRole);
+      setDone({ email: email.trim(), inviteLink: res.invite_link });
     } catch (e2) {
       setErr(e2.message || 'Could not add advisor.');
     } finally {
@@ -795,10 +794,14 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
     return (
       <div className={wrap}>
         <p className="text-sm text-[var(--color-ink)]">
-          Advisor <strong>{done.email}</strong> created and emailed their sign-in details. Here's a fallback in case delivery doesn't land:
+          Advisor <strong>{done.email}</strong> created and emailed an invite link to set their password. Here's a copyable fallback in case delivery doesn't land:
         </p>
-        <p className="mt-1 tnum text-xs text-[var(--color-ink-2)]">Temporary password: <strong>{done.password}</strong></p>
-        <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => { setDone(null); setEmail(''); setPassword(GENERATED()); onAdded(); }}>Add another</Button></div>
+        <div className="mt-2 flex items-center gap-2">
+          <input readOnly className="field text-xs" value={done.inviteLink || ''} onFocus={(e) => e.target.select()} />
+          <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(done.inviteLink || '')}>Copy</Button>
+        </div>
+        <p className="mt-1 text-xs text-[var(--color-ink-3)]">This link expires in 7 days.</p>
+        <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => { setDone(null); setEmail(''); onAdded(); }}>Add another</Button></div>
       </div>
     );
   }
@@ -810,10 +813,6 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
         <input type="email" required className="field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="advisor@firm.in" />
       </div>
       <div>
-        <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Temporary password</label>
-        <input type="text" required minLength={8} className="field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="min 8 characters" />
-      </div>
-      <div>
         <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Firm role</label>
         <select className="field" value={firmRole} onChange={(e) => setFirmRole(e.target.value)}>
           <option value="jr_advisor">Jr. Advisor</option>
@@ -821,6 +820,7 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
           <option value="firm_admin">Firm Admin</option>
         </select>
       </div>
+      <p className="sm:col-span-2 text-xs text-[var(--color-ink-3)]">An invite email will be sent — the advisor sets their own password.</p>
       {err && <p className="sm:col-span-2 text-xs" style={{ color: 'var(--color-alert)' }}>{err}</p>}
       <div className="sm:col-span-2">
         <Button size="sm" type="submit" disabled={busy}>{busy ? 'Adding…' : 'Add advisor'}</Button>
@@ -828,9 +828,6 @@ function AddAdvisorForm({ tenant, onAdded, embedded = false }) {
     </form>
   );
 }
-
-const GENERATED = () =>
-  Math.random().toString(36).slice(2, 6) + '-' + Math.random().toString(36).slice(2, 6);
 
 const WIZARD_STEPS = [
   { key: 'firm', label: 'Firm' },
@@ -851,7 +848,6 @@ function CreateFirmModal({ open, onClose, onCreated }) {
   const [brandingSkipped, setBrandingSkipped] = useState(false);
   const [addAdvisor, setAddAdvisor] = useState(true);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(() => GENERATED());
   const [firmRole, setFirmRole] = useState('firm_admin');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -860,7 +856,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
   function reset() {
     setStep(0); setCompanyName(''); setAdvisoryMode('distribution');
     setLogoUrl(''); setPrimaryColor('#0f766e'); setBrandingSkipped(false);
-    setAddAdvisor(true); setEmail(''); setPassword(GENERATED()); setFirmRole('firm_admin'); setErr(''); setDone(null);
+    setAddAdvisor(true); setEmail(''); setFirmRole('firm_admin'); setErr(''); setDone(null);
   }
   function closeAndReset() { onClose(); setTimeout(reset, 200); }
 
@@ -868,7 +864,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
     setBusy(true); setErr('');
     try {
       const firstAdvisor = addAdvisor && email.trim()
-        ? { email: email.trim(), temporary_password: password, firm_role: firmRole }
+        ? { email: email.trim(), firm_role: firmRole }
         : undefined;
       const res = await api.createTenant(companyName.trim(), advisoryMode, firstAdvisor);
 
@@ -885,7 +881,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
       setDone({
         companyName: companyName.trim(),
         advisorEmail: firstAdvisor ? firstAdvisor.email : null,
-        password: firstAdvisor ? password : null,
+        inviteLink: firstAdvisor ? res.invite_link : null,
         brandingSet: hasBranding,
       });
     } catch (e2) {
@@ -920,13 +916,17 @@ function CreateFirmModal({ open, onClose, onCreated }) {
             </li>
             <li className="flex items-center gap-2" style={{ color: done.advisorEmail ? 'var(--color-ink)' : 'var(--color-ink-3)' }}>
               {done.advisorEmail ? <CheckDot /> : <PendingDot />}
-              {done.advisorEmail ? `Advisor ${done.advisorEmail} created and emailed sign-in details` : 'No advisor added yet — add one from Manage firm'}
+              {done.advisorEmail ? `Advisor ${done.advisorEmail} created and emailed an invite link` : 'No advisor added yet — add one from Manage firm'}
             </li>
           </ul>
-          {done.password && (
-            <p className="mt-3 tnum text-xs text-[var(--color-ink-2)]">
-              Fallback temporary password (in case the email doesn't land): <strong>{done.password}</strong>
-            </p>
+          {done.inviteLink && (
+            <div className="mt-3">
+              <p className="text-xs text-[var(--color-ink-2)]">Invite link (fallback in case the email doesn't land, expires in 7 days):</p>
+              <div className="mt-1 flex items-center gap-2">
+                <input readOnly className="field text-xs" value={done.inviteLink} onFocus={(e) => e.target.select()} />
+                <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(done.inviteLink)}>Copy</Button>
+              </div>
+            </div>
           )}
           <div className="mt-5"><Button onClick={() => { onCreated(); reset(); }}>Done</Button></div>
         </div>
@@ -1025,10 +1025,6 @@ function CreateFirmModal({ open, onClose, onCreated }) {
                     <input type="email" className="field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="advisor@firm.in" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Temporary password</label>
-                    <input type="text" minLength={8} className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                  <div>
                     <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Firm role</label>
                     <select className="field" value={firmRole} onChange={(e) => setFirmRole(e.target.value)}>
                       <option value="jr_advisor">Jr. Advisor</option>
@@ -1036,6 +1032,7 @@ function CreateFirmModal({ open, onClose, onCreated }) {
                       <option value="firm_admin">Firm Admin</option>
                     </select>
                   </div>
+                  <p className="sm:col-span-2 text-xs text-[var(--color-ink-3)]">An invite email will be sent — the advisor sets their own password.</p>
                 </div>
               )}
               {!addAdvisor && (

@@ -26,6 +26,7 @@ for t in \
   tests/test_demo_access_validation.php \
   tests/test_demo_access_db.php \
   tests/test_password_reset_db.php \
+  tests/test_invite_tokens_db.php \
   tests/test_templates_db.php \
   tests/test_risk_profiles_db.php \
   tests/test_client_portfolio_db.php \
