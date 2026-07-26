@@ -6,14 +6,17 @@ import AppHeader from '../components/AppHeader';
 import { Card, Button, Badge } from '../components/ui';
 
 // Settings: MFA enrollment + password change. Reachable from the header on any
-// authenticated route; also the redirect target of the soft MFA gate (see
-// ProtectedRoute's requireMfa). When arrived at via that gate,
-// location.state.mfaRequired is true and we surface a banner explaining why.
+// authenticated route; also the redirect target of ProtectedRoute's mandatory-
+// MFA gate. When arrived at via that gate, location.state.mfaRequired is true
+// and we surface a banner explaining why, and "Continue" after enrolling goes
+// back to wherever the user was actually headed (location.state.from) rather
+// than always landing on the dashboard.
 export default function Settings() {
   const { user, refreshSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const mfaRequired = location.state?.mfaRequired === true;
+  const continuePath = location.state?.from?.pathname || '/';
 
   return (
     <div className="min-h-screen">
@@ -43,7 +46,7 @@ export default function Settings() {
             enrolled={!!user?.mfaEnrolled}
             onEnrolled={refreshSession}
             mfaRequired={mfaRequired}
-            onContinue={() => navigate('/', { replace: true })}
+            onContinue={() => navigate(continuePath, { replace: true })}
           />
           <PasswordSection />
         </div>
@@ -63,8 +66,7 @@ function SectionCard({ title, description, children }) {
 }
 
 function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
-  // 'idle' → user hasn't started; 'setup' → secret issued, awaiting confirm code;
-  // 'done' → just confirmed in this session (before session refresh lands).
+  // 'idle' → user hasn't started; 'setup' → secret issued, awaiting confirm code.
   const [phase, setPhase] = useState('idle');
   const [secret, setSecret] = useState('');
   const [uri, setUri] = useState('');
@@ -72,6 +74,12 @@ function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // This branch also covers "just finished enrolling in this session": once
+  // confirmEnroll()'s onEnrolled() call resolves, the `enrolled` prop (driven
+  // by AuthContext's user.mfaEnrolled) flips true and this early return takes
+  // over — there's no separate transient "done" phase, so the Continue button
+  // has to live here too, not in a phase branch below that `enrolled` would
+  // otherwise make unreachable a moment after it renders.
   if (enrolled) {
     return (
       <SectionCard
@@ -82,6 +90,11 @@ function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
           <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Enabled</Badge>
           <span className="text-sm text-[var(--color-ink-2)]">Your account is protected with TOTP.</span>
         </div>
+        {mfaRequired && (
+          <div className="mt-4">
+            <Button onClick={onContinue}>Continue</Button>
+          </div>
+        )}
       </SectionCard>
     );
   }
@@ -112,9 +125,8 @@ function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
     try {
       await api.mfaEnrollConfirm(code);
       // mfa_enroll_confirm.php returns only { status, message } — re-read the
-      // session so the app picks up mfa_enrolled: true (updates the header dot,
-      // clears the gate). If refresh fails, we still show the done state.
-      setPhase('done');
+      // session so the app picks up mfa_enrolled: true, which flips this
+      // component to the `enrolled` early-return branch above.
       await onEnrolled();
     } catch (err) {
       setError(err.message || 'That code did not verify. Start again and check your phone clock.');
@@ -133,19 +145,7 @@ function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
       title="Two-factor authentication"
       description="Add a second step at sign-in using an authenticator app (Google Authenticator, Authy, 1Password, etc.)."
     >
-      {phase === 'done' ? (
-        <div>
-          <div className="flex items-center gap-3">
-            <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Enabled</Badge>
-            <span className="text-sm text-[var(--color-ink-2)]">Two-factor authentication is now active.</span>
-          </div>
-          {mfaRequired && (
-            <div className="mt-4">
-              <Button onClick={onContinue}>Continue</Button>
-            </div>
-          )}
-        </div>
-      ) : phase === 'setup' ? (
+      {phase === 'setup' ? (
         <form onSubmit={confirmEnroll}>
           <p className="text-sm text-[var(--color-ink-2)] mb-3">
             Add this account to your authenticator app using the key or setup link below, then enter the 6-digit code it shows.
