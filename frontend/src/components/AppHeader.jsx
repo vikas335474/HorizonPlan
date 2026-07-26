@@ -47,8 +47,24 @@ export default function AppHeader() {
   const brandLogo = tenant?.whiteLabel?.logo_url || null;
   const brandName = tenant?.whiteLabel?.company_name || 'HorizonPlan';
 
+  // Staging vs. production is a build-time distinction (a separate deploy
+  // pipeline/branch/subdomain/database, not a runtime toggle like demoMode
+  // below) — set via VITE_APP_ENV at `npm run build` time by
+  // deploy-staging.yml. Renders unconditionally on staging (no login/role
+  // check) since the whole point is nobody mistakes this environment for
+  // production, logged in or not.
+  const isStaging = import.meta.env.VITE_APP_ENV === 'staging';
+
   return (
     <>
+      {isStaging && (
+        <div
+          className="sticky top-0 z-30 px-4 py-1.5 text-center text-xs font-semibold"
+          style={{ backgroundColor: 'var(--color-ink)', color: '#fff' }}
+        >
+          STAGING ENVIRONMENT — not production, safe to test and reset.
+        </div>
+      )}
       {/* docs/09 Piece 1: a demo environment must never be mistaken for
           production data — this banner renders on every authenticated page
           (AppHeader mounts on all of them) whenever platform.demoMode is on. */}

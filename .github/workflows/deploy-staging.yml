@@ -1,0 +1,112 @@
+# Staging counterpart to deploy.yml. Builds the React SPA and publishes a
+# ready-to-serve public_html tree to the `deploy-staging` branch, which
+# Hostinger's native Git deployment (hPanel → Advanced → GIT) pulls into the
+# staging subdomain's own document root — a separate site, separate database,
+# separate deploy target from production. See DEPLOY.md's "Staging
+# environment setup" section for the one-time Hostinger setup.
+#
+# Deliberately a near-duplicate of deploy.yml rather than a parameterized
+# single workflow: the two pipelines target different branches (main vs.
+# develop), different publish branches (deploy vs. deploy-staging), and are
+# meant to be readable/editable independently without one change accidentally
+# touching production's pipeline.
+name: Build & publish deploy-staging branch
+
+on:
+  push:
+    branches: [develop]
+    # Only rebuild when something that actually ships changes.
+    paths:
+      - 'frontend/**'
+      - 'api/**'
+      - '.github/workflows/deploy-staging.yml'
+  # Lets you re-publish on demand from the Actions tab without a code change.
+  workflow_dispatch:
+
+# GITHUB_TOKEN needs write access to push the deploy-staging branch.
+permissions:
+  contents: write
+
+# Never let two publishes race on the same branch.
+concurrency:
+  group: publish-deploy-staging-branch
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # Full history so we can build on top of the existing deploy-staging branch.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        # VITE_APP_ENV=staging flags the build so AppHeader.jsx renders a
+        # "STAGING ENVIRONMENT" banner — the whole reason this is a separate
+        # workflow rather than reusing deploy.yml's build step untouched.
+        run: VITE_APP_ENV=staging npm run build
+
+      - name: Assemble public_html tree
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+          # Compiled SPA: index.html, assets/, favicon, and .htaccess (a dotfile,
+          # so the trailing "/." copies it too) land at the deploy root.
+          cp -a frontend/dist/. _site/
+          # PHP API served as-is, same origin under /api — no build step.
+          cp -a api _site/api
+          # Belt-and-suspenders: real credentials must never reach the branch.
+          rm -f _site/api/db_config.php
+          echo "Assembled tree:"
+          ls -la _site
+          test -f _site/index.html || { echo "index.html missing from build"; exit 1; }
+          test -f _site/.htaccess || { echo ".htaccess missing from build"; exit 1; }
+
+      - name: Publish to deploy-staging branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          DEPLOY_DIR="$(mktemp -d)"
+          if git ls-remote --exit-code --heads origin deploy-staging >/dev/null 2>&1; then
+            # Continue the existing linear history so Hostinger's pull fast-forwards.
+            git fetch origin deploy-staging
+            git worktree add "$DEPLOY_DIR" -B deploy-staging origin/deploy-staging
+          else
+            # First run: branch off the current commit; the sync below then strips
+            # the source tree, leaving only the assembled site in the first commit.
+            git worktree add "$DEPLOY_DIR" -B deploy-staging HEAD
+          fi
+
+          # Mirror the assembled tree into the branch, deleting anything stale
+          # (old hashed asset bundles), but never the worktree's own .git link.
+          #
+          # --checksum is required, not cosmetic — see deploy.yml's own comment
+          # on this exact line for the index.html-goes-stale bug it prevents.
+          rsync -a --checksum --delete --exclude='.git' _site/ "$DEPLOY_DIR/"
+
+          git -C "$DEPLOY_DIR" add -A
+          if git -C "$DEPLOY_DIR" diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git -C "$DEPLOY_DIR" commit -m "Deploy staging build from ${GITHUB_SHA::7}"
+            git -C "$DEPLOY_DIR" push origin deploy-staging
+          fi
+
+          git worktree remove "$DEPLOY_DIR" --force
