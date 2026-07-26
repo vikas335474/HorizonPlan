@@ -374,6 +374,20 @@ export const api = {
   // [{ description, value }, ...]. Always lands as liquid mutual_fund assets.
   importPortfolioItems: (clientId, items) =>
     request('client_portfolio_import.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items }) }),
+
+  // --- Audit log (docs/09 Session 6) ---
+  // Read-only change_log view. entityType/entityId scope it to one goal's
+  // (or sub-scenario's) history — used by GoalDetail.jsx's History tab.
+  // Omit both for a firm-wide activity feed. tenantId is super_admin-only
+  // (cross-tenant escape hatch, mirrors tenant_detail.php); ignored server-side
+  // for an advisor session.
+  getChangeLog: ({ entityType, entityId, tenantId, page = 1, perPage = 25 } = {}) => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+    if (entityType) params.set('entity_type', entityType);
+    if (entityId) params.set('entity_id', String(entityId));
+    if (tenantId) params.set('tenant_id', String(tenantId));
+    return request(`change_log_list.php?${params.toString()}`);
+  },
 };
 
 export { ApiError };

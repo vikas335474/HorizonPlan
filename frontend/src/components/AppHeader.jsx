@@ -89,6 +89,14 @@ export default function AppHeader() {
               Risk questionnaire
             </Link>
           )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <Link
+              to="/activity"
+              className="text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
+            >
+              Activity
+            </Link>
+          )}
           {user && (
             <span className="hidden sm:inline text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}
