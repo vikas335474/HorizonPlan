@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/GoalFieldValidation.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -108,6 +109,17 @@ $data = [
     'locked_corpus_amount'     => $lockedCorpusAmount,
     'locked_return_rate'       => $isRetirement ? ($input['locked_return_rate'] ?? null) : null,
 ];
+
+// docs/09 Pre-Launch Hardening Session 1: same per-field range/type
+// validation as goals_update.php, shared via GoalFieldValidation.php so the
+// two entry points to this data can't drift. Fields with no rule (goal_type,
+// goal_label, monthly_sip_amount, sip_step_up_rate, ...) pass through untouched.
+$fieldError = validateGoalFields($data);
+if ($fieldError !== null) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => $fieldError]);
+    exit();
+}
 
 $goalId = $scopedDb->insert('base_plans', $data);
 
