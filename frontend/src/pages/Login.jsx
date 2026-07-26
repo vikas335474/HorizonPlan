@@ -1,14 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ApiError } from '../lib/api';
 
 // Login is a two-step flow when the user has MFA enrolled:
 //   Step 1: email + password → server returns 202 mfa_required
 //   Step 2: 6-digit TOTP code → server issues full session
 // Users without MFA enrolled skip step 2 (server issues session on password alone).
+//
+// "Sign in with Google" is a third, independent path: one click, no OTP step
+// — a verified Google login counts as MFA in its own right (see
+// auth_google.php). An account that has linked Google can no longer complete
+// password-only login (login.php blocks it with google_signin_required) —
+// that response is handled below by nudging the user toward the Google button
+// instead of showing a generic "wrong password" message.
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function Login() {
-  const { login, mfaVerify } = useAuth();
+  const { login, mfaVerify, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // Where to land after login. If the user was redirected here from a specific
@@ -32,11 +42,14 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [googleSigninRequired, setGoogleSigninRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [googleError, setGoogleError] = useState('');
 
   async function handlePasswordSubmit(e) {
     e.preventDefault();
     setError('');
+    setGoogleSigninRequired(false);
     setSubmitting(true);
     try {
       const result = await login(email, password);
@@ -46,9 +59,24 @@ export default function Login() {
         navigate(destinationFor(result.user), { replace: true });
       }
     } catch (err) {
-      setError(err.message || 'Something went wrong. Try again.');
+      if (err instanceof ApiError && err.body?.google_signin_required) {
+        setGoogleSigninRequired(true);
+        setError(err.message || 'This account signs in with Google.');
+      } else {
+        setError(err.message || 'Something went wrong. Try again.');
+      }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleGoogleCredential(credential) {
+    setGoogleError('');
+    try {
+      const user = await loginWithGoogle(credential);
+      navigate(destinationFor(user), { replace: true });
+    } catch (err) {
+      setGoogleError(err.message || 'Google sign-in failed. Try again.');
     }
   }
 
@@ -156,6 +184,14 @@ export default function Login() {
               </form>
             )}
 
+            {step === 'password' && (
+              <GoogleSignInSection
+                onCredential={handleGoogleCredential}
+                error={googleError}
+                highlight={googleSigninRequired}
+              />
+            )}
+
             {step === 'mfa' && (
               <form onSubmit={handleMfaSubmit}>
                 <label className="block text-sm font-medium mb-1.5 text-[var(--color-ink-2)]" htmlFor="code">
@@ -203,6 +239,71 @@ export default function Login() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Renders Google's own "Sign in with Google" button via Identity Services
+// (loaded globally in index.html). Renders nothing if no Client ID is
+// configured for this deployment (see DEPLOY.md) rather than showing a
+// broken/non-functional button.
+function GoogleSignInSection({ onCredential, error, highlight }) {
+  const buttonRef = useRef(null);
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    // index.html's <script> tag loads asynchronously — poll briefly for
+    // window.google rather than assuming it's ready by mount time.
+    function tryInit() {
+      if (cancelled) return;
+      if (!window.google?.accounts?.id) {
+        attempts += 1;
+        if (attempts < 40) setTimeout(tryInit, 100);
+        return;
+      }
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (response) => onCredentialRef.current(response.credential),
+      });
+      if (buttonRef.current) {
+        window.google.accounts.id.renderButton(buttonRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          width: 320,
+        });
+      }
+    }
+    tryInit();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!GOOGLE_CLIENT_ID) return null;
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+        <span className="text-xs text-[var(--color-ink-3)]">or</span>
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+      </div>
+      <div
+        ref={buttonRef}
+        className={`flex justify-center rounded-[var(--radius-ctrl)] ${highlight ? 'ring-2 ring-offset-2' : ''}`}
+        style={highlight ? { '--tw-ring-color': 'var(--color-amber)' } : undefined}
+      />
+      {error && (
+        <p className="mt-3 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5 text-center"
+           style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

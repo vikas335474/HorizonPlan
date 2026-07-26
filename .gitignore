@@ -2,6 +2,9 @@
 api/db_config.php
 .env
 .env.*
+# ...except the checked-in example/placeholder files documenting the shape.
+!.env.example
+!**/.env.example
 
 # Dependencies
 node_modules/

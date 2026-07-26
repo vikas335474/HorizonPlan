@@ -69,6 +69,15 @@ export const api = {
   mfaVerify: (code) =>
     request('mfa_verify.php', { method: 'POST', body: JSON.stringify({ code }) }),
 
+  // "Sign in with Google" — credential is the ID token Google Identity
+  // Services hands back from the button's callback. A verified Google login
+  // counts as MFA in its own right, so there's no second step after this one.
+  authGoogle: (credential) =>
+    request('auth_google.php', { method: 'POST', body: JSON.stringify({ credential }) }),
+
+  // Unlink Google from the signed-in user's own account (Settings page).
+  unlinkGoogle: () => request('google_unlink.php', { method: 'POST' }),
+
   // MFA enrollment (called from settings/profile, not login flow)
   mfaEnroll: () =>
     request('mfa_enroll.php', { method: 'POST' }),

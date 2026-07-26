@@ -92,6 +92,38 @@ assertTrue(
     'a nonexistent user id is treated as not-enrolled, not enrolled (fail closed)'
 );
 
+// google_sub is an alternative, not an additional, requirement — a linked
+// Google account satisfies MFA on its own, with no TOTP secret at all (see
+// sql/021_google_auth.sql / api/auth_google.php). Full coverage of the
+// account-linking logic itself lives in tests/test_google_auth_db.php; this
+// just confirms userHasMfaEnrolled() itself reads the new column correctly.
+$usersCols = $db->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
+if (in_array('google_sub', $usersCols, true)) {
+    $db->prepare(
+        "INSERT INTO users (tenant_id, email, password_hash, role) VALUES (:t, :e, :h, 'advisor')"
+    )->execute([
+        ':t' => $tenantId,
+        ':e' => 'google-only-' . $testEmail,
+        ':h' => password_hash('irrelevant-for-this-test', PASSWORD_BCRYPT),
+    ]);
+    $googleOnlyUserId = (int) $db->lastInsertId();
+
+    assertTrue(
+        userHasMfaEnrolled($db, $googleOnlyUserId) === false,
+        'a fresh account with neither mfa_secret nor google_sub is not MFA-enrolled'
+    );
+
+    $db->prepare("UPDATE users SET google_sub = :sub WHERE id = :id")
+       ->execute([':sub' => 'test-google-sub-' . bin2hex(random_bytes(4)), ':id' => $googleOnlyUserId]);
+
+    assertTrue(
+        userHasMfaEnrolled($db, $googleOnlyUserId) === true,
+        'a linked Google account (google_sub set) satisfies MFA with no TOTP secret at all'
+    );
+} else {
+    echo "SKIP: users.google_sub not migrated — run sql/021_google_auth.sql for full coverage.\n";
+}
+
 $db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll MFA-enforcement DB tests passed.\n";

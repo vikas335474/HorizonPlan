@@ -20,6 +20,11 @@ function normalizeUser(raw) {
     // Coerce to a real boolean so consumers can rely on it (the soft MFA gate,
     // the header nudge dot) without re-checking for undefined.
     mfaEnrolled: !!raw.mfa_enrolled,
+    // The two factors that can independently satisfy mfa_enrolled — Settings
+    // shows both statuses so a user can see which one(s) they've actually set
+    // up, not just the combined flag.
+    totpEnrolled: !!raw.mfa_totp_enrolled,
+    googleLinked: !!raw.google_linked,
   };
 }
 
@@ -143,6 +148,19 @@ export function AuthProvider({ children }) {
     return normalized;
   }, [refreshSession]);
 
+  // loginWithGoogle() is called from Login.jsx with the ID token Google
+  // Identity Services hands back. Same shape/contract as mfaVerify(): the
+  // server has already fully authenticated by the time this resolves (a
+  // verified Google login counts as MFA — see auth_google.php), so there's no
+  // further step, just a session to pick up.
+  const loginWithGoogle = useCallback(async (credential) => {
+    const res = await api.authGoogle(credential);
+    const normalized = normalizeUser(res.user);
+    setUser(normalized);
+    refreshSession(); // pull the tenant block in the background, as login() does
+    return normalized;
+  }, [refreshSession]);
+
   const logout = useCallback(async () => {
     await api.logout().catch(() => {
       // Idempotent — clear local state even if the network request fails.
@@ -153,7 +171,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, loginWithGoogle, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -57,6 +57,28 @@ After this, the flow is just: merge to `main` → Action builds → `deploy` upd
 SQL in `/sql` is **not** run automatically. After any deploy that adds a
 migration, run it manually via hPanel → Databases → phpMyAdmin.
 
+## Google Sign-In setup
+
+Google Sign-In (api/auth_google.php) needs one OAuth 2.0 Client ID, created
+once in [Google Cloud Console](https://console.cloud.google.com/) → APIs &
+Services → Credentials → Create Credentials → OAuth client ID → **Web
+application**. Add the production domain (and `http://localhost:5173` /
+whatever local dev origin is used) under **Authorized JavaScript origins** —
+no redirect URI is needed, since the frontend uses Google Identity Services'
+token flow, not a server-side redirect.
+
+The resulting Client ID is not a secret (it ships inside the built frontend
+JS), but it's still per-deployment config, kept out of git the same way
+`db_config.php` is:
+- Backend: set `GOOGLE_CLIENT_ID` in `api/db_config.php` (see
+  `api/db_config.example.php`).
+- Frontend: set `VITE_GOOGLE_CLIENT_ID` in `frontend/.env` before running
+  `npm run build` (see `frontend/.env.example`).
+
+Leaving either unset disables Google Sign-In cleanly — `auth_google.php` 503s
+rather than accepting a token it can't actually verify, and the frontend
+button doesn't render without a configured Client ID.
+
 ## Troubleshooting
 
 ### Site-wide `403` — "Access to this resource on the server is denied!"

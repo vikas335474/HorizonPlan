@@ -227,18 +227,22 @@ function verifyAccessAny(PDO $db, array $allowedRoles, bool $requireMfaEnrolled 
 }
 
 /**
- * Whether the given user has completed MFA enrollment (users.mfa_secret is
- * set). Pure DB read, no session/exit side effects — kept separate from
- * requireMfaEnrollment() so it's directly unit-testable against a real DB
- * without needing an HTTP context to exercise the 403 exit path.
+ * Whether the given user has satisfied mandatory MFA enrollment — either a
+ * TOTP secret (users.mfa_secret) or a linked Google account (users.google_sub)
+ * is enough; both are alternative ways of satisfying the same requirement, not
+ * a stacked "both required" check (see auth_google.php / GoogleAuth.php for
+ * why a verified Google login counts as MFA in its own right). Pure DB read,
+ * no session/exit side effects — kept separate from requireMfaEnrollment() so
+ * it's directly unit-testable against a real DB without needing an HTTP
+ * context to exercise the 403 exit path.
  */
 function userHasMfaEnrolled(PDO $db, int $userId): bool
 {
-    $stmt = $db->prepare("SELECT mfa_secret FROM users WHERE id = :id LIMIT 1");
+    $stmt = $db->prepare("SELECT mfa_secret, google_sub FROM users WHERE id = :id LIMIT 1");
     $stmt->execute([':id' => $userId]);
     $row = $stmt->fetch();
 
-    return $row !== false && !empty($row['mfa_secret']);
+    return $row !== false && (!empty($row['mfa_secret']) || !empty($row['google_sub']));
 }
 
 /**

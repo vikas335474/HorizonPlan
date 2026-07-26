@@ -8,6 +8,19 @@ define('DB_USER', 'CHANGE_ME');
 define('DB_PASS', 'CHANGE_ME');
 define('DB_CHARSET', 'utf8mb4');
 
+// Google Sign-In (api/auth_google.php) — the OAuth 2.0 Client ID from a
+// Google Cloud Console project (APIs & Services → Credentials → OAuth client
+// ID → Web application). This is the same value the frontend build needs as
+// VITE_GOOGLE_CLIENT_ID (see frontend/.env.example) — it's a public
+// identifier, not a secret (it ships inside the frontend JS bundle), but it
+// still lives in this git-ignored file because it's per-deployment config
+// (a different Client ID for local dev vs. the production domain, since
+// Google OAuth clients are registered against specific authorized origins).
+// Leave empty to disable Google Sign-In entirely — auth_google.php 503s
+// cleanly rather than accepting tokens it can't actually verify against a
+// real Client ID.
+define('GOOGLE_CLIENT_ID', '');
+
 function getPdo(): PDO {
     $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
     $options = [
