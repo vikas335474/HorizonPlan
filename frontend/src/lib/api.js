@@ -364,6 +364,11 @@ export const api = {
 
   deletePortfolioItem: (id) =>
     request('client_portfolio_delete.php', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  // Bulk import from a parsed CAMS/KFintech/MFCentral CAS CSV — items:
+  // [{ description, value }, ...]. Always lands as liquid mutual_fund assets.
+  importPortfolioItems: (clientId, items) =>
+    request('client_portfolio_import.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items }) }),
 };
 
 export { ApiError };
