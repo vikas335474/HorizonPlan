@@ -248,7 +248,11 @@ function InflationSlide({ goal }) {
   return (
     <div>
       <SlideHeading>What {formatPercent(goal.inflation_rate)} inflation does</SlideHeading>
-      <div className="grid grid-cols-2 gap-6 text-center items-center">
+      {/* flex-wrap, not a 2-column grid: there are 3 items (stat, arrow, stat) —
+          a grid-cols-2 track would strand the third item on its own row.
+          Wrapping also degrades gracefully on a narrow phone screen instead of
+          assuming all three always fit on one line. */}
+      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-center">
         <BigStat label="Today" value={formatCurrency(base)} sub="Annual cost, in today's rupees" />
         <div className="text-2xl text-[var(--color-ink-3)]">→</div>
         <BigStat label={`In ${years} years`} value={formatCurrency(future)} sub="Same lifestyle, future rupees" accent />
@@ -314,9 +318,17 @@ function ReadinessSlide({ projection }) {
 
 function BigStat({ label, value, sub, accent }) {
   return (
-    <div>
+    // min-w-0: a grid/flex item's default min-width is auto, which lets a
+    // wide, unbreakable tabular-numeral value (no spaces to wrap on) push
+    // this box past its own track and visually bleed into the sibling
+    // column — this is exactly what happened on a 375px phone screen with
+    // a large starting-corpus figure. min-w-0 forces the box to actually
+    // respect the space it's given; text-xl (not a flat text-3xl) means it
+    // usually doesn't need to; break-all is the last-resort fallback for
+    // whatever value is still too wide even at that size.
+    <div className="min-w-0">
       <div className="text-[11px] uppercase tracking-wider text-[var(--color-ink-3)] mb-1">{label}</div>
-      <div className="tnum text-3xl font-semibold" style={{ color: accent ? 'var(--color-amber)' : 'var(--color-ink)' }}>{value}</div>
+      <div className="tnum text-xl sm:text-3xl font-semibold break-all" style={{ color: accent ? 'var(--color-amber)' : 'var(--color-ink)' }}>{value}</div>
       {sub && <div className="text-xs text-[var(--color-ink-3)] mt-1">{sub}</div>}
     </div>
   );

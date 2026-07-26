@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDemoTour } from '../context/DemoTourContext';
@@ -21,10 +22,23 @@ export default function AppHeader() {
   const { user, tenant, platform, logout } = useAuth();
   const { available: tourAvailable, restart: restartTour } = useDemoTour();
   const navigate = useNavigate();
+  // Session 7 mobile audit: the nav (Templates/Risk questionnaire/Activity/
+  // role label/Settings/Sign out) is 6+ inline items with no wrap — at a
+  // real phone width that forced the entire page 187px wider than the
+  // viewport (562px content in a 375px viewport, confirmed via Playwright),
+  // pushing every authenticated page into permanent horizontal scroll. Below
+  // sm, the inline nav collapses behind this menu instead.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleLogout() {
+    setMenuOpen(false);
     await logout();
     navigate('/login', { replace: true });
+  }
+
+  function go(path) {
+    setMenuOpen(false);
+    navigate(path);
   }
 
   const homePath = user?.role === 'client' ? '/goals' : '/';
@@ -48,8 +62,8 @@ export default function AppHeader() {
       )}
       <header className="surface-glass sticky top-0 z-20 border-b border-[var(--color-line)]">
       <div className="mx-auto max-w-6xl px-5 h-14 flex items-center justify-between">
-        <Link to={homePath} className="flex items-center gap-2.5 group">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden transition-colors group-hover:bg-[var(--color-surface-2)]">
+        <Link to={homePath} className="flex items-center gap-2.5 group min-w-0">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-colors group-hover:bg-[var(--color-surface-2)]">
             {brandLogo ? (
               <img src={brandLogo} alt="" className="h-full w-full object-contain" />
             ) : (
@@ -61,10 +75,14 @@ export default function AppHeader() {
               </svg>
             )}
           </span>
-          <span className="text-[15px] font-semibold tracking-tight text-[var(--color-ink)]">{brandName}</span>
+          <span className="truncate text-[15px] font-semibold tracking-tight text-[var(--color-ink)]">{brandName}</span>
         </Link>
 
-        <div className="flex items-center gap-4">
+        {/* Desktop nav — unchanged, just now hidden below sm in favor of the
+            hamburger menu (mobile audit: this row's 6+ inline items had no
+            wrap and forced the whole page into horizontal scroll on a real
+            phone width). */}
+        <div className="hidden sm:flex items-center gap-4">
           {user?.role === 'super_admin' && (
             <Link
               to="/admin"
@@ -98,7 +116,7 @@ export default function AppHeader() {
             </Link>
           )}
           {user && (
-            <span className="hidden sm:inline text-xs font-medium text-[var(--color-ink-3)]">
+            <span className="text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}
               {user.role === 'advisor' && user.firmRole && FIRM_ROLE_LABELS[user.firmRole] && (
                 <> · {FIRM_ROLE_LABELS[user.firmRole]}</>
@@ -141,7 +159,80 @@ export default function AppHeader() {
             Sign out
           </button>
         </div>
+
+        {/* Mobile menu toggle — replaces the whole nav row below sm. */}
+        <button
+          type="button"
+          className="sm:hidden relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-ctrl)] text-[var(--color-ink-2)] hover:bg-[var(--color-surface-2)]"
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            {menuOpen ? (
+              <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            ) : (
+              <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            )}
+          </svg>
+          {user && !user.mfaEnrolled && (
+            <span
+              className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-amber)' }}
+              aria-hidden="true"
+            />
+          )}
+        </button>
       </div>
+
+      {/* Mobile nav panel — same destinations as the desktop row above, one
+          per line instead of crammed into one non-wrapping row. */}
+      {menuOpen && (
+        <div className="sm:hidden border-t border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-3 flex flex-col gap-1">
+          {user?.role === 'super_admin' && (
+            <button onClick={() => go('/admin')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Firms</button>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <button onClick={() => go('/templates')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Templates</button>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <button onClick={() => go('/risk-questionnaire')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Risk questionnaire</button>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <button onClick={() => go('/activity')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Activity</button>
+          )}
+          {tourAvailable && (
+            <button
+              onClick={() => { setMenuOpen(false); restartTour(); }}
+              className="py-2 text-left text-sm font-medium text-[var(--color-teal-ink)]"
+            >
+              Take the tour
+            </button>
+          )}
+          {user && (
+            <button onClick={() => go('/settings')} className="flex items-center gap-1.5 py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">
+              Settings
+              {!user.mfaEnrolled && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: 'var(--color-amber)' }}
+                  title="Two-factor authentication is not set up"
+                  aria-label="Two-factor authentication is not set up"
+                />
+              )}
+            </button>
+          )}
+          {user && (
+            <div className="pt-1 mt-1 border-t border-[var(--color-line)] text-xs font-medium text-[var(--color-ink-3)]">
+              {ROLE_LABELS[user.role] || user.role}
+              {user.role === 'advisor' && user.firmRole && FIRM_ROLE_LABELS[user.firmRole] && (
+                <> · {FIRM_ROLE_LABELS[user.firmRole]}</>
+              )}
+            </div>
+          )}
+          <button onClick={handleLogout} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Sign out</button>
+        </div>
+      )}
       </header>
     </>
   );
