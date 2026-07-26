@@ -70,7 +70,7 @@ function PlatformTab() {
   function load() {
     setLoading(true); setError('');
     api.getPlatformSettings()
-      .then((res) => setSettings({ mfa_enforcement: res.mfa_enforcement, demo_mode: res.demo_mode }))
+      .then((res) => setSettings({ mfa_enforcement: res.mfa_enforcement, demo_mode: res.demo_mode, signup_enabled: res.signup_enabled }))
       .catch((e) => setError(e.message || 'Could not load platform settings.'))
       .finally(() => setLoading(false));
   }
@@ -81,7 +81,7 @@ function PlatformTab() {
     setBusy(true); setError('');
     try {
       const res = await api.updatePlatformSettings(changes);
-      setSettings({ mfa_enforcement: res.mfa_enforcement, demo_mode: res.demo_mode });
+      setSettings({ mfa_enforcement: res.mfa_enforcement, demo_mode: res.demo_mode, signup_enabled: res.signup_enabled });
       // The acting super_admin's own session is affected by these toggles too
       // (e.g. the MFA gate) — refresh so the header/route guard picks it up
       // immediately instead of waiting for the next session.php poll.
@@ -110,7 +110,7 @@ function PlatformTab() {
       <div className="mb-5">
         <h2 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Platform</h2>
         <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
-          Platform-wide settings — MFA enforcement and demo mode. Changes apply to every firm immediately.
+          Platform-wide settings — MFA enforcement, demo mode, and self-serve signup. Changes apply to every firm immediately.
         </p>
       </div>
 
@@ -183,6 +183,42 @@ function PlatformTab() {
                     className="px-3 py-1.5 font-medium transition-colors"
                     style={
                       settings.demo_mode === v
+                        ? { backgroundColor: 'var(--color-ink)', color: 'white' }
+                        : { color: 'var(--color-ink-2)' }
+                    }
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-ink)]">Self-serve trial signup</h3>
+                <p className="mt-1 text-xs text-[var(--color-ink-2)] max-w-md">
+                  Whether the public "Start your free trial" form (/signup) accepts new firms. A
+                  signup always creates a distribution-mode tenant — advisory_mode still requires a
+                  Super Admin to grant it after a real review, unaffected by this toggle.
+                </p>
+                {settings.signup_enabled === 'off' && (
+                  <p className="mt-2 text-xs font-medium" style={{ color: 'var(--color-amber)' }}>
+                    ⚠ Self-serve signup is currently disabled — the signup form rejects every submission.
+                  </p>
+                )}
+              </div>
+              <div className="inline-flex rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] overflow-hidden text-sm shrink-0">
+                {['off', 'on'].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => update({ signup_enabled: v })}
+                    className="px-3 py-1.5 font-medium transition-colors"
+                    style={
+                      settings.signup_enabled === v
                         ? { backgroundColor: 'var(--color-ink)', color: 'white' }
                         : { color: 'var(--color-ink-2)' }
                     }

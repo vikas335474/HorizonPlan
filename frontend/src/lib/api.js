@@ -78,6 +78,24 @@ export const api = {
   // Unlink Google from the signed-in user's own account (Settings page).
   unlinkGoogle: () => request('google_unlink.php', { method: 'POST' }),
 
+  // Self-serve trial signup — creates a new distribution-mode tenant + its
+  // first advisor (firm_admin) and issues a session immediately, same
+  // contract as login()'s non-MFA branch.
+  signup: (companyName, email, password) =>
+    request('signup.php', {
+      method: 'POST',
+      body: JSON.stringify({ company_name: companyName, email, password }),
+    }),
+
+  // Public "try a live demo" picker (Login.jsx) — no auth, no CSRF (GET).
+  listDemoFirms: () => request('demo_firms_list.php'),
+
+  // One-click login into a seeded demo firm's account. Same contract as
+  // authGoogle(): the server has already fully authenticated by the time
+  // this resolves.
+  demoLogin: (firmSlug) =>
+    request('demo_login.php', { method: 'POST', body: JSON.stringify({ firm: firmSlug }) }),
+
   // MFA enrollment (called from settings/profile, not login flow)
   mfaEnroll: () =>
     request('mfa_enroll.php', { method: 'POST' }),

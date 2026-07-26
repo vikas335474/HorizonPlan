@@ -261,7 +261,7 @@ function userHasMfaEnrolled(PDO $db, int $userId): bool
  * a test script exercise multiple toggle states within a single process
  * without the cache masking a real DB change.
  *
- * @return array{mfa_enforcement: string, demo_mode: string}
+ * @return array{mfa_enforcement: string, demo_mode: string, signup_enabled: string}
  */
 function getPlatformSettings(PDO $db, bool $forceRefresh = false): array
 {
@@ -270,12 +270,15 @@ function getPlatformSettings(PDO $db, bool $forceRefresh = false): array
         return $cached;
     }
 
-    $stmt = $db->query("SELECT mfa_enforcement, demo_mode FROM platform_settings WHERE id = 1 LIMIT 1");
+    $stmt = $db->query("SELECT mfa_enforcement, demo_mode, signup_enabled FROM platform_settings WHERE id = 1 LIMIT 1");
     $row = $stmt ? $stmt->fetch() : false;
 
     $cached = [
         'mfa_enforcement' => $row['mfa_enforcement'] ?? 'enabled',
         'demo_mode'       => $row['demo_mode'] ?? 'off',
+        // Fails closed toward the stricter posture (signups off) if the row
+        // can't be read — same defensive default reasoning as the other two.
+        'signup_enabled'  => $row['signup_enabled'] ?? 'off',
     ];
 
     return $cached;

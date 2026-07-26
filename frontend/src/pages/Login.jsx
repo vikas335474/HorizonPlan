@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ApiError } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 
 // Login is a two-step flow when the user has MFA enrolled:
 //   Step 1: email + password → server returns 202 mfa_required
@@ -234,11 +234,93 @@ export default function Login() {
             )}
           </div>
 
+          {step === 'password' && (
+            <p className="mt-4 text-sm text-center text-[var(--color-ink-2)]">
+              New here?{' '}
+              <Link to="/signup" className="font-medium text-[var(--color-teal-ink)] hover:underline">
+                Start your free trial
+              </Link>
+            </p>
+          )}
+
+          {step === 'password' && <TryDemoSection />}
+
           <p className="mt-6 text-center text-xs text-[var(--color-ink-3)]">
             Protected by two-factor authentication · Bank-grade session security
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// A small "try a live demo, no signup needed" picker. Fetches the list of
+// seeded demo firms (empty if nothing has been seeded — renders nothing in
+// that case, same graceful-degradation precedent as GoogleSignInSection with
+// no configured Client ID) and logs straight into whichever one is picked via
+// demo_login.php — no credentials involved anywhere in this flow.
+function TryDemoSection() {
+  const { demoLogin } = useAuth();
+  const navigate = useNavigate();
+  const [firms, setFirms] = useState([]);
+  const [busySlug, setBusySlug] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listDemoFirms()
+      .then((res) => { if (!cancelled) setFirms(res.firms || []); })
+      .catch(() => { /* silently hide the section on any failure */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (firms.length === 0) return null;
+
+  async function tryFirm(slug) {
+    setError('');
+    setBusySlug(slug);
+    try {
+      const user = await demoLogin(slug);
+      navigate(user?.role === 'client' ? '/goals' : '/', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Could not open that demo. Try again.');
+    } finally {
+      setBusySlug('');
+    }
+  }
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+        <span className="text-xs text-[var(--color-ink-3)]">or explore a live demo</span>
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {firms.map((firm) => (
+          <button
+            key={firm.slug}
+            type="button"
+            onClick={() => tryFirm(firm.slug)}
+            disabled={busySlug !== ''}
+            className="rounded-[var(--radius-ctrl)] border px-3 py-2 text-left transition-colors disabled:opacity-60"
+            style={{ borderColor: 'var(--color-line-2)', backgroundColor: 'var(--color-surface-2)' }}
+          >
+            <div className="text-xs font-medium truncate text-[var(--color-ink)]">
+              {busySlug === firm.slug ? 'Opening…' : firm.name}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
+              {firm.advisory_mode === 'advisory' ? 'Advisory mode' : 'Distribution mode'}
+            </div>
+          </button>
+        ))}
+      </div>
+      {error && (
+        <p className="mt-3 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5 text-center"
+           style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -28,11 +28,17 @@ declare(strict_types=1);
  *   php tools/seed_demo_data_full.php
  *
  * All accounts share one password (DEMO_PASSWORD below) — this mirrors
- * tools/seed_demo_data.php's existing convention. No MFA secrets are set on
- * any demo account: demo_mode is expected to be 'on' for this dataset to be
- * usable at all (see api/lib/security_gatekeeper.php's requireMfaEnrollment()
- * — demo_mode='on' skips the MFA gate platform-wide), so there is nothing to
- * enroll against.
+ * tools/seed_demo_data.php's existing convention. Each firm's 'admin' handle
+ * (the firm_admin) gets a real, randomly generated TOTP secret at seed time
+ * — see api/lib/DemoAccess.php and api/demo_login.php: the public one-click
+ * "try the demo" entry point authenticates using that real secret rather than
+ * relying on platform_settings.demo_mode to bypass MFA platform-wide, which
+ * would also strip MFA from real self-serve trial-signup tenants sharing the
+ * same production instance (api/signup.php). Every other seeded account
+ * (the other 3 roster roles per firm, and all 160 clients) has no MFA secret,
+ * same as any other freshly created, unenrolled account — they're never
+ * targeted by the public demo-login endpoint, so there's nothing to enroll
+ * against for them.
  *
  * Every client's email domain is *.demo.horizonplan.in — api/demo_reset.php
  * identifies demo-seeded rows by that domain rather than a separate flag,
@@ -68,6 +74,7 @@ if (!defined('SEED_DEMO_DATA_FULL_NO_AUTORUN')) {
     require_once $configPath;
 }
 require_once __DIR__ . '/../api/lib/PlanMath.php';
+require_once __DIR__ . '/../api/lib/Totp.php';
 
 const DEMO_PASSWORD = 'DemoPass@2026';
 const PLATFORM_ADMIN_EMAIL = 'platform.admin@demo.horizonplan.in';
@@ -125,15 +132,15 @@ const EMPLOYEE_ROSTER = [
     ['handle' => 'junior2', 'firm_role' => 'jr_advisor'],
 ];
 
-function makeUser(PDO $db, int $tenantId, string $email, string $role, ?string $firmRole = null): int
+function makeUser(PDO $db, int $tenantId, string $email, string $role, ?string $firmRole = null, ?string $mfaSecret = null): int
 {
     $stmt = $db->prepare(
-        'INSERT INTO users (tenant_id, email, password_hash, role, firm_role) VALUES (:t, :e, :h, :r, :fr)'
+        'INSERT INTO users (tenant_id, email, password_hash, role, firm_role, mfa_secret) VALUES (:t, :e, :h, :r, :fr, :mfa)'
     );
     $stmt->execute([
         ':t' => $tenantId, ':e' => $email,
         ':h' => password_hash(DEMO_PASSWORD, PASSWORD_BCRYPT),
-        ':r' => $role, ':fr' => $firmRole,
+        ':r' => $role, ':fr' => $firmRole, ':mfa' => $mfaSecret,
     ]);
     return (int) $db->lastInsertId();
 }
@@ -341,10 +348,19 @@ function seedDemoDataFull(PDO $db): array
         $tenantId = (int) $db->lastInsertId();
 
         // ── Employees (docs/09 Piece 2 firm-role hierarchy) ─────────────────
+        // The firm_admin ('admin' handle) gets a real TOTP secret so
+        // api/demo_login.php can issue it a fully MFA-satisfied session
+        // without relying on platform_settings.demo_mode to bypass MFA
+        // platform-wide (see api/lib/DemoAccess.php's docblock for why that
+        // distinction matters once real trial-signup tenants share this same
+        // instance). The other three roster roles are never targeted by the
+        // public one-click demo login, so they stay exactly as before
+        // (no secret — same as any other freshly seeded, unenrolled account).
         $employees = [];
         foreach (EMPLOYEE_ROSTER as $emp) {
             $email = "{$emp['handle']}@{$firmDef['slug']}.demo.horizonplan.in";
-            $employees[] = ['id' => makeUser($db, $tenantId, $email, 'advisor', $emp['firm_role']), 'firm_role' => $emp['firm_role']];
+            $mfaSecret = $emp['handle'] === 'admin' ? Totp::generateSecret() : null;
+            $employees[] = ['id' => makeUser($db, $tenantId, $email, 'advisor', $emp['firm_role'], $mfaSecret), 'firm_role' => $emp['firm_role']];
         }
         $firmAdminId = $employees[0]['id'];
         $srAdvisorId = $employees[1]['id'];
@@ -576,9 +592,12 @@ if (!defined('SEED_DEMO_DATA_FULL_NO_AUTORUN')) {
            . ($result['skipped_firms'] !== [] ? ' (' . count($result['skipped_firms']) . ' already existed, skipped)' : '')
            . ", {$result['total_clients']} clients, {$result['total_goals']} goals.\n";
     }
-    echo "Platform admin : " . PLATFORM_ADMIN_EMAIL . " / " . DEMO_PASSWORD . "\n";
-    echo "Firm logins    : <handle>@<slug>.demo.horizonplan.in (handles: admin/senior/junior1/junior2; slugs: "
-       . implode(', ', array_column(FIRMS, 'slug')) . ") / " . DEMO_PASSWORD . "\n";
-    echo "Client logins  : client<N>.<bracket>@<slug>.demo.horizonplan.in / " . DEMO_PASSWORD . "\n";
-    echo "Remember to set platform_settings.demo_mode = 'on' (Admin Console -> Platform) so MFA is skipped for these accounts.\n";
+    echo "Platform admin  : " . PLATFORM_ADMIN_EMAIL . " / " . DEMO_PASSWORD . " (needs demo_mode='on', or its own TOTP enrollment, to pass the MFA gate)\n";
+    echo "Firm admin login: <slug>'s 'admin' handle has a REAL TOTP secret — use the public \"Try a live demo\" picker on /login\n"
+       . "                  (api/demo_login.php), which authenticates it directly. Manual password login for this\n"
+       . "                  specific account will still prompt for a code nobody has, by design (see DemoAccess.php).\n"
+       . "                  Slugs: " . implode(', ', array_column(FIRMS, 'slug')) . "\n";
+    echo "Other firm logins: <handle>@<slug>.demo.horizonplan.in (senior/junior1/junior2) / " . DEMO_PASSWORD . " — no TOTP secret,\n"
+       . "                  needs demo_mode='on' to pass the MFA gate via manual login.\n";
+    echo "Client logins   : client<N>.<bracket>@<slug>.demo.horizonplan.in / " . DEMO_PASSWORD . " — same demo_mode note as above.\n";
 }

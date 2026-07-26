@@ -12,7 +12,7 @@ header('Content-Type: application/json; charset=UTF-8');
 $db = getPdo();
 verifyAccess($db, 'super_admin');
 
-$stmt = $db->query("SELECT mfa_enforcement, demo_mode, updated_at FROM platform_settings WHERE id = 1 LIMIT 1");
+$stmt = $db->query("SELECT mfa_enforcement, demo_mode, signup_enabled, updated_at FROM platform_settings WHERE id = 1 LIMIT 1");
 $row = $stmt->fetch();
 
 if (!$row) {
@@ -27,5 +27,6 @@ echo json_encode([
     'status'          => 'success',
     'mfa_enforcement' => $row['mfa_enforcement'],
     'demo_mode'       => $row['demo_mode'],
+    'signup_enabled'  => $row['signup_enabled'],
     'updated_at'      => $row['updated_at'],
 ]);

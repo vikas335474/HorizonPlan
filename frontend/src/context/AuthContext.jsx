@@ -161,6 +161,30 @@ export function AuthProvider({ children }) {
     return normalized;
   }, [refreshSession]);
 
+  // signup() creates a new trial tenant + its first advisor and issues a
+  // session, same contract/shape as login()'s non-MFA branch (a brand new
+  // account is never MFA-enrolled yet — it gets nagged on the next gated
+  // request, exactly like an admin-created advisor's very first login).
+  const signup = useCallback(async (companyName, email, password) => {
+    const res = await api.signup(companyName, email, password);
+    const normalized = normalizeUser(res.user);
+    setUser(normalized);
+    refreshSession();
+    return normalized;
+  }, [refreshSession]);
+
+  // demoLogin() is called from Login.jsx's "try a live demo" picker. Same
+  // contract as loginWithGoogle(): the server has already fully authenticated
+  // (the target demo account has a real TOTP secret — see DemoAccess.php) by
+  // the time this resolves.
+  const demoLogin = useCallback(async (firmSlug) => {
+    const res = await api.demoLogin(firmSlug);
+    const normalized = normalizeUser(res.user);
+    setUser(normalized);
+    refreshSession();
+    return normalized;
+  }, [refreshSession]);
+
   const logout = useCallback(async () => {
     await api.logout().catch(() => {
       // Idempotent — clear local state even if the network request fails.
@@ -171,7 +195,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, loginWithGoogle, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, loginWithGoogle, signup, demoLogin, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
