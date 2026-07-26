@@ -91,7 +91,16 @@ jobs:
 
           # Mirror the assembled tree into the branch, deleting anything stale
           # (old hashed asset bundles), but never the worktree's own .git link.
-          rsync -a --delete --exclude='.git' _site/ "$DEPLOY_DIR/"
+          #
+          # --checksum is required, not cosmetic: rsync's default quick-check
+          # only compares size + mtime. index.html is the same size build to
+          # build (only the fixed-length content hash inside a script/link tag
+          # changes) and its mtime lands in the same CI second as the worktree
+          # checkout's mtime, so plain `-a` silently skipped re-transferring it
+          # once those happened to collide — leaving index.html pinned to a
+          # stale asset hash forever after while assets/*.js (always a new
+          # filename) kept rotating underneath it, 404ing in production.
+          rsync -a --checksum --delete --exclude='.git' _site/ "$DEPLOY_DIR/"
 
           git -C "$DEPLOY_DIR" add -A
           if git -C "$DEPLOY_DIR" diff --cached --quiet; then

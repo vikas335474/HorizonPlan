@@ -80,3 +80,17 @@ The compiled `index.html` references `/assets/…` (absolute paths). Every file
 from the build must sit at the `public_html` **root** together — never leave
 `index.html` at the root while `assets/` stays in a subfolder. The pipeline
 guarantees this; it only happens with manual uploads.
+
+A second cause hit the automated pipeline itself in the past: the publish
+step's `rsync` didn't pass `--checksum`, so its default size+mtime quick-check
+occasionally treated a changed `index.html` as unchanged (same byte size
+build-to-build, mtime landing in the same CI second as the worktree checkout)
+and skipped re-publishing it — while `assets/*.js`/`*.css` kept rotating to
+new hashed filenames underneath it, since those are always "new" files to
+rsync. The symptom: the live site's `index.html` references an asset hash
+that no longer exists in `assets/` because a later deploy deleted it. Fixed by
+adding `--checksum` to the `rsync` call in `deploy.yml`, which compares actual
+file content instead of size/mtime. If this ever recurs, compare the deployed
+`deploy` branch's `index.html` script/link tags against what's actually in its
+`assets/` directory — a mismatch there is this bug, not a Hostinger caching
+issue.
