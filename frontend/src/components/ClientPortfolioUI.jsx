@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Card, Badge, Button, Spinner } from './ui';
 import { formatCurrency } from '../lib/format';
+import { parseCsv, parseAmount } from '../lib/csv';
 
 // docs/05 item 3 / docs/06 corpus composition: a factual snapshot of what the
 // client already owns, independent of any one goal — shown on the client's
@@ -40,6 +41,7 @@ export function ClientPortfolioCard({ clientId }) {
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   function load() {
     setLoading(true);
@@ -69,8 +71,11 @@ export function ClientPortfolioCard({ clientId }) {
     <Card className="p-4 mb-4">
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-base font-semibold text-[var(--color-ink)]">Portfolio &amp; net worth</h2>
-        {!adding && (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>+ Add item</Button>
+        {!adding && !importing && (
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setImporting(true)}>Import CAS/MFCentral CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)}>+ Add item</Button>
+          </div>
         )}
       </div>
       <p className="text-xs text-[var(--color-ink-2)] mb-3">
@@ -137,7 +142,263 @@ export function ClientPortfolioCard({ clientId }) {
           onCancel={() => setAdding(false)}
         />
       )}
+
+      {importing && (
+        <ImportCasCsv
+          clientId={clientId}
+          onImported={() => { setImporting(false); load(); }}
+          onCancel={() => setImporting(false)}
+        />
+      )}
     </Card>
+  );
+}
+
+// Bulk-import a client's mutual fund holdings from a CAMS/KFintech/MFCentral
+// Consolidated Account Statement (CAS) CSV export. No direct API/Account
+// Aggregator integration here (that's a separately-scoped, much bigger piece
+// of work — a real external-credential/consent-flow security surface) —
+// this is the CSV-mapping path: the advisor exports/downloads their CAS as
+// CSV, uploads it here, and tells the app which column is which. CAMS/
+// KFintech/MFCentral don't share one guaranteed export layout (and often
+// carry a few preamble lines — statement title, generation date, PAN — above
+// the real header row), so nothing about the column order or header row
+// position is assumed; the advisor confirms both before anything imports.
+function ImportCasCsv({ clientId, onImported, onCancel }) {
+  const [step, setStep] = useState('upload'); // 'upload' | 'configure' | 'preview'
+  const [rawRows, setRawRows] = useState([]);
+  const [headerRowNum, setHeaderRowNum] = useState(1); // 1-based, advisor-facing
+  const [schemeCol, setSchemeCol] = useState('');
+  const [valueCol, setValueCol] = useState('');
+  const [folioCol, setFolioCol] = useState('');
+  const [error, setError] = useState('');
+  const [importing, setImportingState] = useState(false);
+
+  function loadText(text) {
+    setError('');
+    const rows = parseCsv(text).filter((r) => r.some((cell) => cell.trim() !== ''));
+    if (rows.length < 2) {
+      setError('Could not find at least a header row and one data row in this file.');
+      return;
+    }
+    setRawRows(rows);
+    setHeaderRowNum(1);
+    setSchemeCol('');
+    setValueCol('');
+    setFolioCol('');
+    setStep('configure');
+  }
+
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => loadText(String(reader.result || ''));
+    reader.onerror = () => setError('Could not read that file.');
+    reader.readAsText(file);
+  }
+
+  const headerRowIndex = headerRowNum - 1;
+  const headerRow = rawRows[headerRowIndex] || [];
+  const dataRows = rawRows.slice(headerRowIndex + 1);
+
+  function columnLabel(idx) {
+    const cell = (headerRow[idx] || '').trim();
+    return cell !== '' ? cell : `Column ${idx + 1}`;
+  }
+
+  // Normalizes + validates every data row against the chosen column mapping.
+  // Rows missing a scheme name or a parseable value are skipped, not
+  // rejected outright — a CAS export commonly has trailing summary/blank
+  // rows after the real holdings.
+  function buildImportRows() {
+    const schemeIdx = Number(schemeCol);
+    const valueIdx = Number(valueCol);
+    const folioIdx = folioCol !== '' ? Number(folioCol) : null;
+    const items = [];
+    let skipped = 0;
+    for (const row of dataRows) {
+      const scheme = (row[schemeIdx] || '').trim();
+      const amount = parseAmount(row[valueIdx]);
+      if (scheme === '' || amount === null) { skipped++; continue; }
+      const folio = folioIdx !== null ? (row[folioIdx] || '').trim() : '';
+      items.push({
+        description: folio ? `${scheme} (Folio ${folio})` : scheme,
+        value: amount,
+      });
+    }
+    return { items, skipped };
+  }
+
+  const [preview, setPreview] = useState(null);
+
+  function handleContinueToPreview() {
+    if (schemeCol === '' || valueCol === '') {
+      setError('Choose both the scheme/fund name column and the value column.');
+      return;
+    }
+    setError('');
+    setPreview(buildImportRows());
+    setStep('preview');
+  }
+
+  async function handleConfirmImport() {
+    if (!preview || preview.items.length === 0) return;
+    setImportingState(true);
+    setError('');
+    try {
+      const res = await api.importPortfolioItems(clientId, preview.items);
+      onImported(res);
+    } catch (err) {
+      setError(err.message || 'Import failed.');
+    } finally {
+      setImportingState(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-ctrl)] border border-[var(--color-line-2)] p-3 mb-2">
+      <p className="text-xs text-[var(--color-ink-2)] mb-2">
+        Import mutual fund holdings from a CAMS, KFintech, or MFCentral Consolidated Account
+        Statement (CAS) — export it as CSV first, then upload it here. Every imported holding
+        lands as a liquid mutual fund asset, same as adding one by hand.
+      </p>
+
+      {step === 'upload' && (
+        <div>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleFile}
+            className="text-xs"
+          />
+          <p className="text-[11px] text-[var(--color-ink-3)] mt-2">
+            Don't have a file handy? Paste the CSV text instead:
+          </p>
+          <PasteCsvBox onLoad={loadText} />
+        </div>
+      )}
+
+      {step === 'configure' && (
+        <div>
+          <p className="text-xs font-medium text-[var(--color-ink)] mb-1.5">
+            Which row has the column headers?
+          </p>
+          <input
+            type="number" min="1" max={rawRows.length} value={headerRowNum}
+            aria-label="Header row number"
+            onChange={(e) => setHeaderRowNum(Math.max(1, Math.min(rawRows.length, Number(e.target.value) || 1)))}
+            className="field text-sm mb-2"
+            style={{ maxWidth: '6rem' }}
+          />
+          <div className="overflow-x-auto mb-3 rounded-[var(--radius-ctrl)] border border-[var(--color-line)]">
+            <table className="text-[11px] w-full">
+              <tbody>
+                {rawRows.slice(0, 8).map((row, i) => (
+                  <tr
+                    key={i}
+                    style={i === headerRowIndex ? { backgroundColor: 'var(--color-teal-soft)' } : undefined}
+                  >
+                    <td className="px-2 py-1 text-[var(--color-ink-3)] whitespace-nowrap">{i + 1}</td>
+                    {row.slice(0, 6).map((cell, j) => (
+                      <td key={j} className="px-2 py-1 whitespace-nowrap text-[var(--color-ink)]">{cell || '—'}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+            <div>
+              <label className="block text-[11px] font-medium text-[var(--color-ink-2)] mb-1">Scheme / fund name column</label>
+              <select value={schemeCol} onChange={(e) => setSchemeCol(e.target.value)} className="field text-sm">
+                <option value="">Choose…</option>
+                {headerRow.map((_, idx) => <option key={idx} value={idx}>{columnLabel(idx)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-[var(--color-ink-2)] mb-1">Current value column</label>
+              <select value={valueCol} onChange={(e) => setValueCol(e.target.value)} className="field text-sm">
+                <option value="">Choose…</option>
+                {headerRow.map((_, idx) => <option key={idx} value={idx}>{columnLabel(idx)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-[var(--color-ink-2)] mb-1">Folio number (optional)</label>
+              <select value={folioCol} onChange={(e) => setFolioCol(e.target.value)} className="field text-sm">
+                <option value="">Not included</option>
+                {headerRow.map((_, idx) => <option key={idx} value={idx}>{columnLabel(idx)}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {error && <p className="text-xs mb-2" style={{ color: 'var(--color-alert)' }}>{error}</p>}
+
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleContinueToPreview}>Preview import</Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {step === 'preview' && preview && (
+        <div>
+          <p className="text-xs text-[var(--color-ink)] mb-2">
+            Ready to import <strong>{preview.items.length}</strong> holding{preview.items.length === 1 ? '' : 's'} totaling{' '}
+            <strong>{formatCurrency(preview.items.reduce((sum, it) => sum + it.value, 0))}</strong> as liquid mutual fund assets.
+            {preview.skipped > 0 && ` (${preview.skipped} row${preview.skipped === 1 ? '' : 's'} skipped — missing a name or a readable value.)`}
+          </p>
+          <div className="max-h-48 overflow-y-auto mb-3 rounded-[var(--radius-ctrl)] border border-[var(--color-line)]">
+            <table className="text-[11px] w-full">
+              <tbody>
+                {preview.items.slice(0, 15).map((it, i) => (
+                  <tr key={i} className="border-b border-[var(--color-line)] last:border-b-0">
+                    <td className="px-2 py-1 text-[var(--color-ink)]">{it.description}</td>
+                    <td className="px-2 py-1 text-right tnum text-[var(--color-ink)]">{formatCurrency(it.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {preview.items.length > 15 && (
+              <p className="text-[11px] text-[var(--color-ink-3)] px-2 py-1">…and {preview.items.length - 15} more</p>
+            )}
+          </div>
+
+          {error && <p className="text-xs mb-2" style={{ color: 'var(--color-alert)' }}>{error}</p>}
+
+          <div className="flex gap-2">
+            <Button size="sm" disabled={importing || preview.items.length === 0} onClick={handleConfirmImport}>
+              {importing ? 'Importing…' : `Import ${preview.items.length} holding${preview.items.length === 1 ? '' : 's'}`}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setStep('configure')}>Back</Button>
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PasteCsvBox({ onLoad }) {
+  const [text, setText] = useState('');
+  return (
+    <div className="mt-1.5">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Paste CSV content here…"
+        rows={3}
+        className="field text-xs w-full"
+      />
+      <Button
+        type="button" variant="outline" size="sm" className="mt-1.5"
+        disabled={text.trim() === ''}
+        onClick={() => onLoad(text)}
+      >
+        Use pasted text
+      </Button>
+    </div>
   );
 }
 
