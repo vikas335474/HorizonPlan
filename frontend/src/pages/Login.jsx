@@ -1,14 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api, ApiError } from '../lib/api';
 
 // Login is a two-step flow when the user has MFA enrolled:
 //   Step 1: email + password → server returns 202 mfa_required
 //   Step 2: 6-digit TOTP code → server issues full session
 // Users without MFA enrolled skip step 2 (server issues session on password alone).
+//
+// "Sign in with Google" is a third, independent path: one click, no OTP step
+// — a verified Google login counts as MFA in its own right (see
+// auth_google.php). An account that has linked Google can no longer complete
+// password-only login (login.php blocks it with google_signin_required) —
+// that response is handled below by nudging the user toward the Google button
+// instead of showing a generic "wrong password" message.
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function Login() {
-  const { login, mfaVerify } = useAuth();
+  const { login, mfaVerify, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // Where to land after login. If the user was redirected here from a specific
@@ -32,11 +42,14 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [googleSigninRequired, setGoogleSigninRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [googleError, setGoogleError] = useState('');
 
   async function handlePasswordSubmit(e) {
     e.preventDefault();
     setError('');
+    setGoogleSigninRequired(false);
     setSubmitting(true);
     try {
       const result = await login(email, password);
@@ -46,9 +59,24 @@ export default function Login() {
         navigate(destinationFor(result.user), { replace: true });
       }
     } catch (err) {
-      setError(err.message || 'Something went wrong. Try again.');
+      if (err instanceof ApiError && err.body?.google_signin_required) {
+        setGoogleSigninRequired(true);
+        setError(err.message || 'This account signs in with Google.');
+      } else {
+        setError(err.message || 'Something went wrong. Try again.');
+      }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleGoogleCredential(credential) {
+    setGoogleError('');
+    try {
+      const user = await loginWithGoogle(credential);
+      navigate(destinationFor(user), { replace: true });
+    } catch (err) {
+      setGoogleError(err.message || 'Google sign-in failed. Try again.');
     }
   }
 
@@ -156,6 +184,14 @@ export default function Login() {
               </form>
             )}
 
+            {step === 'password' && (
+              <GoogleSignInSection
+                onCredential={handleGoogleCredential}
+                error={googleError}
+                highlight={googleSigninRequired}
+              />
+            )}
+
             {step === 'mfa' && (
               <form onSubmit={handleMfaSubmit}>
                 <label className="block text-sm font-medium mb-1.5 text-[var(--color-ink-2)]" htmlFor="code">
@@ -198,11 +234,158 @@ export default function Login() {
             )}
           </div>
 
+          {step === 'password' && (
+            <p className="mt-4 text-sm text-center text-[var(--color-ink-2)]">
+              New here?{' '}
+              <Link to="/signup" className="font-medium text-[var(--color-teal-ink)] hover:underline">
+                Start your free trial
+              </Link>
+            </p>
+          )}
+
+          {step === 'password' && <TryDemoSection />}
+
           <p className="mt-6 text-center text-xs text-[var(--color-ink-3)]">
             Protected by two-factor authentication · Bank-grade session security
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// A small "try a live demo, no signup needed" picker. Fetches the list of
+// seeded demo firms (empty if nothing has been seeded — renders nothing in
+// that case, same graceful-degradation precedent as GoogleSignInSection with
+// no configured Client ID) and logs straight into whichever one is picked via
+// demo_login.php — no credentials involved anywhere in this flow.
+function TryDemoSection() {
+  const { demoLogin } = useAuth();
+  const navigate = useNavigate();
+  const [firms, setFirms] = useState([]);
+  const [busySlug, setBusySlug] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listDemoFirms()
+      .then((res) => { if (!cancelled) setFirms(res.firms || []); })
+      .catch(() => { /* silently hide the section on any failure */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (firms.length === 0) return null;
+
+  async function tryFirm(slug) {
+    setError('');
+    setBusySlug(slug);
+    try {
+      const user = await demoLogin(slug);
+      navigate(user?.role === 'client' ? '/goals' : '/', { replace: true });
+    } catch (err) {
+      setError(err.message || 'Could not open that demo. Try again.');
+    } finally {
+      setBusySlug('');
+    }
+  }
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+        <span className="text-xs text-[var(--color-ink-3)]">or explore a live demo</span>
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {firms.map((firm) => (
+          <button
+            key={firm.slug}
+            type="button"
+            onClick={() => tryFirm(firm.slug)}
+            disabled={busySlug !== ''}
+            className="rounded-[var(--radius-ctrl)] border px-3 py-2 text-left transition-colors disabled:opacity-60"
+            style={{ borderColor: 'var(--color-line-2)', backgroundColor: 'var(--color-surface-2)' }}
+          >
+            <div className="text-xs font-medium truncate text-[var(--color-ink)]">
+              {busySlug === firm.slug ? 'Opening…' : firm.name}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
+              {firm.advisory_mode === 'advisory' ? 'Advisory mode' : 'Distribution mode'}
+            </div>
+          </button>
+        ))}
+      </div>
+      {error && (
+        <p className="mt-3 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5 text-center"
+           style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Renders Google's own "Sign in with Google" button via Identity Services
+// (loaded globally in index.html). Renders nothing if no Client ID is
+// configured for this deployment (see DEPLOY.md) rather than showing a
+// broken/non-functional button.
+function GoogleSignInSection({ onCredential, error, highlight }) {
+  const buttonRef = useRef(null);
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    // index.html's <script> tag loads asynchronously — poll briefly for
+    // window.google rather than assuming it's ready by mount time.
+    function tryInit() {
+      if (cancelled) return;
+      if (!window.google?.accounts?.id) {
+        attempts += 1;
+        if (attempts < 40) setTimeout(tryInit, 100);
+        return;
+      }
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (response) => onCredentialRef.current(response.credential),
+      });
+      if (buttonRef.current) {
+        window.google.accounts.id.renderButton(buttonRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          width: 320,
+        });
+      }
+    }
+    tryInit();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!GOOGLE_CLIENT_ID) return null;
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+        <span className="text-xs text-[var(--color-ink-3)]">or</span>
+        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
+      </div>
+      <div
+        ref={buttonRef}
+        className={`flex justify-center rounded-[var(--radius-ctrl)] ${highlight ? 'ring-2 ring-offset-2' : ''}`}
+        style={highlight ? { '--tw-ring-color': 'var(--color-amber)' } : undefined}
+      />
+      {error && (
+        <p className="mt-3 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5 text-center"
+           style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

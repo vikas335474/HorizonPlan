@@ -227,18 +227,22 @@ function verifyAccessAny(PDO $db, array $allowedRoles, bool $requireMfaEnrolled 
 }
 
 /**
- * Whether the given user has completed MFA enrollment (users.mfa_secret is
- * set). Pure DB read, no session/exit side effects — kept separate from
- * requireMfaEnrollment() so it's directly unit-testable against a real DB
- * without needing an HTTP context to exercise the 403 exit path.
+ * Whether the given user has satisfied mandatory MFA enrollment — either a
+ * TOTP secret (users.mfa_secret) or a linked Google account (users.google_sub)
+ * is enough; both are alternative ways of satisfying the same requirement, not
+ * a stacked "both required" check (see auth_google.php / GoogleAuth.php for
+ * why a verified Google login counts as MFA in its own right). Pure DB read,
+ * no session/exit side effects — kept separate from requireMfaEnrollment() so
+ * it's directly unit-testable against a real DB without needing an HTTP
+ * context to exercise the 403 exit path.
  */
 function userHasMfaEnrolled(PDO $db, int $userId): bool
 {
-    $stmt = $db->prepare("SELECT mfa_secret FROM users WHERE id = :id LIMIT 1");
+    $stmt = $db->prepare("SELECT mfa_secret, google_sub FROM users WHERE id = :id LIMIT 1");
     $stmt->execute([':id' => $userId]);
     $row = $stmt->fetch();
 
-    return $row !== false && !empty($row['mfa_secret']);
+    return $row !== false && (!empty($row['mfa_secret']) || !empty($row['google_sub']));
 }
 
 /**
@@ -257,7 +261,7 @@ function userHasMfaEnrolled(PDO $db, int $userId): bool
  * a test script exercise multiple toggle states within a single process
  * without the cache masking a real DB change.
  *
- * @return array{mfa_enforcement: string, demo_mode: string}
+ * @return array{mfa_enforcement: string, demo_mode: string, signup_enabled: string}
  */
 function getPlatformSettings(PDO $db, bool $forceRefresh = false): array
 {
@@ -266,12 +270,15 @@ function getPlatformSettings(PDO $db, bool $forceRefresh = false): array
         return $cached;
     }
 
-    $stmt = $db->query("SELECT mfa_enforcement, demo_mode FROM platform_settings WHERE id = 1 LIMIT 1");
+    $stmt = $db->query("SELECT mfa_enforcement, demo_mode, signup_enabled FROM platform_settings WHERE id = 1 LIMIT 1");
     $row = $stmt ? $stmt->fetch() : false;
 
     $cached = [
         'mfa_enforcement' => $row['mfa_enforcement'] ?? 'enabled',
         'demo_mode'       => $row['demo_mode'] ?? 'off',
+        // Fails closed toward the stricter posture (signups off) if the row
+        // can't be read — same defensive default reasoning as the other two.
+        'signup_enabled'  => $row['signup_enabled'] ?? 'off',
     ];
 
     return $cached;

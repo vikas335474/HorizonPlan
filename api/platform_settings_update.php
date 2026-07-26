@@ -53,6 +53,18 @@ if (array_key_exists('demo_mode', $input)) {
     $changes['demo_mode'] = $val;
 }
 
+if (array_key_exists('signup_enabled', $input)) {
+    $val = (string) $input['signup_enabled'];
+    if (!in_array($val, ['off', 'on'], true)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => "signup_enabled must be 'off' or 'on'."]);
+        exit();
+    }
+    $set[] = 'signup_enabled = :signup_enabled';
+    $params[':signup_enabled'] = $val;
+    $changes['signup_enabled'] = $val;
+}
+
 if ($set === []) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'Nothing to update.']);
@@ -70,10 +82,11 @@ $scopedDb = new TenantScopedDb($db, (int) $session['tenant_id']);
 $scopedDb->logChange('platform_settings', 1, 'platform_settings_updated', null,
     json_encode($changes), (int) $session['user_id']);
 
-$fresh = $db->query("SELECT mfa_enforcement, demo_mode FROM platform_settings WHERE id = 1 LIMIT 1")->fetch();
+$fresh = $db->query("SELECT mfa_enforcement, demo_mode, signup_enabled FROM platform_settings WHERE id = 1 LIMIT 1")->fetch();
 
 echo json_encode([
     'status'          => 'success',
     'mfa_enforcement' => $fresh['mfa_enforcement'],
     'demo_mode'       => $fresh['demo_mode'],
+    'signup_enabled'  => $fresh['signup_enabled'],
 ]);

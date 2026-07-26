@@ -44,7 +44,10 @@ export default function Settings() {
         <div className="mt-6 space-y-5">
           <MfaSection
             enrolled={!!user?.mfaEnrolled}
+            totpEnrolled={!!user?.totpEnrolled}
+            googleLinked={!!user?.googleLinked}
             onEnrolled={refreshSession}
+            onGoogleUnlinked={refreshSession}
             mfaRequired={mfaRequired}
             onContinue={() => navigate(continuePath, { replace: true })}
           />
@@ -65,7 +68,7 @@ function SectionCard({ title, description, children }) {
   );
 }
 
-function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
+function MfaSection({ enrolled, totpEnrolled, googleLinked, onEnrolled, onGoogleUnlinked, mfaRequired, onContinue }) {
   // 'idle' → user hasn't started; 'setup' → secret issued, awaiting confirm code.
   const [phase, setPhase] = useState('idle');
   const [secret, setSecret] = useState('');
@@ -80,15 +83,27 @@ function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
   // over — there's no separate transient "done" phase, so the Continue button
   // has to live here too, not in a phase branch below that `enrolled` would
   // otherwise make unreachable a moment after it renders.
+  //
+  // TOTP and Google are two independent ways to satisfy the same mandatory
+  // requirement (see security_gatekeeper.php::userHasMfaEnrolled()) — either
+  // one showing here is enough to be "Enabled" overall, so both statuses are
+  // always shown together rather than one hiding the other.
   if (enrolled) {
     return (
       <SectionCard
         title="Two-factor authentication"
-        description="An authenticator code is required every time you sign in."
+        description="Google sign-in or an authenticator code — either one satisfies sign-in security."
       >
-        <div className="flex items-center gap-3">
-          <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Enabled</Badge>
-          <span className="text-sm text-[var(--color-ink-2)]">Your account is protected with TOTP.</span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            {totpEnrolled ? (
+              <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Enabled</Badge>
+            ) : (
+              <Badge fg="var(--color-ink-3)" bg="var(--color-surface-2)">Not set up</Badge>
+            )}
+            <span className="text-sm text-[var(--color-ink-2)]">Authenticator app (TOTP)</span>
+          </div>
+          <GoogleLinkStatus linked={googleLinked} onUnlinked={onGoogleUnlinked} />
         </div>
         {mfaRequired && (
           <div className="mt-4">
@@ -205,9 +220,66 @@ function MfaSection({ enrolled, onEnrolled, mfaRequired, onContinue }) {
           <Button onClick={startEnroll} disabled={busy}>
             {busy ? 'Starting…' : 'Set up two-factor'}
           </Button>
+          <p className="mt-4 text-xs text-[var(--color-ink-3)]">
+            Prefer not to use an authenticator app? Sign out and use "Sign in with Google"
+            on the login page instead — it satisfies this requirement on its own, and links
+            automatically the first time you use it.
+          </p>
         </div>
       )}
     </SectionCard>
+  );
+}
+
+// Shows whether a Google account is linked, with an Unlink action. Linking
+// itself only ever happens via the login page's Google button (auto-linked
+// on first successful Google login by verified email) — there is no "link"
+// button here, only "unlink", since this page can't originate a Google OAuth
+// flow without duplicating that logic for no real benefit.
+function GoogleLinkStatus({ linked, onUnlinked }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function unlink() {
+    setError('');
+    setBusy(true);
+    try {
+      await api.unlinkGoogle();
+      await onUnlinked();
+    } catch (err) {
+      setError(err.message || 'Could not unlink Google.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        {linked ? (
+          <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Linked</Badge>
+        ) : (
+          <Badge fg="var(--color-ink-3)" bg="var(--color-surface-2)">Not linked</Badge>
+        )}
+        <span className="text-sm text-[var(--color-ink-2)]">Google sign-in</span>
+        {linked && (
+          <button
+            type="button"
+            onClick={unlink}
+            disabled={busy}
+            className="text-xs font-medium text-[var(--color-ink-2)] hover:text-[var(--color-alert)] disabled:opacity-60"
+          >
+            {busy ? 'Unlinking…' : 'Unlink'}
+          </button>
+        )}
+      </div>
+      {error && (
+        <p className="mt-2 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2"
+           style={{ color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

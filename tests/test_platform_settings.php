@@ -52,10 +52,10 @@ if (!in_array('platform_settings', $present, true)) {
     skip('platform_settings table not migrated — run sql/019_platform_settings.sql to enable this test.');
 }
 
-function setSettings(PDO $db, string $mfaEnforcement, string $demoMode): void
+function setSettings(PDO $db, string $mfaEnforcement, string $demoMode, string $signupEnabled = 'on'): void
 {
-    $db->prepare("UPDATE platform_settings SET mfa_enforcement = :m, demo_mode = :d WHERE id = 1")
-       ->execute([':m' => $mfaEnforcement, ':d' => $demoMode]);
+    $db->prepare("UPDATE platform_settings SET mfa_enforcement = :m, demo_mode = :d, signup_enabled = :s WHERE id = 1")
+       ->execute([':m' => $mfaEnforcement, ':d' => $demoMode, ':s' => $signupEnabled]);
 }
 
 $db->beginTransaction();
@@ -66,18 +66,23 @@ assertTrue($row !== false, 'platform_settings has its seeded id=1 row');
 // --- read/write round trip -------------------------------------------------
 setSettings($db, 'enabled', 'off');
 $read = getPlatformSettings($db, true);
-assertTrue($read === ['mfa_enforcement' => 'enabled', 'demo_mode' => 'off'],
+assertTrue($read === ['mfa_enforcement' => 'enabled', 'demo_mode' => 'off', 'signup_enabled' => 'on'],
     'getPlatformSettings() reads back enabled/off after a direct write');
 
 setSettings($db, 'disabled', 'off');
 $read = getPlatformSettings($db, true);
-assertTrue($read === ['mfa_enforcement' => 'disabled', 'demo_mode' => 'off'],
+assertTrue($read === ['mfa_enforcement' => 'disabled', 'demo_mode' => 'off', 'signup_enabled' => 'on'],
     'getPlatformSettings() reads back disabled/off');
 
 setSettings($db, 'enabled', 'on');
 $read = getPlatformSettings($db, true);
-assertTrue($read === ['mfa_enforcement' => 'enabled', 'demo_mode' => 'on'],
+assertTrue($read === ['mfa_enforcement' => 'enabled', 'demo_mode' => 'on', 'signup_enabled' => 'on'],
     'getPlatformSettings() reads back enabled/on');
+
+setSettings($db, 'enabled', 'off', 'off');
+$read = getPlatformSettings($db, true);
+assertTrue($read === ['mfa_enforcement' => 'enabled', 'demo_mode' => 'off', 'signup_enabled' => 'off'],
+    'getPlatformSettings() reads back a disabled signup_enabled too');
 
 // --- MFA-bypass logic (mirrors requireMfaEnrollment()'s own condition) -----
 // requireMfaEnrollment() itself exits the process on failure, so it can't be

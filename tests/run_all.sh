@@ -19,6 +19,11 @@ for t in \
   tests/test_tenant_isolation.php \
   tests/test_auth_db.php \
   tests/test_mfa_enforcement_db.php \
+  tests/test_google_auth_validation.php \
+  tests/test_google_auth_db.php \
+  tests/test_signup_db.php \
+  tests/test_demo_access_validation.php \
+  tests/test_demo_access_db.php \
   tests/test_password_reset_db.php \
   tests/test_templates_db.php \
   tests/test_risk_profiles_db.php \

@@ -5,6 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HorizonPlan</title>
+    <!-- Google Identity Services — used only by Login.jsx's "Sign in with
+         Google" button (frontend/.env's VITE_GOOGLE_CLIENT_ID). Harmless to
+         load unconditionally: with no configured Client ID, Login.jsx simply
+         never calls into it. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <div id="root"></div>

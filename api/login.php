@@ -34,7 +34,7 @@ if (!checkLoginRateLimit($db, $email, $ipAddress)) {
     exit();
 }
 
-$stmt = $db->prepare("SELECT id, tenant_id, role, password_hash, mfa_secret FROM users WHERE email = :email LIMIT 1");
+$stmt = $db->prepare("SELECT id, tenant_id, role, password_hash, mfa_secret, google_sub FROM users WHERE email = :email LIMIT 1");
 $stmt->execute([':email' => $email]);
 $user = $stmt->fetch();
 
@@ -63,25 +63,47 @@ if (!empty($user['mfa_secret'])) {
     exit();
 }
 
-// MFA not yet enrolled — issue a full session anyway (issueSession() has no
-// concept of enrollment state, and login.php has no reason to grow one).
-// MFA enrollment is mandatory (see "Security status" in CLAUDE.md): the
+// No TOTP secret, but Google IS linked — password alone must NOT issue a
+// full session here. Google login counts as MFA precisely because it's a
+// verified Google login; a plain password check is not that, so treating
+// "google_sub is set" as license to skip the second factor entirely would
+// silently downgrade this account's real security to password-only the
+// moment Google gets linked. Send the caller to the Google button instead.
+// This leaks "this account uses Google Sign-In" only to someone who already
+// knows the correct password — the same leak profile as the mfa_required
+// branch above leaking "this account has 2FA enabled".
+if (!empty($user['google_sub'])) {
+    http_response_code(401);
+    echo json_encode([
+        'status'                 => 'error',
+        'message'                => 'This account signs in with Google. Use "Sign in with Google" below.',
+        'google_signin_required' => true,
+    ]);
+    exit();
+}
+
+// Neither TOTP nor Google linked — issue a full session anyway (issueSession()
+// has no concept of enrollment state, and login.php has no reason to grow
+// one). MFA enrollment is mandatory (see "Security status" in CLAUDE.md): the
 // session this creates works for mfa_enroll.php, session.php, and logout.php
 // only — verifyAccess()/verifyAccessAny() 403 everything else until the user
-// completes enrollment. The frontend's ProtectedRoute redirects to /settings
-// off the mfa_enrolled flag below rather than the user hitting a wall of 403s.
+// completes enrollment (TOTP or Google, either satisfies it). The frontend's
+// ProtectedRoute redirects to /settings off the mfa_enrolled flag below rather
+// than the user hitting a wall of 403s.
 issueSession($db, (int) $user['id'], (int) $user['tenant_id'], $user['role']);
 
 echo json_encode([
     'status' => 'success',
     'user'   => [
-        'id'           => (int) $user['id'],
-        'tenant_id'    => (int) $user['tenant_id'],
-        'role'         => $user['role'],
-        // Always false here — this branch is only reached when mfa_secret is
-        // empty. Derived rather than hardcoded so it stays correct if the
-        // branching above ever changes. The frontend uses this to know whether
-        // to nudge the user toward MFA enrollment.
-        'mfa_enrolled' => !empty($user['mfa_secret']),
+        'id'                => (int) $user['id'],
+        'tenant_id'         => (int) $user['tenant_id'],
+        'role'              => $user['role'],
+        // Always false here — this branch is only reached when neither
+        // mfa_secret nor google_sub is set. Derived rather than hardcoded so
+        // it stays correct if the branching above ever changes. The frontend
+        // uses this to know whether to nudge the user toward MFA enrollment.
+        'mfa_enrolled'      => false,
+        'mfa_totp_enrolled' => false,
+        'google_linked'     => false,
     ],
 ]);
