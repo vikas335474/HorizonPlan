@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
+import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { Card, EmptyState, Spinner } from '../components/ui';
 
 // A client's own goals view. Clients never pass a client_id — the server uses
@@ -44,6 +45,12 @@ export default function GoalsList() {
         <div className="mb-6">
           <DisclosureBanner />
         </div>
+
+        {/* Read-only — client_portfolio_list.php already permits a client
+            session to read their own rows, but this is the first place a
+            client could actually see them; no clientId passed, the server
+            forces it to the session's own id regardless. */}
+        <ClientPortfolioCard readOnly />
 
         {loading && <Spinner label="Loading your goals…" />}
 

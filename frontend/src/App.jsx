@@ -17,6 +17,7 @@ import AdvisorTemplates from './pages/AdvisorTemplates';
 import RiskQuestionnaireBuilder from './pages/RiskQuestionnaireBuilder';
 import ActivityLog from './pages/ActivityLog';
 import PlanReviewQueue from './pages/PlanReviewQueue';
+import FeatureGuide from './pages/FeatureGuide';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -88,6 +89,10 @@ export default function App() {
               on goals_review_queue.php, requireFirmRole on the actual
               approve/request-changes action in goals_review.php). */}
           <Route path="/reviews" element={<ProtectedRoute><PlanReviewQueue /></ProtectedRoute>} />
+
+          {/* Quick-reference feature run book — advisor/super_admin, static
+              content only (no endpoint), client-side-guarded like AdminConsole. */}
+          <Route path="/guide" element={<ProtectedRoute><FeatureGuide /></ProtectedRoute>} />
 
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
