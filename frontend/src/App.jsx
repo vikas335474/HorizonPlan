@@ -15,6 +15,7 @@ import MeetingMode from './pages/MeetingMode';
 import AdminConsole from './pages/AdminConsole';
 import AdvisorTemplates from './pages/AdvisorTemplates';
 import RiskQuestionnaireBuilder from './pages/RiskQuestionnaireBuilder';
+import ActivityLog from './pages/ActivityLog';
 import Settings from './pages/Settings';
 
 // The landing route depends on role: advisors/admins get the client dashboard,
@@ -76,6 +77,10 @@ export default function App() {
           {/* docs/06 Section B — advisor/super_admin manage the firm's risk
               questionnaire + scoring rubric. Server-enforced (verifyAccess 'advisor'). */}
           <Route path="/risk-questionnaire" element={<ProtectedRoute><RiskQuestionnaireBuilder /></ProtectedRoute>} />
+
+          {/* docs/09 Session 6 — firm-wide read-only audit trail; advisor/super_admin
+              view, server-enforced (verifyAccessAny ['advisor', 'super_admin']). */}
+          <Route path="/activity" element={<ProtectedRoute><ActivityLog /></ProtectedRoute>} />
 
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

@@ -8,6 +8,7 @@ import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
 import LifecycleChart from '../components/LifecycleChart';
+import { ChangeLogCard } from '../components/ChangeLogUI';
 import {
   formatCurrency,
   formatPercent,
@@ -827,6 +828,13 @@ export default function GoalDetail() {
                 })}
               </div>
             )}
+
+            {/* docs/09 Session 6 — read-only audit trail, this goal's own
+                base_plan mutations (cascaded sub-scenario changes carry the
+                sub-scenario's own entity_id, not this goal's, so they aren't
+                pulled in here — a firm-wide view of everything lives at
+                /activity). */}
+            <ChangeLogCard entityType="base_plan" entityId={goal.id} emptyMessage="No changes recorded for this goal yet." />
           </>
         )}
       </main>
