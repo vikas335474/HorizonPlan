@@ -57,6 +57,66 @@ After this, the flow is just: merge to `main` → Action builds → `deploy` upd
 SQL in `/sql` is **not** run automatically. After any deploy that adds a
 migration, run it manually via hPanel → Databases → phpMyAdmin.
 
+## Staging environment setup
+
+Production and admin/dev/testing activity have shared one instance for a
+while — fine when the only traffic was admin-created tenants and the seeded
+demo dataset, less fine now that real self-serve trial signups (see the
+"Self-serve trial signup" session in `CLAUDE.md`) can land on the same
+database. Staging is a **second, fully separate** site: its own subdomain,
+document root, MySQL database, and `db_config.php` — never the production
+database with a different URL in front of it. It reuses the exact same
+deploy mechanism as production (a dedicated publish branch Hostinger's Git
+deployment pulls), just pointed at a different branch and directory.
+
+```
+Source (develop)               CI (GitHub Action)              deploy-staging branch == staging subdomain's docroot
+  frontend/  ── npm run build ─► frontend/dist/  ─┐
+  api/       ───────────────────────────────────┼─► _site/  ── push ─►  /index.html, /assets/…, /.htaccess, /api/…
+                                                  (VITE_APP_ENV=staging, so AppHeader shows a "STAGING ENVIRONMENT" banner)
+```
+
+**One-time Hostinger setup:**
+
+1. **hPanel → Domains → Subdomains.** Create a subdomain (e.g.
+   `staging.yourdomain.com`). Hostinger creates its own document root, separate
+   from `public_html` — note the path it gives you (e.g.
+   `public_html/staging` or a sibling folder, depending on plan).
+2. **hPanel → Databases → MySQL Databases.** Create a **new** database + user,
+   distinct from production's. Nothing here should ever point at the
+   production database.
+3. **Run all of `/sql` against the new database**, in order, via phpMyAdmin —
+   same manual process as any production migration, just once, against an
+   empty schema.
+4. **hPanel → Advanced → GIT.** Create a second Git deployment:
+   - Repository: this repo's URL.
+   - Branch: **`deploy-staging`** — not `deploy`, not `main`.
+   - Directory: the staging subdomain's document root from step 1.
+   - Enable Auto-Deployment, same as production.
+5. **Create `public_html/staging/api/db_config.php` on the server** (copy
+   `db_config.example.php`, fill in the *staging* database's credentials —
+   never the production ones). Untracked, exactly like production's, so every
+   `git pull` leaves it alone.
+6. **Push a `develop` branch** in this repo (branched off `main` is fine to
+   start) — `deploy-staging.yml` builds and publishes on every push to it,
+   mirroring `deploy.yml`'s `main` → `deploy` flow exactly. Merge to `develop`
+   first to try changes on staging before promoting the same commit to `main`.
+
+After this, the flow is: push to `develop` → Action builds with
+`VITE_APP_ENV=staging` → `deploy-staging` updates → Hostinger pulls into the
+staging subdomain. The amber "DEMO ENVIRONMENT" banner (`platform_settings.
+demo_mode`) and this dark "STAGING ENVIRONMENT" banner are independent — a
+staging database can also have `demo_mode` on if useful for testing that
+banner itself, but staging's own identity comes from the build flag, not from
+any database row, so it renders even before a database connection exists.
+
+**Populating staging with data:** run `php tools/seed_demo_data_full.php`
+against the staging database (SSH/CLI) for a realistic, full-featured
+dataset, or `php tools/bootstrap_admin.php` for a single clean admin account
+to build up manually. Staging is exactly where to point anything that would
+be too risky to run against production first — a new migration, the demo
+reset endpoint, a rate-limit change — before it goes anywhere near real data.
+
 ## Google Sign-In setup
 
 Google Sign-In (api/auth_google.php) needs one OAuth 2.0 Client ID, created
