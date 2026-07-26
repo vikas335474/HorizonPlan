@@ -855,8 +855,15 @@ export default function GoalDetail() {
                 base_plan mutations (cascaded sub-scenario changes carry the
                 sub-scenario's own entity_id, not this goal's, so they aren't
                 pulled in here — a firm-wide view of everything lives at
-                /activity). */}
-            <ChangeLogCard entityType="base_plan" entityId={goal.id} emptyMessage="No changes recorded for this goal yet." />
+                /activity). change_log_list.php is verifyAccessAny(['advisor',
+                'super_admin']) only — a client session rendering this card
+                would 403 and show "Privilege escalation blocked" right in
+                their own goal page (confirmed live), the same class of gap
+                as the four buttons hidden above. Firm-internal audit trail,
+                not client-facing content, so it's advisor/super_admin only. */}
+            {isAdvisor && (
+              <ChangeLogCard entityType="base_plan" entityId={goal.id} emptyMessage="No changes recorded for this goal yet." />
+            )}
           </>
         )}
       </main>
