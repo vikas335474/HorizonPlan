@@ -191,7 +191,10 @@ export default function Dashboard() {
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
-                    <label className="flex items-center gap-1.5 text-sm text-[var(--color-ink-2)] cursor-pointer select-none">
+                    <label
+                      className="flex items-center gap-1.5 text-sm text-[var(--color-ink-2)] cursor-pointer select-none"
+                      data-tour="dashboard-attention-filter"
+                    >
                       <input
                         type="checkbox"
                         checked={attentionOnly}
@@ -216,13 +219,16 @@ export default function Dashboard() {
                     <li key={c.client_id}>
                       <button
                         onClick={() => navigate(`/clients/${c.client_id}`)}
+                        data-tour="dashboard-client-row"
+                        data-client-id={c.client_id}
+                        data-goal-count={c.goal_count}
                         className="group w-full grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-left border-b border-[var(--color-line)] last:border-b-0 hover:bg-[var(--color-surface-2)] transition-colors"
                       >
                         <div className="col-span-12 md:col-span-6 flex items-center gap-3 min-w-0">
                           <Avatar email={c.email} />
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium text-[var(--color-ink)]">{c.email}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5" data-tour-badges="true">
                               <span className="text-xs text-[var(--color-ink-3)]">Client since {formatDate(c.client_since)}</span>
                               <ClientHealthBadges client={c} />
                             </div>

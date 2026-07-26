@@ -123,7 +123,7 @@ function GoalsHealthSummary({ goals }) {
     : null;
 
   return (
-    <Card className="p-4 mb-4">
+    <Card className="p-4 mb-4" data-tour="goals-health-summary">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div>
           <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">Goals</div>

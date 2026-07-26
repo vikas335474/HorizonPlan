@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useDemoTour } from '../context/DemoTourContext';
 
 const ROLE_LABELS = {
   advisor: 'Advisor',
@@ -18,6 +19,7 @@ const FIRM_ROLE_LABELS = {
 
 export default function AppHeader() {
   const { user, tenant, platform, logout } = useAuth();
+  const { available: tourAvailable, restart: restartTour } = useDemoTour();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -94,6 +96,17 @@ export default function AppHeader() {
                 <> · {FIRM_ROLE_LABELS[user.firmRole]}</>
               )}
             </span>
+          )}
+          {/* Only ever rendered for a demo-login session (user.isDemo, see
+              DemoTourContext.jsx) — a real admin-created or trial-signup
+              advisor never sees this. */}
+          {tourAvailable && (
+            <button
+              onClick={restartTour}
+              className="text-sm font-medium text-[var(--color-teal-ink)] hover:underline"
+            >
+              Take the tour
+            </button>
           )}
           {user && (
             <Link
