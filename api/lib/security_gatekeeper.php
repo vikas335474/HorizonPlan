@@ -242,15 +242,63 @@ function userHasMfaEnrolled(PDO $db, int $userId): bool
 }
 
 /**
+ * Read the single-row platform_settings config (docs/09 Piece 1). Cached in a
+ * static variable so repeated calls within the same request — e.g.
+ * verifyAccess() plus an endpoint that separately wants to know demo_mode —
+ * only cost one query, not one per call. Each PHP-FPM/php-S request is a
+ * fresh process, so this cache never leaks across requests.
+ *
+ * Defensive default (mfa_enforcement=enabled, demo_mode=off) if the table is
+ * somehow missing its seeded row — fails closed toward the stricter
+ * production behavior, never toward accidentally skipping MFA.
+ *
+ * $forceRefresh bypasses the cache — never needed in a real request (one PHP
+ * process per request means the cache never goes stale mid-request), but lets
+ * a test script exercise multiple toggle states within a single process
+ * without the cache masking a real DB change.
+ *
+ * @return array{mfa_enforcement: string, demo_mode: string}
+ */
+function getPlatformSettings(PDO $db, bool $forceRefresh = false): array
+{
+    static $cached = null;
+    if ($cached !== null && !$forceRefresh) {
+        return $cached;
+    }
+
+    $stmt = $db->query("SELECT mfa_enforcement, demo_mode FROM platform_settings WHERE id = 1 LIMIT 1");
+    $row = $stmt ? $stmt->fetch() : false;
+
+    $cached = [
+        'mfa_enforcement' => $row['mfa_enforcement'] ?? 'enabled',
+        'demo_mode'       => $row['demo_mode'] ?? 'off',
+    ];
+
+    return $cached;
+}
+
+/**
  * Enforce mandatory MFA enrollment for the current session. Exits with a 403
  * JSON response (carrying mfa_enrollment_required: true, so a caller could
  * branch on it distinctly from a plain role-based 403, though today the
  * frontend gate works off the session's own mfa_enrolled flag instead) if
  * the account hasn't completed TOTP enrollment. Called from verifyAccess()/
  * verifyAccessAny() by default — see those docblocks for the one exemption.
+ *
+ * docs/09 Piece 1: platform_settings can lift this requirement wholesale —
+ * demo_mode='on' implies MFA is skipped regardless of mfa_enforcement, and
+ * mfa_enforcement='disabled' on its own also skips it (useful for testing
+ * without the rest of demo-mode's behavior). Checked first, before touching
+ * the user's own mfa_secret, so an unenrolled account in demo mode never
+ * even needs one.
  */
 function requireMfaEnrollment(PDO $db, array $session): void
 {
+    $settings = getPlatformSettings($db);
+    if ($settings['demo_mode'] === 'on' || $settings['mfa_enforcement'] === 'disabled') {
+        return;
+    }
+
     if (userHasMfaEnrolled($db, (int) $session['user_id'])) {
         return;
     }
@@ -348,6 +396,49 @@ function verifyMfaPendingToken(PDO $db, string $purpose): array
     // Return both user_id and payload (payload is the TOTP secret for 'enroll'
     // purpose, null for 'login' purpose).
     return ['user_id' => (int) $row['user_id'], 'payload' => $row['payload']];
+}
+
+/**
+ * docs/09 Piece 2 — check a session's firm-level role (jr_advisor/sr_advisor/
+ * firm_admin) against an allowed list. Only meaningful for 'advisor' role
+ * sessions; a super_admin session always passes (same "super_admin bypasses
+ * every role gate" convention as verifyAccess()/verifyAccessAny()), since
+ * firm_role has no meaning cross-tenant for a platform admin.
+ *
+ * Backward compatibility: an advisor with firm_role = NULL (every advisor
+ * created before migration 020) is treated as sr_advisor — the middle tier,
+ * not the most permissive (firm_admin) or least (jr_advisor) — so existing
+ * accounts keep exactly the approval capability they had before this
+ * feature existed, and nothing silently gains firm-admin-only capabilities
+ * (add/manage advisors, edit firm branding) it never had.
+ *
+ * Exits with a 403 JSON response on failure, same contract as verifyAccess().
+ *
+ * @param array $session the session array from verifyAccess()/verifyAccessAny() —
+ *   must additionally carry 'firm_role' (callers fetch it themselves; see
+ *   admin_advisor_create.php / templates_approve.php for the query pattern)
+ * @param string[] $allowedFirmRoles
+ */
+function requireFirmRole(PDO $db, array $session, array $allowedFirmRoles): void
+{
+    if ($session['role'] === 'super_admin') {
+        return;
+    }
+
+    $stmt = $db->prepare("SELECT firm_role FROM users WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => (int) $session['user_id']]);
+    $row = $stmt->fetch();
+
+    $firmRole = ($row && $row['firm_role'] !== null) ? $row['firm_role'] : 'sr_advisor';
+
+    if (!in_array($firmRole, $allowedFirmRoles, true)) {
+        http_response_code(403);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'This action requires senior advisor or firm admin privileges.',
+        ]);
+        exit();
+    }
 }
 
 /**

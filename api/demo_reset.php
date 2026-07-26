@@ -1,0 +1,138 @@
+<?php
+declare(strict_types=1);
+
+// docs/09 Piece 3 — one-click demo data reset. super_admin-only, and only
+// works when platform_settings.demo_mode = 'on' (403 otherwise) — this is a
+// bulk-delete operation and must never be reachable against a real
+// production dataset just because the caller happens to be a super_admin.
+//
+// Deletes ONLY the 4 demo firms' tenant-scoped data (identified by tenant
+// company_name matching tools/seed_demo_data_full.php's FIRMS list, not by
+// email domain — company_name is the same identity the seeder itself uses
+// for its per-firm idempotency check, so the two can never drift apart) and
+// never touches the acting super_admin's own account, the platform admin
+// tenant, platform_settings, or the shared global system template (it lives
+// under a separate "HorizonPlan System" tenant, never in the demo tenant
+// list built below). After deleting, it requires seed_demo_data_full.php
+// in-process (SEED_DEMO_DATA_FULL_NO_AUTORUN defined first so the file's own
+// CLI entry point doesn't try to run) and calls seedDemoDataFull($db)
+// directly — that function is idempotent per firm, so it recreates exactly
+// the 4 firms just deleted without touching the platform admin account
+// (which was never deleted) or refusing to run because a platform admin
+// already exists.
+
+require_once __DIR__ . '/lib/security_gatekeeper.php';
+require_once __DIR__ . '/db_config.php';
+
+// Re-seeding 160 clients + goals/portfolio/risk-profile rows takes ~40s
+// locally — well past PHP's default 30s max_execution_time (and past
+// Hostinger's own 30s ceiling noted elsewhere in this project, see CLAUDE.md
+// Phase 7). Every other endpoint in this app is legitimately sub-second
+// (PlanMath is pure in-memory arithmetic), so raising the limit here — for
+// this one deliberate, super_admin-only, low-frequency admin action — is not
+// the same call as building async job infrastructure for real per-request
+// traffic. Documented limitation: on Hostinger's actual shared-hosting cap,
+// this may still need to run via CLI (`php tools/seed_demo_data_full.php`)
+// or SSH rather than through this endpoint, if the host enforces its 30s
+// ceiling at a level set_time_limit() can't override.
+set_time_limit(180);
+
+header('Content-Type: application/json; charset=UTF-8');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed.']);
+    exit();
+}
+
+$db = getPdo();
+$session = verifyAccess($db, 'super_admin');
+
+$settings = getPlatformSettings($db, true);
+if ($settings['demo_mode'] !== 'on') {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'Demo reset is only available while demo_mode is on.']);
+    exit();
+}
+
+define('SEED_DEMO_DATA_FULL_NO_AUTORUN', true);
+require_once __DIR__ . '/../tools/seed_demo_data_full.php';
+
+// The exact 4 company names tools/seed_demo_data_full.php's FIRMS constant
+// seeds — deliberately not derived from email-domain matching, so this can
+// never accidentally sweep up a real firm that happens to share a domain
+// convention, and never the platform admin's own tenant (a different name).
+$demoFirmNames = array_column(FIRMS, 'name');
+
+$placeholders = implode(', ', array_fill(0, count($demoFirmNames), '?'));
+$tenantStmt = $db->prepare("SELECT id FROM tenants WHERE company_name IN ($placeholders)");
+$tenantStmt->execute($demoFirmNames);
+$demoTenantIds = array_map('intval', $tenantStmt->fetchAll(PDO::FETCH_COLUMN));
+
+if ($demoTenantIds === []) {
+    // Nothing to delete (e.g. a reset called before any seed run) — just
+    // (re)seed and return.
+    $result = seedDemoDataFull($db);
+    echo json_encode([
+        'status'  => 'success',
+        'message' => 'No existing demo firms found — seeded a fresh dataset.',
+        'created_firms' => $result['created_firms'],
+    ]);
+    exit();
+}
+
+$db->beginTransaction();
+try {
+    $tenantPlaceholders = implode(', ', array_fill(0, count($demoTenantIds), '?'));
+
+    // FK-safe order: base_plans carries applied_template_id/
+    // applied_customization_id FKs into template_strategies/
+    // template_customizations, so base_plans (and template_audit_log, which
+    // also FKs into both) must be deleted before those two tables — not
+    // after, which an earlier draft of this endpoint got backwards. Full
+    // chain: client_portfolio_items/risk_profiles/sub_scenarios/
+    // template_audit_log/base_plans (all children) before
+    // risk_question_sets/template_customizations/template_strategies
+    // (their parents), and finally users/tenants.
+    foreach ([
+        'client_portfolio_items', 'risk_profiles', 'sub_scenarios',
+        'template_audit_log', 'base_plans',
+        'risk_question_sets', 'template_customizations', 'template_strategies',
+        'change_log',
+    ] as $table) {
+        $db->prepare("DELETE FROM {$table} WHERE tenant_id IN ($tenantPlaceholders)")
+           ->execute($demoTenantIds);
+    }
+
+    // active_sessions/mfa_pending/password_resets key off user_id, not
+    // tenant_id — active_sessions has no ON DELETE CASCADE (mfa_pending and
+    // password_resets do), so it needs an explicit delete before users.
+    $userIdsStmt = $db->prepare("SELECT id FROM users WHERE tenant_id IN ($tenantPlaceholders)");
+    $userIdsStmt->execute($demoTenantIds);
+    $demoUserIds = array_map('intval', $userIdsStmt->fetchAll(PDO::FETCH_COLUMN));
+    if ($demoUserIds !== []) {
+        $userPlaceholders = implode(', ', array_fill(0, count($demoUserIds), '?'));
+        $db->prepare("DELETE FROM active_sessions WHERE user_id IN ($userPlaceholders)")->execute($demoUserIds);
+    }
+
+    $db->prepare("DELETE FROM users WHERE tenant_id IN ($tenantPlaceholders)")->execute($demoTenantIds);
+    $db->prepare("DELETE FROM tenants WHERE id IN ($tenantPlaceholders)")->execute($demoTenantIds);
+
+    $db->commit();
+} catch (Throwable $e) {
+    $db->rollBack();
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Could not clear demo data: ' . $e->getMessage()]);
+    exit();
+}
+
+$result = seedDemoDataFull($db);
+
+echo json_encode([
+    'status'         => 'success',
+    'message'        => 'Demo data reset and reseeded.',
+    'created_firms'  => $result['created_firms'],
+    'total_clients'  => $result['total_clients'],
+    'total_goals'    => $result['total_goals'],
+    'platform_admin' => $result['platform_admin_email'],
+]);
