@@ -14,6 +14,7 @@ require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/Mailer.php';
+require_once __DIR__ . '/lib/InviteTokens.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -45,20 +46,13 @@ if (!in_array($advisoryMode, ['distribution', 'advisory'], true)) {
 // Validate the optional first advisor up front so we don't create a tenant and
 // then fail on the user — either both succeed or we stop before touching the DB.
 $advisorEmail = null;
-$advisorPass  = null;
 $advisorFirmRole = null;
 if ($advisor !== null) {
     $advisorEmail = strtolower(trim((string) ($advisor['email'] ?? '')));
-    $advisorPass  = (string) ($advisor['temporary_password'] ?? '');
     $advisorFirmRole = isset($advisor['firm_role']) ? (string) $advisor['firm_role'] : null;
     if ($advisorEmail === '' || !filter_var($advisorEmail, FILTER_VALIDATE_EMAIL)) {
         http_response_code(400);
         echo json_encode(['status' => 'error', 'message' => 'A valid advisor email is required.']);
-        exit();
-    }
-    if (strlen($advisorPass) < 8) {
-        http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Advisor temporary password must be at least 8 characters.']);
         exit();
     }
     if ($advisorFirmRole !== null && !in_array($advisorFirmRole, ['jr_advisor', 'sr_advisor', 'firm_admin'], true)) {
@@ -85,9 +79,12 @@ try {
     $advisorId = null;
     if ($advisorEmail !== null) {
         $scopedDb = new TenantScopedDb($db, $tenantId); // bound to the new tenant
+        // An unusable, never-known password — the account is only reachable
+        // by redeeming the invite token below (or a later real password
+        // reset). See InviteTokens.php's own docblock.
         $advisorId = $scopedDb->insert('users', [
             'email'         => $advisorEmail,
-            'password_hash' => password_hash($advisorPass, PASSWORD_BCRYPT),
+            'password_hash' => unusablePasswordHash(),
             'role'          => 'advisor',
             'firm_role'     => $advisorFirmRole,
         ]);
@@ -103,21 +100,23 @@ try {
     exit();
 }
 
-// Best-effort invite email — never blocks the response on mail() failing.
-// The temporary password is still returned in the JSON response below so the
-// super_admin has a fallback if Hostinger's local MTA doesn't deliver (see
-// Mailer.php's own docblock on why there's no SMTP dependency yet).
-if ($advisorEmail !== null) {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+// The invite token can only be issued after the advisor row is committed
+// (issueInviteToken() needs a real user_id) — outside the transaction above,
+// same as the email send always was. Best-effort email — never blocks the
+// response on mail() failing. inviteLink is still returned in the JSON
+// response below so the super_admin has a copyable fallback if Hostinger's
+// local MTA doesn't deliver (see Mailer.php's own docblock on why there's no
+// SMTP dependency yet) — the advisor can be handed the link through another
+// channel (Slack, WhatsApp) instead.
+$inviteLink = null;
+if ($advisorEmail !== null && $advisorId !== null) {
+    $rawToken   = issueInviteToken($db, $advisorId);
+    $inviteLink = buildInviteLink($rawToken);
     sendMail(
         $advisorEmail,
         "You've been added to HorizonPlan — {$companyName}",
         "An advisor account was created for you at {$companyName} on HorizonPlan.\n\n"
-        . "Sign in here: {$scheme}://{$host}/login\n"
-        . "Email: {$advisorEmail}\n"
-        . "Temporary password: {$advisorPass}\n\n"
-        . "You'll be able to change this password after signing in."
+        . "Set your password and sign in here (link expires in 7 days):\n{$inviteLink}\n"
     );
 }
 
@@ -128,4 +127,5 @@ echo json_encode([
     'advisory_mode' => $advisoryMode,
     'advisor_id'   => $advisorId,
     'advisor_email' => $advisorEmail,
+    'invite_link'  => $inviteLink,
 ]);
