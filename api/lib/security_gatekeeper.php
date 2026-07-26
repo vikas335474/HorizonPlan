@@ -144,8 +144,14 @@ function getCurrentSession(PDO $db): ?array
  * session record (user_id, tenant_id, role) on success. Exits with a JSON
  * error response on any failure — callers don't need to handle a false/null
  * return, execution simply stops here on auth failure.
+ *
+ * $requireMfaEnrolled defaults to true — MFA enrollment is mandatory (see
+ * "Security status" in CLAUDE.md), so every endpoint is blocked until the
+ * account has completed TOTP enrollment unless it explicitly opts out. The
+ * only real caller of `false` is mfa_enroll.php itself, which must stay
+ * reachable precisely so an unenrolled user can enroll.
  */
-function verifyAccess(PDO $db, string $requiredRole): array
+function verifyAccess(PDO $db, string $requiredRole, bool $requireMfaEnrolled = true): array
 {
     header('Content-Type: application/json; charset=UTF-8');
 
@@ -170,6 +176,10 @@ function verifyAccess(PDO $db, string $requiredRole): array
         exit();
     }
 
+    if ($requireMfaEnrolled) {
+        requireMfaEnrollment($db, $session);
+    }
+
     return $session; // ['user_id' => ..., 'tenant_id' => ..., 'role' => ...]
 }
 
@@ -181,9 +191,12 @@ function verifyAccess(PDO $db, string $requiredRole): array
  * verifyAccess(). Exits with a JSON error response on failure, same as
  * verifyAccess() — callers don't need to handle a null return.
  *
+ * $requireMfaEnrolled — see verifyAccess()'s docblock; same default, same
+ * one exemption (mfa_enroll.php).
+ *
  * @param string[] $allowedRoles
  */
-function verifyAccessAny(PDO $db, array $allowedRoles): array
+function verifyAccessAny(PDO $db, array $allowedRoles, bool $requireMfaEnrolled = true): array
 {
     header('Content-Type: application/json; charset=UTF-8');
 
@@ -206,7 +219,49 @@ function verifyAccessAny(PDO $db, array $allowedRoles): array
         exit();
     }
 
+    if ($requireMfaEnrolled) {
+        requireMfaEnrollment($db, $session);
+    }
+
     return $session;
+}
+
+/**
+ * Whether the given user has completed MFA enrollment (users.mfa_secret is
+ * set). Pure DB read, no session/exit side effects — kept separate from
+ * requireMfaEnrollment() so it's directly unit-testable against a real DB
+ * without needing an HTTP context to exercise the 403 exit path.
+ */
+function userHasMfaEnrolled(PDO $db, int $userId): bool
+{
+    $stmt = $db->prepare("SELECT mfa_secret FROM users WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $userId]);
+    $row = $stmt->fetch();
+
+    return $row !== false && !empty($row['mfa_secret']);
+}
+
+/**
+ * Enforce mandatory MFA enrollment for the current session. Exits with a 403
+ * JSON response (carrying mfa_enrollment_required: true, so a caller could
+ * branch on it distinctly from a plain role-based 403, though today the
+ * frontend gate works off the session's own mfa_enrolled flag instead) if
+ * the account hasn't completed TOTP enrollment. Called from verifyAccess()/
+ * verifyAccessAny() by default — see those docblocks for the one exemption.
+ */
+function requireMfaEnrollment(PDO $db, array $session): void
+{
+    if (userHasMfaEnrolled($db, (int) $session['user_id'])) {
+        return;
+    }
+
+    http_response_code(403);
+    echo json_encode([
+        'status'                  => 'error',
+        'message'                 => 'Two-factor authentication setup is required before you can continue.',
+        'mfa_enrollment_required' => true,
+    ]);
+    exit();
 }
 
 /**
