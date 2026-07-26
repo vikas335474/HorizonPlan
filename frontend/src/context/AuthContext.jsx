@@ -25,6 +25,11 @@ function normalizeUser(raw) {
     // up, not just the combined flag.
     totpEnrolled: !!raw.mfa_totp_enrolled,
     googleLinked: !!raw.google_linked,
+    // Drives the guided demo tour (DemoTour.jsx) — true only for the
+    // synthetic *.demo.horizonplan.in accounts the public "try a live demo"
+    // picker logs into (see api/lib/DemoAccess.php). Never true for an
+    // admin-created or trial-signup account, so the tour can't nag them.
+    isDemo: !!raw.is_demo,
   };
 }
 

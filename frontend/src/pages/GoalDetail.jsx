@@ -286,7 +286,7 @@ export default function GoalDetail() {
                   </svg>
                   Client report
                 </Button>
-                <Button variant="teal" onClick={() => navigate(`/goals/${goal.id}/meeting`)}>
+                <Button variant="teal" data-tour="meeting-mode-button" onClick={() => navigate(`/goals/${goal.id}/meeting`)}>
                   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true" className="mr-1.5">
                     <rect x="2" y="3" width="11" height="7.5" rx="1" stroke="currentColor" strokeWidth="1.2" />
                     <path d="M5.5 13h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
@@ -345,7 +345,7 @@ export default function GoalDetail() {
                 baseline, computed from goals_projection.php. Null while the
                 goal is missing withdrawal_rate/drawdown_return_rate. */}
             {isRetirement && baselineProjection?.readiness_score != null && (
-              <div className="mb-4">
+              <div className="mb-4" data-tour="readiness-score-card">
                 <ReadinessScoreCard score={baselineProjection.readiness_score} />
               </div>
             )}

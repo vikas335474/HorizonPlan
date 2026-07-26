@@ -16,6 +16,9 @@ export default function GoalCard({ goal }) {
   return (
     <Link
       to={`/goals/${goal.id}`}
+      data-tour="goal-card"
+      data-goal-id={goal.id}
+      data-has-readiness={goal.readiness_score !== null && goal.readiness_score !== undefined}
       className="lift group relative block overflow-hidden bg-[var(--color-surface)] border border-[var(--color-line)] rounded-[var(--radius-card)] p-4 pl-5"
       style={{ boxShadow: 'var(--shadow-sm)' }}
     >

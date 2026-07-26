@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/lib/DemoAccess.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -27,7 +28,7 @@ issueCsrfToken();
 // read to tell the frontend whether this user has MFA enrolled. This drives
 // the soft app-layer MFA gate (redirect unenrolled users to Settings) — the
 // column value itself is never returned, only the boolean derived from it.
-$mfaStmt = $db->prepare("SELECT mfa_secret, google_sub, firm_role FROM users WHERE id = :id LIMIT 1");
+$mfaStmt = $db->prepare("SELECT mfa_secret, google_sub, firm_role, email FROM users WHERE id = :id LIMIT 1");
 $mfaStmt->execute([':id' => (int) $session['user_id']]);
 $mfaRow = $mfaStmt->fetch();
 
@@ -66,6 +67,12 @@ echo json_encode([
         'mfa_enrolled'      => !empty($mfaRow['mfa_secret']) || !empty($mfaRow['google_sub']),
         'mfa_totp_enrolled' => !empty($mfaRow['mfa_secret']),
         'google_linked'     => !empty($mfaRow['google_sub']),
+        // Drives the guided demo tour (DemoTour.jsx) — true only for the
+        // synthetic *.demo.horizonplan.in accounts DemoAccess.php already
+        // treats as the one safety boundary for the public demo-login path,
+        // so the tour can never surface for a real admin-created or
+        // trial-signup account.
+        'is_demo'           => isDemoAccountEmail((string) ($mfaRow['email'] ?? '')),
     ],
     'tenant' => [
         'company_name'  => $tenantRow['company_name'] ?? null,
