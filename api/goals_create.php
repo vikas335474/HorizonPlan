@@ -5,6 +5,7 @@ require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/GoalFieldValidation.php';
+require_once __DIR__ . '/lib/PlanReview.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -109,6 +110,16 @@ $data = [
     'locked_corpus_amount'     => $lockedCorpusAmount,
     'locked_return_rate'       => $isRetirement ? ($input['locked_return_rate'] ?? null) : null,
 ];
+
+// Jr -> Sr Advisor Plan-Approval Workflow (decision #1): a retirement goal is
+// created with its advice fields (withdrawal_rate defaults to 3.5, always
+// set) already in place, so if this tenant has opted into plan review it
+// enters the workflow immediately rather than starting 'not_required' and
+// waiting for a subsequent edit. Non-retirement goals never carry advice
+// fields at all, so they stay 'not_required' (the column's own DEFAULT).
+if ($isRetirement && tenantRequiresPlanReview($db, $tenantId)) {
+    $data['review_status'] = 'pending_review';
+}
 
 // docs/09 Pre-Launch Hardening Session 1: same per-field range/type
 // validation as goals_update.php, shared via GoalFieldValidation.php so the

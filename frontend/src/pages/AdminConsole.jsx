@@ -611,6 +611,23 @@ function FirmDetailModal({ tenantId, onClose, onChanged }) {
     }
   }
 
+  // Jr -> Sr Advisor Plan-Approval Workflow (decision #3) — opt-in per
+  // tenant, toggled from the same place branding/compliance mode already are.
+  async function togglePlanReview() {
+    if (!detail || busy) return;
+    setBusy(true);
+    try {
+      await api.updateTenant(detail.tenant.id, {
+        requires_plan_review: detail.tenant.requires_plan_review ? 'off' : 'on',
+      });
+      refresh();
+    } catch (e) {
+      setError(e.message || 'Could not change this setting.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Modal open={!!tenantId} onClose={onClose} size="xl" title={detail ? detail.tenant.company_name : 'Firm'}>
       {loading && <Spinner label="Loading firm…" />}
@@ -650,6 +667,33 @@ function FirmDetailModal({ tenantId, onClose, onChanged }) {
                   {m}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="pt-5 border-t border-[var(--color-line)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-ink)]">Plan review</h3>
+                <p className="mt-0.5 text-xs text-[var(--color-ink-3)] max-w-md">
+                  When on, a goal's withdrawal rate / post-retirement return / applied template needs a
+                  senior advisor or firm admin's sign-off. No hard gate yet — this only adds a status badge
+                  and a review queue.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={detail.tenant.requires_plan_review}
+                disabled={busy}
+                onClick={togglePlanReview}
+                className="shrink-0 relative h-6 w-11 rounded-full transition-colors"
+                style={{ backgroundColor: detail.tenant.requires_plan_review ? 'var(--color-teal)' : 'var(--color-line-2)' }}
+              >
+                <span
+                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+                  style={{ transform: detail.tenant.requires_plan_review ? 'translateX(22px)' : 'translateX(2px)' }}
+                />
+              </button>
             </div>
           </div>
 

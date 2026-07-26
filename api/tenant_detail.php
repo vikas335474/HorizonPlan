@@ -30,7 +30,7 @@ if ($tenantId <= 0) {
 }
 
 $tenantStmt = $db->prepare(
-    'SELECT id, company_name, advisory_mode, white_label_settings, created_at FROM tenants WHERE id = :id LIMIT 1'
+    'SELECT id, company_name, advisory_mode, white_label_settings, requires_plan_review, created_at FROM tenants WHERE id = :id LIMIT 1'
 );
 $tenantStmt->execute([':id' => $tenantId]);
 $tenant = $tenantStmt->fetch();
@@ -77,6 +77,7 @@ echo json_encode([
         'company_name'  => $tenant['company_name'],
         'advisory_mode' => $tenant['advisory_mode'],
         'white_label'   => $whiteLabel,
+        'requires_plan_review' => $tenant['requires_plan_review'] === 'on',
         'created_at'    => $tenant['created_at'],
         'advisor_count' => count($advisors),
         'client_count'  => $clientCount,

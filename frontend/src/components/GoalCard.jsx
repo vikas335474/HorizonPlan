@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Badge } from './ui';
 import { ReadinessScoreBadge } from './ReadinessScore';
+import { ReviewStatusBadge } from './PlanReviewUI';
+import { useAuth } from '../context/AuthContext';
 import {
   formatCurrency,
   formatDate,
@@ -10,6 +12,7 @@ import {
 } from '../lib/format';
 
 export default function GoalCard({ goal }) {
+  const { user } = useAuth();
   const accent = GOAL_TYPE_ACCENT[goal.goal_type] || GOAL_TYPE_ACCENT.other;
   const isRetirement = goal.goal_type === 'retirement';
 
@@ -35,6 +38,7 @@ export default function GoalCard({ goal }) {
           {goal.readiness_score !== null && goal.readiness_score !== undefined && (
             <ReadinessScoreBadge score={goal.readiness_score} />
           )}
+          {user?.role !== 'client' && <ReviewStatusBadge status={goal.review_status} />}
           <Badge fg={accent.fg} bg={accent.bg}>
             {GOAL_TYPE_LABELS[goal.goal_type] || goal.goal_type}
           </Badge>

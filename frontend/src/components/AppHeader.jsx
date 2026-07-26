@@ -97,6 +97,18 @@ export default function AppHeader() {
               Activity
             </Link>
           )}
+          {/* Jr -> Sr Advisor Plan-Approval Workflow — shown to every advisor/
+              super_admin (not just sr_advisor/firm_admin), same as Activity:
+              a jr_advisor can still see the status of their own submissions,
+              just not approve them. */}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <Link
+              to="/reviews"
+              className="text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
+            >
+              Reviews
+            </Link>
+          )}
           {user && (
             <span className="hidden sm:inline text-xs font-medium text-[var(--color-ink-3)]">
               {ROLE_LABELS[user.role] || user.role}

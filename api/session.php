@@ -36,7 +36,7 @@ $mfaRow = $mfaStmt->fetch();
 // mode (docs/02 Section 3.6 — must be read from the tenant, never hardcoded)
 // and the white-label branding. advisory_mode is only ever set server-side by a
 // Super Admin, so the frontend reads it here but can never change it.
-$tenantStmt = $db->prepare("SELECT company_name, advisory_mode, white_label_settings FROM tenants WHERE id = :id LIMIT 1");
+$tenantStmt = $db->prepare("SELECT company_name, advisory_mode, white_label_settings, requires_plan_review FROM tenants WHERE id = :id LIMIT 1");
 $tenantStmt->execute([':id' => (int) $session['tenant_id']]);
 $tenantRow = $tenantStmt->fetch();
 
@@ -78,6 +78,10 @@ echo json_encode([
         'company_name'  => $tenantRow['company_name'] ?? null,
         'advisory_mode' => $tenantRow['advisory_mode'] ?? 'distribution',
         'white_label'   => $whiteLabel,
+        // Jr -> Sr Advisor Plan-Approval Workflow (decision #3) — lets the
+        // frontend show/hide the submit-for-review action and review queue
+        // without a separate round trip.
+        'requires_plan_review' => ($tenantRow['requires_plan_review'] ?? 'off') === 'on',
     ],
     'platform' => [
         'mfa_enforcement' => $platformSettings['mfa_enforcement'],

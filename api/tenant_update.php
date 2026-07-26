@@ -101,6 +101,22 @@ if (array_key_exists('white_label', $input)) {
     }
 }
 
+if (array_key_exists('requires_plan_review', $input)) {
+    // Jr -> Sr Advisor Plan-Approval Workflow (decision #3): opt-in per
+    // tenant. Not a compliance control like advisory_mode — a firm_admin (or
+    // super_admin) toggling this is the same self-service tier as branding,
+    // already enforced above (an advisor session reaching this point is
+    // already confirmed firm_admin of their own tenant).
+    $val = (string) $input['requires_plan_review'];
+    if (!in_array($val, ['on', 'off'], true)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => "requires_plan_review must be 'on' or 'off'."]);
+        exit();
+    }
+    $set[] = 'requires_plan_review = :req_review';
+    $params[':req_review'] = $val;
+}
+
 if ($set === []) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'Nothing to update.']);

@@ -55,6 +55,8 @@ function normalizeTenant(raw) {
     companyName: raw.company_name ?? null,
     advisoryMode: raw.advisory_mode === 'advisory' ? 'advisory' : 'distribution',
     whiteLabel: raw.white_label ?? null,
+    // Jr -> Sr Advisor Plan-Approval Workflow — opt-in per tenant, default off.
+    requiresPlanReview: !!raw.requires_plan_review,
   };
 }
 

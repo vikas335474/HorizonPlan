@@ -9,6 +9,7 @@ import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
 import LifecycleChart from '../components/LifecycleChart';
 import { ChangeLogCard } from '../components/ChangeLogUI';
+import { GoalReviewCard, ReviewStatusBadge } from '../components/PlanReviewUI';
 import {
   formatCurrency,
   formatPercent,
@@ -356,6 +357,7 @@ export default function GoalDetail() {
                   <Badge fg={accent.fg} bg={accent.bg}>
                     {GOAL_TYPE_LABELS[goal.goal_type] || goal.goal_type}
                   </Badge>
+                  <ReviewStatusBadge status={goal.review_status} />
                   <span className="text-xs text-[var(--color-ink-3)]">
                     {goal.projection_horizon_years}-year horizon
                   </span>
@@ -519,6 +521,13 @@ export default function GoalDetail() {
                 </form>
               )}
             </Card>
+
+            {/* Jr -> Sr Advisor Plan-Approval Workflow — advisor-facing only
+                (hides itself for a client session), and a no-op display for a
+                firm that hasn't opted in and a goal that's never entered the
+                workflow. No hard gate anywhere: this is a badge + audit trail,
+                not a block on anything below it. */}
+            <GoalReviewCard goal={goal} onChanged={loadGoal} />
 
             {/* Retirement Readiness Score (docs/07 Bet 3) — the goal's own
                 baseline, computed from goals_projection.php. Null while the

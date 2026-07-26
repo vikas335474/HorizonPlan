@@ -375,6 +375,26 @@ export const api = {
   importPortfolioItems: (clientId, items) =>
     request('client_portfolio_import.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items }) }),
 
+  // --- Jr -> Sr Advisor Plan-Approval Workflow ---
+  // Puts a goal into (or back into) the pending_review queue. Most goals get
+  // here automatically on an advice-field edit; this covers the cases that
+  // don't (see goals_submit_review.php's own docblock).
+  submitGoalForReview: (goalId) =>
+    request('goals_submit_review.php', { method: 'POST', body: JSON.stringify({ goal_id: goalId }) }),
+
+  // action: 'approve' | 'request_changes'. notes required for request_changes.
+  // sr_advisor/firm_admin only (server-enforced via requireFirmRole()).
+  reviewGoal: (goalId, action, notes) =>
+    request('goals_review.php', {
+      method: 'POST',
+      body: JSON.stringify({ goal_id: goalId, action, ...(notes ? { notes } : {}) }),
+    }),
+
+  // status: 'active' (default — pending_review + changes_requested), 'all',
+  // or an explicit comma list of review_status values.
+  listReviewQueue: (status) =>
+    request(`goals_review_queue.php${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+
   // --- Audit log (docs/09 Session 6) ---
   // Read-only change_log view. entityType/entityId scope it to one goal's
   // (or sub-scenario's) history — used by GoalDetail.jsx's History tab.
