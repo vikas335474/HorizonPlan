@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { Button } from '../components/ui';
+import Spotlight from '../components/Spotlight';
 
 // Guided, self-paced click-through tour over the PUBLIC DEMO — coach marks
 // over the real seeded UI (dashboard health badges, a real client's
@@ -130,8 +131,6 @@ const STEPS = [
     isLast: true,
   },
 ];
-
-const SPOTLIGHT_PAD = 8;
 
 export function DemoTourProvider({ children }) {
   const { user, loading } = useAuth();
@@ -302,69 +301,30 @@ export function useDemoTour() {
 }
 
 function TourOverlay({ step, stepNumber, totalSteps, rect, onNext, onBack, onSkip }) {
-  const spot = {
-    top: rect.top - SPOTLIGHT_PAD,
-    left: rect.left - SPOTLIGHT_PAD,
-    width: rect.width + SPOTLIGHT_PAD * 2,
-    height: rect.height + SPOTLIGHT_PAD * 2,
-  };
-
-  // Prefer placing the card below the target; flip above if there isn't
-  // room, and clamp horizontally so it never runs off-screen.
-  const cardWidth = 320;
-  const estCardHeight = 190;
-  const spaceBelow = window.innerHeight - spot.top - spot.height;
-  const placeAbove = spaceBelow < estCardHeight + 24 && spot.top > estCardHeight + 24;
-  const cardTop = placeAbove ? Math.max(16, spot.top - estCardHeight - 16) : spot.top + spot.height + 16;
-  const cardLeft = Math.min(Math.max(16, spot.left), window.innerWidth - cardWidth - 16);
-
   return (
-    <div className="fixed inset-0 z-[70]" style={{ pointerEvents: 'none' }} aria-live="polite">
-      {/* Spotlight — a transparent box whose huge box-shadow darkens
-          everything else. No separate click-blocking backdrop layer: the
-          whole overlay is pointer-events:none except the card below, so the
-          real page underneath — including the highlighted element itself —
-          stays genuinely clickable while the tour is up. */}
-      <div
-        className="absolute rounded-xl transition-all duration-200 ease-out"
-        style={{
-          top: spot.top,
-          left: spot.left,
-          width: spot.width,
-          height: spot.height,
-          boxShadow: '0 0 0 9999px rgba(15, 23, 41, 0.6)',
-          outline: '2px solid var(--color-teal)',
-          outlineOffset: 2,
-        }}
-      />
-
-      <div
-        className="absolute w-80 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 animate-[popIn_0.18s_cubic-bezier(0.34,1.56,0.64,1)]"
-        style={{ top: cardTop, left: cardLeft, boxShadow: 'var(--shadow-lg)', pointerEvents: 'auto' }}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-teal-ink)]">
-            Guided tour · {stepNumber} of {totalSteps}
-          </span>
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-xs font-medium text-[var(--color-ink-3)] hover:text-[var(--color-ink)] transition-colors"
-          >
-            Skip
-          </button>
-        </div>
-        <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-1">{step.title}</h3>
-        <p className="text-xs leading-relaxed text-[var(--color-ink-2)] mb-4">{step.body}</p>
-        <div className="flex items-center justify-between gap-2">
-          {onBack ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onBack}>Back</Button>
-          ) : <span />}
-          <Button type="button" variant="teal" size="sm" onClick={onNext}>
-            {step.isLast ? 'Done' : 'Next'}
-          </Button>
-        </div>
+    <Spotlight rect={rect} cardWidth={320} estCardHeight={190}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-teal-ink)]">
+          Guided tour · {stepNumber} of {totalSteps}
+        </span>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="text-xs font-medium text-[var(--color-ink-3)] hover:text-[var(--color-ink)] transition-colors"
+        >
+          Skip
+        </button>
       </div>
-    </div>
+      <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-1">{step.title}</h3>
+      <p className="text-xs leading-relaxed text-[var(--color-ink-2)] mb-4">{step.body}</p>
+      <div className="flex items-center justify-between gap-2">
+        {onBack ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onBack}>Back</Button>
+        ) : <span />}
+        <Button type="button" variant="teal" size="sm" onClick={onNext}>
+          {step.isLast ? 'Done' : 'Next'}
+        </Button>
+      </div>
+    </Spotlight>
   );
 }

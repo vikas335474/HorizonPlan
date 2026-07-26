@@ -7,6 +7,7 @@ import Modal from '../components/Modal';
 import { Card, Button, Badge } from '../components/ui';
 import { ReadinessScoreBadge, bandFor } from '../components/ReadinessScore';
 import OnboardingChecklist, { isOnboardingDismissed, dismissOnboarding } from '../components/OnboardingChecklist';
+import OnboardingSpotlight from '../components/OnboardingSpotlight';
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/format';
 
 // docs/08 gap #5 — the client list previously only showed goal count and
@@ -109,7 +110,7 @@ export default function Dashboard() {
               Clients, goals, and corpus under plan across your firm.
             </p>
           </div>
-          <Button onClick={() => setAddOpen(true)}>
+          <Button data-tour="onboarding-add-client" onClick={() => setAddOpen(true)}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
@@ -136,12 +137,21 @@ export default function Dashboard() {
                 them) IS the first-run signal, no has_completed_onboarding
                 column needed. */}
             {!dismissed && !(data.stats.total_clients > 0 && data.stats.total_goals > 0) && (
-              <OnboardingChecklist
-                clients={clients}
-                onAddClient={() => setAddOpen(true)}
-                onGoToClient={(clientId) => navigate(`/clients/${clientId}`)}
-                onDismiss={() => { dismissOnboarding(user?.userId); setDismissed(true); }}
-              />
+              <>
+                <OnboardingChecklist
+                  clients={clients}
+                  onAddClient={() => setAddOpen(true)}
+                  onGoToClient={(clientId) => navigate(`/clients/${clientId}`)}
+                  onDismiss={() => { dismissOnboarding(user?.userId); setDismissed(true); }}
+                />
+                {/* Sits alongside the checklist, not in place of it — the
+                    checklist tracks what's left, this points at the one
+                    real button to click next. */}
+                <OnboardingSpotlight
+                  step={data.stats.total_clients === 0 ? 'client' : 'goal'}
+                  onDismiss={() => { dismissOnboarding(user?.userId); setDismissed(true); }}
+                />
+              </>
             )}
 
             {/* Stat band */}

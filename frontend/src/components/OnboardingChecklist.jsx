@@ -72,7 +72,15 @@ export default function OnboardingChecklist({ clients, onAddClient, onGoToClient
           label="Create a goal for them"
           action={
             !hasGoal && clientNeedingGoal
-              ? <Button size="sm" variant="outline" onClick={() => onGoToClient(clientNeedingGoal.client_id)}>Go to client</Button>
+              ? (
+                <Button
+                  size="sm" variant="outline"
+                  data-tour="onboarding-goal-cta"
+                  onClick={() => onGoToClient(clientNeedingGoal.client_id)}
+                >
+                  Go to client
+                </Button>
+              )
               : null
           }
         />
