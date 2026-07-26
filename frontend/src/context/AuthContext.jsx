@@ -12,10 +12,26 @@ function normalizeUser(raw) {
     userId: raw.user_id ?? raw.id,
     tenantId: raw.tenant_id,
     role: raw.role,
+    // docs/09 Piece 2 — only meaningful for role === 'advisor'; null for
+    // super_admin/client, and null for an advisor created before this
+    // feature (treated as sr_advisor server-side, see requireFirmRole()).
+    firmRole: raw.firm_role ?? null,
     // login.php / mfa_verify.php / session.php all now carry mfa_enrolled.
     // Coerce to a real boolean so consumers can rely on it (the soft MFA gate,
     // the header nudge dot) without re-checking for undefined.
     mfaEnrolled: !!raw.mfa_enrolled,
+  };
+}
+
+// docs/09 Piece 1 — only session.php returns this block (same precedent as
+// tenant: login.php/mfaVerify() don't carry it, refreshSession() pulls it in
+// right after). Defaults to the conservative production posture
+// (MFA enforced, demo mode off) whenever it's unknown, same reasoning as
+// normalizeTenant()'s advisoryMode fallback.
+function normalizePlatform(raw) {
+  return {
+    mfaEnforcement: raw?.mfa_enforcement === 'disabled' ? 'disabled' : 'enabled',
+    demoMode: raw?.demo_mode === 'on' ? 'on' : 'off',
   };
 }
 
@@ -35,6 +51,7 @@ function normalizeTenant(raw) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [tenant, setTenant] = useState(null);
+  const [platform, setPlatform] = useState(normalizePlatform(null));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +62,7 @@ export function AuthProvider({ children }) {
         if (!cancelled) {
           setUser(normalizeUser(res.user));
           setTenant(normalizeTenant(res.tenant));
+          setPlatform(normalizePlatform(res.platform));
         }
       })
       .catch((err) => {
@@ -83,6 +101,7 @@ export function AuthProvider({ children }) {
       const normalized = normalizeUser(res.user);
       setUser(normalized);
       setTenant(normalizeTenant(res.tenant));
+      setPlatform(normalizePlatform(res.platform));
       return normalized;
     } catch {
       // A failed refresh shouldn't tear down the current session state — the
@@ -130,10 +149,11 @@ export function AuthProvider({ children }) {
     });
     setUser(null);
     setTenant(null);
+    setPlatform(normalizePlatform(null));
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, mfaVerify, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

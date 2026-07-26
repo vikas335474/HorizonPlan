@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import { Card, Button, Spinner } from '../components/ui';
 import { ApprovalBadge } from '../components/TemplateUI';
@@ -43,6 +44,10 @@ const EXAMPLE_BANDS = [
 ];
 
 export default function RiskQuestionnaireBuilder() {
+  const { user } = useAuth();
+  // docs/09 Piece 2: approval requires sr_advisor/firm_admin (or super_admin) —
+  // mirrors the server-side requireFirmRole() gate in risk_question_set_approve.php.
+  const canApprove = user?.role === 'super_admin' || user?.firmRole !== 'jr_advisor';
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(null); // 'draft' | 'approved' | null (never created)
   const [questions, setQuestions] = useState([]);
@@ -314,15 +319,19 @@ export default function RiskQuestionnaireBuilder() {
 
                 <div className="flex items-center gap-2">
                   <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-                  {status === 'draft' && (
+                  {status === 'draft' && canApprove && (
                     <Button variant="teal" onClick={handleApprove}>Approve</Button>
                   )}
                 </div>
-                {status === 'draft' && (
+                {status === 'draft' && canApprove && (
                   <p className="mt-2 text-xs text-[var(--color-ink-3)]">
-                    Approving is self-service for now — Phase 1 has no separate "firm principal" role distinct from
-                    advisor, so the approving advisor and the editor may be the same person. Still a deliberate,
-                    logged second step before a suggested return can reach a client plan.
+                    Approving requires senior advisor or firm admin privileges (docs/09 Piece 2) — still the same
+                    deliberate, logged second step before a suggested return can reach a client plan.
+                  </p>
+                )}
+                {status === 'draft' && !canApprove && (
+                  <p className="mt-2 text-xs text-[var(--color-ink-3)]">
+                    Approving this set requires senior advisor or firm admin privileges — ask one of them to review and approve it.
                   </p>
                 )}
               </>

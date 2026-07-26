@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import Modal from './Modal';
 import { Badge, Button, Spinner, EmptyState } from './ui';
 
@@ -338,10 +339,18 @@ export function ApprovalBadge({ status }) {
 }
 
 export function ApproveButton({ templateId, customizationId, approvalStatus, onApproved, size = 'sm' }) {
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   if (approvalStatus === 'approved') return null;
+
+  // docs/09 Piece 2: a jr_advisor can create/fork templates but not approve
+  // them — same server-side gate as templates_approve.php's requireFirmRole()
+  // call, mirrored here so the button doesn't invite a 403. super_admin and
+  // sr_advisor/firm_admin/NULL (pre-migration advisors, treated as
+  // sr_advisor) all still see it.
+  if (user?.role === 'advisor' && user?.firmRole === 'jr_advisor') return null;
 
   async function handleApprove() {
     setBusy(true);

@@ -50,12 +50,13 @@ if (!empty($tenant['white_label_settings'])) {
 }
 
 $advisorsStmt = $db->prepare(
-    "SELECT id, email, created_at FROM users WHERE tenant_id = :tenant_id AND role = 'advisor' ORDER BY created_at ASC"
+    "SELECT id, email, firm_role, created_at FROM users WHERE tenant_id = :tenant_id AND role = 'advisor' ORDER BY created_at ASC"
 );
 $advisorsStmt->execute([':tenant_id' => $tenantId]);
 $advisors = array_map(static fn(array $a): array => [
     'id'         => (int) $a['id'],
     'email'      => $a['email'],
+    'firm_role'  => $a['firm_role'],
     'created_at' => $a['created_at'],
 ], $advisorsStmt->fetchAll());
 

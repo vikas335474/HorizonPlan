@@ -22,7 +22,9 @@ for t in \
   tests/test_password_reset_db.php \
   tests/test_templates_db.php \
   tests/test_risk_profiles_db.php \
-  tests/test_client_portfolio_db.php
+  tests/test_client_portfolio_db.php \
+  tests/test_platform_settings.php \
+  tests/test_firm_roles.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"

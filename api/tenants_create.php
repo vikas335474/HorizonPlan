@@ -46,9 +46,11 @@ if (!in_array($advisoryMode, ['distribution', 'advisory'], true)) {
 // then fail on the user — either both succeed or we stop before touching the DB.
 $advisorEmail = null;
 $advisorPass  = null;
+$advisorFirmRole = null;
 if ($advisor !== null) {
     $advisorEmail = strtolower(trim((string) ($advisor['email'] ?? '')));
     $advisorPass  = (string) ($advisor['temporary_password'] ?? '');
+    $advisorFirmRole = isset($advisor['firm_role']) ? (string) $advisor['firm_role'] : null;
     if ($advisorEmail === '' || !filter_var($advisorEmail, FILTER_VALIDATE_EMAIL)) {
         http_response_code(400);
         echo json_encode(['status' => 'error', 'message' => 'A valid advisor email is required.']);
@@ -57,6 +59,11 @@ if ($advisor !== null) {
     if (strlen($advisorPass) < 8) {
         http_response_code(400);
         echo json_encode(['status' => 'error', 'message' => 'Advisor temporary password must be at least 8 characters.']);
+        exit();
+    }
+    if ($advisorFirmRole !== null && !in_array($advisorFirmRole, ['jr_advisor', 'sr_advisor', 'firm_admin'], true)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => "first_advisor.firm_role must be 'jr_advisor', 'sr_advisor', or 'firm_admin'."]);
         exit();
     }
     $existing = $db->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
@@ -82,6 +89,7 @@ try {
             'email'         => $advisorEmail,
             'password_hash' => password_hash($advisorPass, PASSWORD_BCRYPT),
             'role'          => 'advisor',
+            'firm_role'     => $advisorFirmRole,
         ]);
         $scopedDb->logChange('user', $advisorId, 'created', null,
             json_encode(['email' => $advisorEmail, 'role' => 'advisor']), (int) $session['user_id']);

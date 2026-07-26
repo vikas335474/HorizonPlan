@@ -27,7 +27,7 @@ issueCsrfToken();
 // read to tell the frontend whether this user has MFA enrolled. This drives
 // the soft app-layer MFA gate (redirect unenrolled users to Settings) — the
 // column value itself is never returned, only the boolean derived from it.
-$mfaStmt = $db->prepare("SELECT mfa_secret FROM users WHERE id = :id LIMIT 1");
+$mfaStmt = $db->prepare("SELECT mfa_secret, firm_role FROM users WHERE id = :id LIMIT 1");
 $mfaStmt->execute([':id' => (int) $session['user_id']]);
 $mfaRow = $mfaStmt->fetch();
 
@@ -49,17 +49,27 @@ if ($tenantRow && !empty($tenantRow['white_label_settings'])) {
     }
 }
 
+// docs/09 Piece 1: expose platform-wide MFA enforcement / demo mode so the
+// frontend can skip the forced-enrollment redirect and show the demo banner
+// without a separate round trip.
+$platformSettings = getPlatformSettings($db);
+
 echo json_encode([
     'status' => 'success',
     'user'   => [
         'user_id'      => (int) $session['user_id'],
         'tenant_id'    => (int) $session['tenant_id'],
         'role'         => $session['role'],
+        'firm_role'    => $mfaRow['firm_role'] ?? null,
         'mfa_enrolled' => !empty($mfaRow['mfa_secret']),
     ],
     'tenant' => [
         'company_name'  => $tenantRow['company_name'] ?? null,
         'advisory_mode' => $tenantRow['advisory_mode'] ?? 'distribution',
         'white_label'   => $whiteLabel,
+    ],
+    'platform' => [
+        'mfa_enforcement' => $platformSettings['mfa_enforcement'],
+        'demo_mode'       => $platformSettings['demo_mode'],
     ],
 ]);
