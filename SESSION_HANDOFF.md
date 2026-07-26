@@ -284,7 +284,7 @@ If the user wants to bring in a real UX designer now (for Figma mockups of all s
 - **Tenant-scoped queries:** `/api/lib/TenantScopedDb.php` (insert, select, update, logChange)
 - **TOTP implementation:** `/api/lib/Totp.php` (RFC 6238, no dependencies)
 - **Global Inheritance:** `/api/goals_update.php` (cascade with is_overridden protection)
-- **Live server:** https://lightskyblue-beaver-537320.hostingersite.com/ (after deploy, should land on `/login` or `/` depending on session)
+- **Live server:** https://the2ndinning.com/ (after deploy, should land on `/login` or `/` depending on session)
 
 ---
 
