@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import ScenarioPanel from '../components/ScenarioPanel';
@@ -23,6 +24,16 @@ import { presetsForGoalType } from '../lib/strategyPresets';
 export default function GoalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // goals_update.php / goals_apply_template.php are advisor-only server-side
+  // (verifyAccess($db, 'advisor')) — this page is shared by both roles per
+  // App.jsx's own routing comment, but nothing here previously checked role,
+  // so a client viewing their own goal saw Edit/"Apply a template" buttons
+  // that would just 403 if clicked. Scenario creation/editing (ScenarioPanel,
+  // strategy presets) stays visible for a client — subscenarios_create.php/
+  // subscenarios_update.php are genuinely verifyAccessAny(['advisor','client']),
+  // so those aren't broken for a client session.
+  const isAdvisor = user?.role === 'advisor' || user?.role === 'super_admin';
   const [goal, setGoal] = useState(null);
   const [subScenarios, setSubScenarios] = useState(null);
   const [error, setError] = useState('');
@@ -390,7 +401,7 @@ export default function GoalDetail() {
             <Card className="p-5 mb-4">
               <div className="flex items-center justify-between gap-3 mb-1">
                 <h2 className="text-base font-semibold text-[var(--color-ink)]">Plan parameters</h2>
-                {!editingBasics && (
+                {!editingBasics && isAdvisor && (
                   <Button variant="outline" size="sm" onClick={startEditingBasics}>
                     Edit
                   </Button>
@@ -549,9 +560,11 @@ export default function GoalDetail() {
               <Card className="p-4 mb-4">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <h2 className="text-base font-semibold text-[var(--color-ink)]">Strategy template</h2>
-                  <Button variant="outline" size="sm" onClick={() => setApplyModalOpen(true)}>
-                    Apply a template
-                  </Button>
+                  {isAdvisor && (
+                    <Button variant="outline" size="sm" onClick={() => setApplyModalOpen(true)}>
+                      Apply a template
+                    </Button>
+                  )}
                 </div>
                 <p className="text-xs text-[var(--color-ink-2)]">
                   {appliedSourceName
@@ -569,7 +582,7 @@ export default function GoalDetail() {
               <Card className="p-4 mb-4">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <h2 className="text-base font-semibold text-[var(--color-ink)]">Accumulation phase</h2>
-                  {!editingAccumulation && (
+                  {!editingAccumulation && isAdvisor && (
                     <Button variant="outline" size="sm" onClick={startEditingAccumulation}>
                       {goal.current_age !== null ? 'Edit' : 'Add saving years'}
                     </Button>
@@ -660,7 +673,7 @@ export default function GoalDetail() {
               <Card className="p-4 mb-4">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <h2 className="text-base font-semibold text-[var(--color-ink)]">Corpus composition</h2>
-                  {!editingCorpus && (
+                  {!editingCorpus && isAdvisor && (
                     <Button variant="outline" size="sm" onClick={startEditingCorpus}>
                       {goal.liquid_corpus_amount !== null ? 'Edit' : 'Split corpus'}
                     </Button>
