@@ -63,8 +63,13 @@ if (!empty($user['mfa_secret'])) {
     exit();
 }
 
-// MFA not yet enrolled — issue a full session. Once MFA enrollment is
-// mandatory (post-MVP), this branch should redirect to enrollment instead.
+// MFA not yet enrolled — issue a full session anyway (issueSession() has no
+// concept of enrollment state, and login.php has no reason to grow one).
+// MFA enrollment is mandatory (see "Security status" in CLAUDE.md): the
+// session this creates works for mfa_enroll.php, session.php, and logout.php
+// only — verifyAccess()/verifyAccessAny() 403 everything else until the user
+// completes enrollment. The frontend's ProtectedRoute redirects to /settings
+// off the mfa_enrolled flag below rather than the user hitting a wall of 403s.
 issueSession($db, (int) $user['id'], (int) $user['tenant_id'], $user['role']);
 
 echo json_encode([

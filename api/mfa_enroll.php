@@ -28,7 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db      = getPdo();
-$session = verifyAccessAny($db, ['client', 'advisor', 'super_admin']);
+// $requireMfaEnrolled = false — this endpoint IS the way an unenrolled user
+// enrolls. Gating it on enrollment (the default in verifyAccessAny()) would
+// make mandatory MFA impossible to ever complete.
+$session = verifyAccessAny($db, ['client', 'advisor', 'super_admin'], false);
 $userId  = (int) $session['user_id'];
 
 // Check if MFA is already enrolled

@@ -54,8 +54,10 @@ export default function App() {
           {/* docs/07 Bet 5 — full-screen guided presentation for a live client meeting */}
           <Route path="/goals/:id/meeting" element={<ProtectedRoute><MeetingMode /></ProtectedRoute>} />
 
-          {/* MFA enrollment is optional (not mandatory) — no route gates on it.
-              The nudge to enrol lives in AppHeader (amber dot on Settings). */}
+          {/* MFA enrollment is mandatory — ProtectedRoute redirects any
+              unenrolled session to /settings (state.mfaRequired), backed by a
+              server-side 403 on every other endpoint. AppHeader's amber dot
+              is a secondary nudge on top of the gate, not the only signal. */}
           {/* Super Admin console — role is enforced server-side on every
               endpoint; AdminConsole also client-guards and redirects non-admins. */}
           <Route path="/admin" element={<ProtectedRoute><AdminConsole /></ProtectedRoute>} />
