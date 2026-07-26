@@ -71,6 +71,10 @@ $result = array_map(static function (array $goal): array {
         'drawdown_return_rate'     => $drawdownReturnRate,
         'projection_horizon_years' => (int) $goal['projection_horizon_years'],
         'readiness_score'          => $readinessScore,
+        // Jr -> Sr Advisor Plan-Approval Workflow — same convention as
+        // readiness_score above: always present, 'not_required' for a firm
+        // that hasn't opted into review or a non-advice-bearing goal.
+        'review_status'            => $goal['review_status'],
     ];
 }, $goals);
 

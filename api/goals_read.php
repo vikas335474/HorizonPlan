@@ -90,6 +90,12 @@ echo json_encode([
         'applied_template_id'      => $goal['applied_template_id'] !== null ? (int) $goal['applied_template_id'] : null,
         'applied_customization_id' => $goal['applied_customization_id'] !== null ? (int) $goal['applied_customization_id'] : null,
         'projection_horizon_years' => (int) $goal['projection_horizon_years'],
+        // Jr -> Sr Advisor Plan-Approval Workflow — 'not_required' unless the
+        // tenant has opted in and this goal has actually entered the workflow.
+        'review_status'           => $goal['review_status'],
+        'reviewed_by_user_id'     => $goal['reviewed_by_user_id'] !== null ? (int) $goal['reviewed_by_user_id'] : null,
+        'reviewed_at'             => $goal['reviewed_at'],
+        'review_notes'            => $goal['review_notes'],
         // Computed, never stored — docs/02 Section 4.2.
         'corpus_multiple'          => PlanMath::corpusMultiple($effectiveWithdrawalRate),
     ],
