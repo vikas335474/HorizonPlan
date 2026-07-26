@@ -7,7 +7,9 @@ import GoalCard from '../components/GoalCard';
 import Modal from '../components/Modal';
 import { RiskProfileSummary } from '../components/RiskProfileUI';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
+import { ReadinessScoreBadge } from '../components/ReadinessScore';
 import { Card, EmptyState, Spinner, Button } from '../components/ui';
+import { formatCurrency } from '../lib/format';
 
 // Advisor drills into one client from the dashboard. clientId comes from the
 // route; goals_list.php accepts client_id for advisor/super_admin sessions and
@@ -60,6 +62,11 @@ export default function ClientGoals() {
           <DisclosureBanner />
         </div>
 
+        {/* docs/08 gap #5 "client overview depth" — a consolidated glance at
+            this client's goals before drilling into the portfolio/risk/goal
+            cards below. */}
+        {goals && goals.length > 0 && <GoalsHealthSummary goals={goals} />}
+
         {/* docs/05 item 3 / docs/06 corpus composition — what the client already
             owns, independent of any one goal. */}
         <ClientPortfolioCard clientId={clientId} />
@@ -102,6 +109,43 @@ export default function ClientGoals() {
         onCreated={() => { setAddOpen(false); load(); }}
       />
     </div>
+  );
+}
+
+// Total tracked corpus and the worst-scoring retirement goal's readiness, in
+// one glance — complements RiskProfileSummary/ClientPortfolioCard below,
+// which are about the client as a person, not their goals specifically.
+function GoalsHealthSummary({ goals }) {
+  const totalCorpus = goals.reduce((sum, g) => sum + g.initial_net_worth, 0);
+  const scored = goals.filter((g) => g.readiness_score !== null && g.readiness_score !== undefined);
+  const worst = scored.length > 0
+    ? scored.reduce((min, g) => (g.readiness_score < min.readiness_score ? g : min))
+    : null;
+
+  return (
+    <Card className="p-4 mb-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">Goals</div>
+          <div className="tnum text-base font-semibold text-[var(--color-ink)]">{goals.length}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">Tracked corpus</div>
+          <div className="tnum text-base font-semibold text-[var(--color-ink)]">{formatCurrency(totalCorpus)}</div>
+        </div>
+        {worst ? (
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">Lowest readiness</div>
+            <div className="mt-0.5 flex items-center gap-2">
+              <ReadinessScoreBadge score={worst.readiness_score} />
+              <span className="text-xs text-[var(--color-ink-2)] truncate max-w-[12rem]">{worst.goal_label}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-[var(--color-ink-3)]">No projectable retirement goal yet</span>
+        )}
+      </div>
+    </Card>
   );
 }
 

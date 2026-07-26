@@ -138,6 +138,67 @@ final class PlanMath
     }
 
     /**
+     * The corpus-composition branch shared by goals_projection.php (full
+     * series, for its chart) and readinessScoreForGoal() below (score only,
+     * for list-view "at a glance" signals) — picks the two-bucket methods
+     * when a goal has actually decomposed its corpus (all three of
+     * liquidCorpusAmount/lockedCorpusAmount/lockedReturnRatePercent set),
+     * otherwise the original single-bucket methods. Extracted so the two
+     * call sites can't silently drift on which condition triggers which
+     * series, same reasoning as the adverseReturnSequence() extraction below.
+     *
+     * @return array{0: float[], 1: float[]} [steadySeries, adverseSeries]
+     */
+    public static function decumulationSeriesForGoal(
+        float $initialNetWorth,
+        float $withdrawalRatePercent,
+        float $inflationRatePercent,
+        float $drawdownReturnRatePercent,
+        int $horizonYears,
+        ?float $liquidCorpusAmount = null,
+        ?float $lockedCorpusAmount = null,
+        ?float $lockedReturnRatePercent = null
+    ): array {
+        if ($liquidCorpusAmount !== null && $lockedCorpusAmount !== null && $lockedReturnRatePercent !== null) {
+            return [
+                self::twoBucketDecumulationSeries($liquidCorpusAmount, $lockedCorpusAmount, $withdrawalRatePercent, $inflationRatePercent, $drawdownReturnRatePercent, $lockedReturnRatePercent, $horizonYears),
+                self::twoBucketAdverseSequenceSeries($liquidCorpusAmount, $lockedCorpusAmount, $withdrawalRatePercent, $inflationRatePercent, $drawdownReturnRatePercent, $lockedReturnRatePercent, $horizonYears),
+            ];
+        }
+
+        return [
+            self::steadyReturnSeries($initialNetWorth, $withdrawalRatePercent, $inflationRatePercent, $drawdownReturnRatePercent, $horizonYears),
+            self::adverseSequenceSeries($initialNetWorth, $withdrawalRatePercent, $inflationRatePercent, $drawdownReturnRatePercent, $horizonYears),
+        ];
+    }
+
+    /**
+     * Readiness score for a goal's own (non-overridden) values — a thin
+     * wrapper over decumulationSeriesForGoal() + readinessScore() for callers
+     * that only need the number, not the series (goals_list.php and
+     * clients_list.php's at-a-glance signals; goals_projection.php needs the
+     * series too, for its chart, so it calls decumulationSeriesForGoal()
+     * directly instead of this). Sub-scenario overrides are a caller concern —
+     * this always scores the goal's own baseline values.
+     */
+    public static function readinessScoreForGoal(
+        float $initialNetWorth,
+        float $withdrawalRatePercent,
+        float $inflationRatePercent,
+        float $drawdownReturnRatePercent,
+        int $horizonYears,
+        ?float $liquidCorpusAmount = null,
+        ?float $lockedCorpusAmount = null,
+        ?float $lockedReturnRatePercent = null
+    ): ?int {
+        [$steady, $adverse] = self::decumulationSeriesForGoal(
+            $initialNetWorth, $withdrawalRatePercent, $inflationRatePercent, $drawdownReturnRatePercent, $horizonYears,
+            $liquidCorpusAmount, $lockedCorpusAmount, $lockedReturnRatePercent
+        );
+        return self::readinessScore($withdrawalRatePercent, $steady, $adverse);
+    }
+
+    /**
      * Fraction of years 1..N (index 0 is the starting balance, excluded)
      * that stayed non-negative. Depletes at the first negative year -> the
      * fraction of years survived before that point. Never depletes -> 1.0.

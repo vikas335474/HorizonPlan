@@ -119,13 +119,10 @@ if ($hasCorpusComposition && $lockedReturnRate === null) {
     exit();
 }
 
-if ($hasCorpusComposition) {
-    $steady = PlanMath::twoBucketDecumulationSeries($liquidCorpusAmount, $lockedCorpusAmount, $withdrawalRate, $inflationRate, $drawdownReturnRate, $lockedReturnRate, $horizonYears);
-    $adverse = PlanMath::twoBucketAdverseSequenceSeries($liquidCorpusAmount, $lockedCorpusAmount, $withdrawalRate, $inflationRate, $drawdownReturnRate, $lockedReturnRate, $horizonYears);
-} else {
-    $steady = PlanMath::steadyReturnSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
-    $adverse = PlanMath::adverseSequenceSeries($initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears);
-}
+[$steady, $adverse] = PlanMath::decumulationSeriesForGoal(
+    $initialNetWorth, $withdrawalRate, $inflationRate, $drawdownReturnRate, $horizonYears,
+    $liquidCorpusAmount, $lockedCorpusAmount, $lockedReturnRate
+);
 
 $response = [
     'status'     => 'success',
