@@ -12,11 +12,19 @@ import { Card, Button, Badge } from '../components/ui';
 // back to wherever the user was actually headed (location.state.from) rather
 // than always landing on the dashboard.
 export default function Settings() {
-  const { user, refreshSession } = useAuth();
+  const { user, tenant, refreshSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const mfaRequired = location.state?.mfaRequired === true;
   const continuePath = location.state?.from?.pathname || '/';
+
+  // Branding self-service is a firm_admin-only affordance (docs/02 3.6 /
+  // CLAUDE.md rule #2): the server (tenant_update.php) already lets a
+  // firm_admin write their own tenant's white_label, but the only editor used
+  // to live in the super_admin AdminConsole. This surfaces the same edit for
+  // the firm's own admin — advisory_mode stays super_admin-only and is never
+  // exposed here. jr_advisor/sr_advisor and clients never see this section.
+  const canBrand = user?.role === 'advisor' && user?.firmRole === 'firm_admin';
 
   return (
     <div className="min-h-screen">
@@ -24,7 +32,9 @@ export default function Settings() {
       <main className="mx-auto max-w-2xl px-5 py-8">
         <h1 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Settings</h1>
         <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
-          Manage two-factor authentication and your password.
+          {canBrand
+            ? 'Manage two-factor authentication, your password, and your firm’s branding.'
+            : 'Manage two-factor authentication and your password.'}
         </p>
 
         {mfaRequired && !user?.mfaEnrolled && (
@@ -52,9 +62,150 @@ export default function Settings() {
             onContinue={() => navigate(continuePath, { replace: true })}
           />
           <PasswordSection />
+          {canBrand && (
+            <BrandingSection
+              tenantId={user.tenantId}
+              companyName={tenant?.companyName}
+              whiteLabel={tenant?.whiteLabel}
+              onSaved={refreshSession}
+            />
+          )}
         </div>
       </main>
     </div>
+  );
+}
+
+// Firm-admin white-label editor. Writes the firm's own tenant via the same
+// tenant_update.php white_label path the super_admin console uses, then
+// refreshes the session so AppHeader's logo/name and the app-wide brand colour
+// (AuthContext applies primary_color to --color-teal) update immediately,
+// without a reload. advisory_mode is deliberately absent — that stays a
+// super_admin-only compliance control.
+function BrandingSection({ tenantId, companyName, whiteLabel, onSaved }) {
+  const wl = whiteLabel || {};
+  const [name, setName] = useState(wl.company_name || '');
+  const [logoUrl, setLogoUrl] = useState(wl.logo_url || '');
+  const [color, setColor] = useState(wl.primary_color || '#0f766e');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Validate the colour client-side to the same #rrggbb shape the server
+  // enforces, so a hand-typed value can't silently drop on save.
+  const colorValid = /^#[0-9a-fA-F]{6}$/.test(color);
+
+  async function save() {
+    setError(''); setSuccess('');
+    if (color && !colorValid) {
+      setError('Primary colour must be a 6-digit hex value like #0f766e.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = {
+        ...(name.trim() ? { company_name: name.trim() } : {}),
+        ...(logoUrl.trim() ? { logo_url: logoUrl.trim() } : {}),
+        ...(colorValid ? { primary_color: color.toLowerCase() } : {}),
+      };
+      await api.updateTenant(tenantId, { white_label: Object.keys(payload).length ? payload : null });
+      await onSaved();
+      setSuccess('Branding saved — it’s live across your client views now.');
+    } catch (err) {
+      setError(err.message || 'Could not save branding.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reset() {
+    setError(''); setSuccess('');
+    setBusy(true);
+    try {
+      await api.updateTenant(tenantId, { white_label: null });
+      setName(''); setLogoUrl(''); setColor('#0f766e');
+      await onSaved();
+      setSuccess('Branding removed — back to the HorizonPlan default.');
+    } catch (err) {
+      setError(err.message || 'Could not reset branding.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const previewColor = colorValid ? color : '#0f766e';
+  const previewName = name.trim() || companyName || 'Your firm';
+
+  return (
+    <SectionCard
+      title="Firm branding"
+      description="Your firm’s name, logo and accent colour — shown across every client-facing view, the client report and Meeting Mode."
+    >
+      {/* Live preview of the client-facing header, same idea as the console's. */}
+      <div
+        className="mb-5 flex items-center gap-3 rounded-[var(--radius-card)] border border-[var(--color-line-2)] px-4 py-3"
+        style={{ background: `color-mix(in srgb, ${previewColor} 8%, var(--color-surface))` }}
+      >
+        {logoUrl.trim() ? (
+          <img src={logoUrl.trim()} alt="" className="h-8 w-8 rounded object-cover" />
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded text-xs font-semibold text-white" style={{ background: previewColor }}>
+            {previewName.slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div>
+          <p className="text-sm font-semibold" style={{ color: previewColor }}>{previewName}</p>
+          <p className="text-[11px] text-[var(--color-ink-3)]">How your client-facing header will look</p>
+        </div>
+      </div>
+
+      <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Display name</label>
+      <input
+        className="field mb-4" value={name} onChange={(e) => setName(e.target.value)}
+        placeholder={companyName || 'Your firm’s name'}
+      />
+
+      <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Logo URL</label>
+      <input
+        className="field mb-1.5" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)}
+        placeholder="https://…/logo.svg"
+      />
+      <p className="mb-4 text-xs text-[var(--color-ink-3)]">
+        Paste a link to a hosted image (SVG or PNG works best). File upload isn’t supported yet.
+      </p>
+
+      <label className="block text-sm font-medium text-[var(--color-ink-2)] mb-1.5">Primary colour</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color" value={colorValid ? color : '#0f766e'}
+          onChange={(e) => setColor(e.target.value)}
+          className="h-9 w-10 rounded border border-[var(--color-line-2)]"
+          aria-label="Primary colour picker"
+        />
+        <input
+          className="field tnum max-w-[10rem]" value={color}
+          onChange={(e) => setColor(e.target.value)} placeholder="#0f766e"
+        />
+      </div>
+
+      {error && (
+        <p className="mt-4 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2"
+           style={{ color: 'var(--color-alert)' }}>
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-teal-soft)] px-3 py-2"
+           style={{ color: 'var(--color-teal-ink)' }}>
+          {success}
+        </p>
+      )}
+
+      <div className="mt-5 flex gap-2">
+        <Button onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save branding'}</Button>
+        <Button variant="ghost" onClick={reset} disabled={busy}>Reset to default</Button>
+      </div>
+    </SectionCard>
   );
 }
 
