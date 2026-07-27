@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HorizonPlan — One-Pager</title>
+<meta name="description" content="HorizonPlan: retirement & goal planning for Indian MFDs, IFAs and SEBI-RIA firms — the planning and client-conversation layer.">
+<style>html,body{margin:0;padding:0;}</style>
+</head>
+<body>
+<style>
+  :root {
+    --paper: #f6f8f8;
+    --surface: #ffffff;
+    --ink: #10201d;
+    --ink-2: #3f5551;
+    --ink-3: #6f8480;
+    --line: #e2e9e7;
+    --line-2: #cfdad7;
+    --teal: #0e7c6b;
+    --teal-ink: #0a5c50;
+    --teal-soft: #e4f1ee;
+    --amber: #e0912f;
+    --amber-soft: #fbefdc;
+    --shadow: 0 1px 2px rgba(16,32,29,.05), 0 8px 24px -12px rgba(16,32,29,.12);
+    --radius: 14px;
+    --maxw: 940px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b1412;
+      --surface: #101c19;
+      --ink: #eaf2f0;
+      --ink-2: #a9bcb7;
+      --ink-3: #748984;
+      --line: #1d2d29;
+      --line-2: #2a3e39;
+      --teal: #3fd6bd;
+      --teal-ink: #6fe3ce;
+      --teal-soft: #12332d;
+      --amber: #f0b055;
+      --amber-soft: #33260f;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0b1412; --surface: #101c19; --ink: #eaf2f0; --ink-2: #a9bcb7; --ink-3: #748984;
+    --line: #1d2d29; --line-2: #2a3e39; --teal: #3fd6bd; --teal-ink: #6fe3ce; --teal-soft: #12332d;
+    --amber: #f0b055; --amber-soft: #33260f; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #f6f8f8; --surface: #ffffff; --ink: #10201d; --ink-2: #3f5551; --ink-3: #6f8480;
+    --line: #e2e9e7; --line-2: #cfdad7; --teal: #0e7c6b; --teal-ink: #0a5c50; --teal-soft: #e4f1ee;
+    --amber: #e0912f; --amber-soft: #fbefdc; --shadow: 0 1px 2px rgba(16,32,29,.05), 0 8px 24px -12px rgba(16,32,29,.12);
+  }
+
+  * { box-sizing: border-box; }
+  .hp { background: var(--paper); color: var(--ink); font-family: var(--sans); line-height: 1.55;
+        -webkit-font-smoothing: antialiased; padding: 40px 20px 64px; }
+  .hp-wrap { max-width: var(--maxw); margin: 0 auto; }
+  .hp h1, .hp h2, .hp h3 { text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+  .tnum { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal-ink); }
+
+  /* Masthead */
+  .mast { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
+  .mark { flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+          border-radius: 11px; background: var(--teal-soft); }
+  .brand { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; }
+  .brand-sub { font-size: 12.5px; color: var(--ink-3); margin-top: 1px; }
+
+  /* Hero */
+  .hero { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+          box-shadow: var(--shadow); padding: 34px 34px 30px; position: relative; overflow: hidden; }
+  .hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px;
+                 border-radius: 50%; background: radial-gradient(circle, var(--teal-soft), transparent 68%); pointer-events: none; }
+  .hero h1 { font-size: clamp(26px, 4.4vw, 40px); font-weight: 750; line-height: 1.08; max-width: 20ch; }
+  .hero .lede { margin-top: 16px; font-size: clamp(15px, 2vw, 17px); color: var(--ink-2); max-width: 62ch; }
+  .hero .lede strong { color: var(--ink); font-weight: 650; }
+  .rule { position: relative; z-index: 1; margin: 26px 0 0; height: 44px; }
+
+  /* Section titles */
+  .sec-title { display: flex; align-items: baseline; gap: 12px; margin: 40px 0 16px; }
+  .sec-title h2 { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+  .sec-title .hairline { flex: 1; height: 1px; background: var(--line-2); }
+
+  /* Feature grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 16px;
+          box-shadow: var(--shadow); }
+  .card .k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+             color: var(--amber); margin-bottom: 9px; }
+  .card h3 { font-size: 15px; font-weight: 680; margin-bottom: 5px; }
+  .card p { margin: 0; font-size: 13px; color: var(--ink-2); }
+  .card + .card { }
+  .feat { display: flex; gap: 9px; align-items: flex-start; margin-top: 11px; }
+  .feat:first-of-type { margin-top: 12px; }
+  .tick { flex: none; margin-top: 2px; }
+  .feat .ft { font-size: 13px; }
+  .feat .ft b { font-weight: 650; color: var(--ink); }
+  .feat .ft span { color: var(--ink-2); }
+
+  /* Live-today band */
+  .live { background: var(--teal-soft); border: 1px solid color-mix(in srgb, var(--teal) 22%, transparent);
+          border-radius: var(--radius); padding: 22px 26px; margin-top: 40px; }
+  .live h2 { font-size: 15px; font-weight: 700; color: var(--teal-ink); margin-bottom: 4px; }
+  .live p.sub { font-size: 13px; color: var(--ink-2); margin: 0 0 14px; }
+  .live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 22px; }
+  .live-grid div { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink); }
+
+  /* Fit note */
+  .fit { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-top: 22px; }
+  @media (max-width: 640px) { .fit { grid-template-columns: 1fr; } }
+  .fit .box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .fit .box h3 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .fit .box.amber h3 { color: var(--amber); }
+  .fit .box p { margin: 0; font-size: 13px; color: var(--ink-2); }
+
+  /* CTA */
+  .cta { margin-top: 40px; background: var(--ink); color: var(--paper); border-radius: var(--radius);
+         padding: 28px 30px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+  :root[data-theme="dark"] .cta, :root:not([data-theme="light"]) .cta { }
+  @media (prefers-color-scheme: dark) { .cta { background: #06110e; } }
+  :root[data-theme="dark"] .cta { background: #06110e; }
+  :root[data-theme="light"] .cta { background: var(--ink); }
+  .cta h2 { font-size: 19px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+  .cta p { margin: 5px 0 0; font-size: 13.5px; color: #c6d6d2; max-width: 46ch; }
+  .cta .pill { flex: none; font-family: var(--sans); font-size: 14px; font-weight: 650; color: #06110e;
+               background: var(--teal); padding: 12px 20px; border-radius: 10px; }
+
+  .foot { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between;
+          font-size: 11.5px; color: var(--ink-3); }
+  .foot .badges { display: flex; gap: 14px; flex-wrap: wrap; }
+  .foot .badges span { display: inline-flex; align-items: center; gap: 5px; }
+
+  @media print {
+    .hp { background: #fff; color: #000; padding: 0; }
+    .hero, .card, .fit .box { box-shadow: none; }
+    .cta { background: #10201d !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+
+<div class="hp">
+  <div class="hp-wrap">
+
+    <div class="mast">
+      <span class="mark" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 22 22" fill="none">
+          <line x1="2" y1="15" x2="20" y2="15" stroke="var(--line-2)" stroke-width="1.5"/>
+          <path d="M4 15 L11 6 L18 11" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="18" cy="11" r="2" fill="var(--amber)"/>
+        </svg>
+      </span>
+      <div>
+        <div class="brand">HorizonPlan</div>
+        <div class="brand-sub">Retirement &amp; goal planning for Indian MFDs, IFAs and SEBI-RIA firms</div>
+      </div>
+    </div>
+
+    <section class="hero">
+      <p class="eyebrow" style="margin-bottom:12px;">The planning &amp; client-conversation layer</p>
+      <h1>Retirement plans your clients can actually feel.</h1>
+      <p class="lede">
+        Model corpus, inflation and withdrawal rates built for Indian markets — then show clients
+        the <strong>sequence-of-returns risk that spreadsheets hide</strong>, in a meeting they'll
+        remember. Not a back-office bolt-on: a planning tool that's deep, modern, and pleasant to use.
+      </p>
+      <svg class="rule" viewBox="0 0 900 44" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="0" y1="40" x2="900" y2="40" stroke="var(--line-2)" stroke-width="1.5"/>
+        <path d="M0 38 C 220 34, 430 20, 640 13 S 860 5, 900 4" stroke="var(--teal)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <circle cx="900" cy="4" r="4.5" fill="var(--amber)"/>
+      </svg>
+    </section>
+
+    <div class="sec-title"><h2>What HorizonPlan does</h2><span class="hairline"></span></div>
+    <div class="grid">
+
+      <div class="card">
+        <div class="k">Plan</div>
+        <h3>Goals, modelled properly</h3>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Multi-goal</b> <span>— retirement, education, home, and more, per client.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Accumulation → decumulation</b> <span>— SIP with annual step-up and the drawdown years as one continuous lifecycle.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Corpus composition</b> <span>— split liquid vs. locked (EPF/NPS/PPF) buckets, spend liquid first.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>What-if scenarios</b> <span>— vary assumptions without touching the base plan; a cascade keeps the rest in sync.</span></span></div>
+      </div>
+
+      <div class="card">
+        <div class="k">See the risk</div>
+        <h3>The story numbers alone miss</h3>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Retirement Readiness Score</b> <span>— one 0–100 number a client can hold onto.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Sequence-of-returns chart</b> <span>— steady vs. a bad early decade, from the same average return.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Historical replay</b> <span>— replay a real market year and see what actually happened to the corpus.</span></span></div>
+      </div>
+
+      <div class="card">
+        <div class="k">Present</div>
+        <h3>Built for the meeting</h3>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Meeting Mode</b> <span>— a full-screen, presentation-ready walkthrough for the room.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Client report</b> <span>— a clean, shareable leave-behind of the plan.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>White-label branding</b> <span>— your firm's name and logo across every client view.</span></span></div>
+      </div>
+
+      <div class="card">
+        <div class="k">Clients &amp; portfolio</div>
+        <h3>Their money, in view</h3>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Client self-service login</b> <span>— clients see their own goals, run the sliders, view their portfolio read-only, anytime.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Portfolio ledger</b> <span>— assets and liabilities, liquid/locked, net worth — import a CAS / MFCentral CSV.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Daily MF price sync</b> <span>— mutual-fund holdings refreshed from cached NAVs.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Risk questionnaire</b> <span>— your firm's own questions and scoring, approval-gated.</span></span></div>
+      </div>
+
+      <div class="card">
+        <div class="k">Govern &amp; secure</div>
+        <h3>Oversight, not an afterthought</h3>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Firm roles + approval workflow</b> <span>— Jr → Sr advisor sign-off on advice before it reaches a client.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Full audit trail</b> <span>— every plan change: who, what, and when.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>SEBI-aware disclosures</b> <span>— the right compliance copy on every client-facing view.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Secure by default</b> <span>— two-factor (authenticator or Google), strict per-firm data isolation.</span></span></div>
+      </div>
+
+      <div class="card">
+        <div class="k">Get started</div>
+        <h3>Live in minutes</h3>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Self-serve trial</b> <span>— create your firm and your first plan without a sales call.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Try a live demo</b> <span>— explore a fully populated firm before you sign up.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Guided onboarding</b> <span>— a checklist and an in-app feature guide walk you through the first client.</span></span></div>
+        <div class="feat"><span class="tick">◆</span><span class="ft"><b>Works on any device</b> <span>— a fast, modern, mobile-responsive web app.</span></span></div>
+      </div>
+
+    </div>
+
+    <div class="live">
+      <h2>What's live today</h2>
+      <p class="sub">Everything below is built and working — not a roadmap.</p>
+      <div class="live-grid">
+        <div><span class="tick">✓</span> Multi-goal accumulation &amp; decumulation modelling</div>
+        <div><span class="tick">✓</span> Retirement Readiness Score</div>
+        <div><span class="tick">✓</span> Sequence-of-returns &amp; historical replay</div>
+        <div><span class="tick">✓</span> Corpus composition (liquid / locked)</div>
+        <div><span class="tick">✓</span> What-if scenarios with cascade</div>
+        <div><span class="tick">✓</span> Meeting Mode presentation</div>
+        <div><span class="tick">✓</span> Shareable client report</div>
+        <div><span class="tick">✓</span> Client self-service login</div>
+        <div><span class="tick">✓</span> Portfolio ledger + CAS/CSV import</div>
+        <div><span class="tick">✓</span> Daily MF NAV price sync</div>
+        <div><span class="tick">✓</span> Firm's own risk questionnaire</div>
+        <div><span class="tick">✓</span> Strategy templates (approval-gated)</div>
+        <div><span class="tick">✓</span> Jr → Sr plan-approval workflow</div>
+        <div><span class="tick">✓</span> Full change audit trail</div>
+        <div><span class="tick">✓</span> White-label branding</div>
+        <div><span class="tick">✓</span> Two-factor auth + per-firm isolation</div>
+      </div>
+    </div>
+
+    <div class="fit">
+      <div class="box">
+        <h3>Where HorizonPlan fits</h3>
+        <p>HorizonPlan is the <b style="color:var(--ink)">planning and client-relationship layer</b>. It's deliberately deep on the retirement story, the meeting, and the record — the part transaction platforms treat as a bolt-on. Keep your back-office; make the planning and the client experience genuinely good.</p>
+      </div>
+      <div class="box amber">
+        <h3>What it isn't</h3>
+        <p>Not a transaction back-office. HorizonPlan doesn't place orders, do Video KYC, or reconcile commissions — it focuses on advice, not execution. Straight about the boundary, on purpose.</p>
+      </div>
+    </div>
+
+    <div class="cta">
+      <div>
+        <h2>The number a client can hold onto.</h2>
+        <p>The meeting, the follow-through, and the record — for the retirement conversation that actually earns trust.</p>
+      </div>
+      <span class="pill">Start a free trial</span>
+    </div>
+
+    <div class="foot">
+      <div class="badges">
+        <span>◆ Tenant-isolated</span>
+        <span>◆ 2FA secured</span>
+        <span>◆ SEBI-aware disclosures</span>
+        <span>◆ Built for Indian markets</span>
+      </div>
+      <div>HorizonPlan — one-pager · features shown are live as of July 2026</div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
