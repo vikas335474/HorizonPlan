@@ -1,3 +1,9 @@
+// Route /risk-questionnaire — where an advisor authors the FIRM's own risk
+// question set + scoring rubric and approves it (api.updateRiskQuestionSet,
+// approveRiskQuestionSet). Approval is gated to sr_advisor / firm_admin (or
+// super_admin) server-side. HorizonPlan never authors these — the mechanism is
+// supplied, the content is the firm's (guardrail 2).
+
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';

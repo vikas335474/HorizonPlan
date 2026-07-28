@@ -1,3 +1,10 @@
+// Route /admin — the Super Admin console. Client-guards to super_admin (redirects
+// everyone else) on top of the server-side gate on every endpoint it touches.
+// Tabs: Platform (api.getPlatformSettings / updatePlatformSettings /
+// resetDemoData), Firms (api.getTenantDetail / createTenant / updateTenant /
+// createAdvisor), and the global Strategy Templates library (api.listTemplates /
+// getTemplateAudit).
+
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../lib/api';

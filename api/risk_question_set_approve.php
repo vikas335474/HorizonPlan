@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Risk profiler authoring: approve the tenant's risk question set. POST,
+// advisor session, and additionally requires firm role sr_advisor or firm_admin
+// (or super_admin) — a jr_advisor may author but not approve (docs/09 Piece 2).
+// Tenant-scoped; every set is tenant-owned (no global/system set exists, unlike
+// templates), so this is always a plain scoped update. Idempotent if already
+// approved. Output: {status, question_set_id}. Errors: 403 (insufficient firm
+// role), 404 (no set yet), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

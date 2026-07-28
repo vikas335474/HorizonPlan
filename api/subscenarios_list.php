@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: list the what-if sub_scenarios under a goal. GET, advisor
+// OR client (a client only on their own goal, 403 otherwise). Tenant-scoped.
+// Input: ?base_plan_id=. Output: {status, sub_scenarios[]} with each override
+// field and the is_overridden flag. Errors: 400 (missing base_plan_id),
+// 403 (not your goal), 404 (goal), 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

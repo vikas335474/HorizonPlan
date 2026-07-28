@@ -1,6 +1,20 @@
 <?php
 declare(strict_types=1);
 
+// Planning engine surface (docs/07 Bets 2/3, docs/06): compute a goal's
+// projection series and Retirement Readiness Score. GET, advisor OR client
+// (client only their own goal, 403 otherwise). Retirement goals only (400).
+// Tenant-scoped read; all math is pure PlanMath (no DB writes).
+//
+// Applies sub-scenario overrides when ?sub_scenario_id= is an active override,
+// else the parent's own values. Always returns steady + adverse decumulation
+// series and the 0-100 readiness_score; adds a two-bucket corpus_composition
+// when the goal has a liquid/locked split, accumulation + lifecycle series when
+// it has ages + an accumulation rate, and a historical replay series when
+// ?replay_start_year= is given (flagged verified/unverified per market_history).
+// Errors: 400 (non-retirement / missing rates / unknown replay year),
+// 403 (not your goal), 404 (goal / sub-scenario), 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

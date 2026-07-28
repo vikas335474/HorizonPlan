@@ -1,6 +1,21 @@
 <?php
 declare(strict_types=1);
 
+// Client portfolio ledger (docs/05 item 3 / docs/10 P0): add ONE asset or
+// liability row to a client's balance sheet. POST, advisor-only (verifyAccess
+// 'advisor'; super_admin also passes) — the advisor records the client's
+// holdings. Tenant-scoped via TenantScopedDb; the target client must be a
+// 'client' in the acting advisor's tenant (404 otherwise).
+//
+// Inputs (JSON body): client_id, item_kind (asset|liability), category, and
+// either a plain `value` or a NAV-tracked pair (amfi_scheme_code + units_held,
+// both-or-neither). `bucket` (liquid|locked) is required for an asset, ignored
+// and nulled for a liability. A NAV-tracked row seeds its value from whatever
+// mf_nav_cache already holds for that scheme (never a live AMFI call here); a
+// brand-new scheme stays "price pending" (0) until the daily cron fills it.
+// Output: {status, item_id}. Errors: 400 (validation), 404 (client not in
+// tenant), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

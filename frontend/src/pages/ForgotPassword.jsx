@@ -1,3 +1,8 @@
+// Route /forgot-password (UNAUTHENTICATED) — step 1 of self-service password
+// reset. Calls api.requestPasswordReset and always shows the same neutral
+// "if that email exists, a link is on its way" confirmation, so it can't be used
+// to enumerate accounts.
+
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';

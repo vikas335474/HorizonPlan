@@ -1,3 +1,8 @@
+// Route /goals/:id/meeting — the full-screen, guided client-meeting presentation
+// (docs/07 Bet 5). Builds read-only slides from api.getGoal + api.getProjection;
+// the timeline slider scrubs the projection live. Shared by advisor and client
+// (a client can present their own goal).
+
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';

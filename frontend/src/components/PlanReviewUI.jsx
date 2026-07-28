@@ -1,3 +1,9 @@
+// Jr -> Sr plan-approval UI primitives: ReviewStatusBadge, GoalReviewCard (an
+// advisor submits, an sr_advisor/firm_admin approves or requests changes — via
+// api.submitGoalForReview / reviewGoal) and ReviewQueueRow. Role-gated: only
+// sr_advisor / firm_admin see the approve / request-changes controls, and a
+// client session never sees any review UI at all. useAuth.
+
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';

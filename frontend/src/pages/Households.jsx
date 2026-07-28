@@ -1,3 +1,7 @@
+// Route /households — advisor-only household list + create form (docs/10 P0-1).
+// Data: api.listHouseholds (loaded here) and api.createHousehold. Each row links
+// into HouseholdDetail. Clients never see households.
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';

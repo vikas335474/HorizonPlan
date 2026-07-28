@@ -1,3 +1,10 @@
+// Root component: the router table plus the provider tree (AuthProvider ->
+// DemoTourProvider). Every authenticated route is wrapped in <ProtectedRoute>;
+// the login / signup / forgot- and reset-password / accept-invite routes stay
+// outside it on purpose. Home() sends a client session to /goals and an
+// advisor/super_admin to the Dashboard. The per-route comments below note the
+// intended role, but the real enforcement is server-side on every endpoint.
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DemoTourProvider } from './context/DemoTourContext';

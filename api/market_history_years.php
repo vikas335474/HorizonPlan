@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Historical replay reference data: list the years available for the
+// "what if you retired in <year>?" projection. GET, any authenticated advisor OR
+// client. NOT tenant-scoped — market_history (sql/015) is global read-only
+// reference data, so this queries it directly, no TenantScopedDb. Each year is
+// flagged is_verified (unverified seed rows are labelled as such downstream).
+// Output: {status, years[]}. Errors: 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 

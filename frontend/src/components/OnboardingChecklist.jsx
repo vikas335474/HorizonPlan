@@ -1,3 +1,9 @@
+// Advisor first-run onboarding checklist (real advisors only — the demo tour is
+// separate). Tracks the "add your first client" style steps; dismissal persists
+// in localStorage via the exported isOnboardingDismissed / dismissOnboarding
+// helpers. Props: {clients, onAddClient, onGoToClient, onDismiss}. No API of its
+// own — it reflects data the Dashboard already loaded.
+
 import { Card, Button } from './ui';
 
 // docs/09 Group 3 Session 5 — first-time advisor onboarding walkthrough.

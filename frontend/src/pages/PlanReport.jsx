@@ -1,3 +1,7 @@
+// Route /goals/:id/report — the printable / shareable single-goal client report.
+// Read-only; renders api.getProjection output plus the compliance
+// DisclosureBanner, laid out for print. Shared by advisor and client.
+
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';

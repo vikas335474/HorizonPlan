@@ -1,3 +1,9 @@
+// Route /login (UNAUTHENTICATED) — password login with the MFA second-factor
+// step, "Sign in with Google", and the public "try a live demo" firm picker
+// (api.listDemoFirms). The auth actions themselves run through useAuth
+// (api.login / mfaVerify / authGoogle / demoLogin). A session that resolves to a
+// client role is redirected to /goals.
+
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

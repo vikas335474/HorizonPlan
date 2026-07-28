@@ -1,3 +1,8 @@
+// Route guard wrapping every authenticated route. Redirects to /login when there
+// is no session, and to /settings when a session hasn't satisfied mandatory MFA
+// (a soft app-layer gate layered on top of the server-side 403 that backs it).
+// Props: {children}. useAuth.
+
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 

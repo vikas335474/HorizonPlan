@@ -1,3 +1,10 @@
+// Global auth/session context — the single source of truth for "who is logged
+// in". AuthProvider bootstraps the session on load (api.session) and exposes the
+// auth actions (login, mfaVerify, authGoogle, demoLogin, signup, logout) plus the
+// resolved user / tenant / platform-settings blocks. useAuth() is the accessor
+// every page and component uses for identity and role-gating; it is deliberately
+// the ONLY place the raw session shape is read.
+
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '../lib/api';
 

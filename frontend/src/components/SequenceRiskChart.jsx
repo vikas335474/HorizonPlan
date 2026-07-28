@@ -1,3 +1,8 @@
+// Recharts sequence-of-returns chart: the steady-return path vs. the
+// adverse-sequence path, plus an optional historical-replay series. Purely
+// presentational. Props: {steadySeries, adverseSeries, historicalSeries,
+// historicalLabel}.
+
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatCurrencyCompact, formatCurrency } from '../lib/format';
 

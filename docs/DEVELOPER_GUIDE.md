@@ -1,0 +1,415 @@
+# HorizonPlan Developer Guide
+
+> Orientation for a developer new to this codebase. Read `CLAUDE.md` first (the
+> standing, non-negotiable rules), then this guide for *how the pieces fit*, then
+> the area-specific file in `/docs/` before touching that area. This guide points
+> at real files and line-level patterns — when in doubt, the code is the source
+> of truth and its inline comments explain the *why*.
+
+HorizonPlan is a B2B2C retirement-planning platform for Indian MFDs/IFAs and
+SEBI-RIA firms. It is a **planning-and-conversation tool, not a transaction
+back-office** — there is no order routing, KYC, or commission reconciliation, by
+design (see `docs/10` for the honest competitive framing).
+
+---
+
+## 1. Architecture at a glance
+
+| Layer | Tech | Where |
+|-------|------|-------|
+| Backend | PHP 8 (no framework) + PDO + MySQL/MariaDB | `api/` |
+| Shared backend logic | plain PHP classes/functions | `api/lib/` |
+| Schema | numbered SQL migrations, applied in order | `sql/` |
+| Frontend | React (Vite) + Tailwind + shadcn/ui | `frontend/` |
+| CLI tools / crons | standalone PHP scripts | `tools/` |
+| Tests | plain PHP scripts, a real DB for the `*_db.php` ones | `tests/` |
+
+**Same-origin model.** The compiled React app is served as static files from
+Hostinger's `public_html`, with the PHP API sitting under `public_html/api` on
+the *same origin*. Consequences that shape everything:
+
+- No CORS, no bearer tokens in `localStorage`. Auth rides on an **httpOnly
+  session cookie** that the browser sends automatically (`credentials: 'include'`
+  in `frontend/src/lib/api.js`).
+- Every endpoint is a single `.php` file reachable at `/api/<name>.php`.
+- There is **no build step on the server** — the frontend must be built
+  (`npm run build`) before every deploy. CI (`.github/workflows/deploy.yml`)
+  automates this to a `deploy` branch; see `DEPLOY.md`.
+
+**Directory map.**
+
+```
+api/
+  <endpoint>.php        one file per endpoint; top-of-file comment states its contract
+  lib/
+    security_gatekeeper.php   auth, CSRF, MFA, sessions, rate limiting, firm-role gate
+    TenantScopedDb.php        the tenant-isolation data-access helper (see §3)
+    PlanMath.php              pure projection arithmetic, no DB
+    ...                       one class/module per concern (see §7)
+  db_config.php         git-ignored; DB creds + getPdo(). Copy from db_config.example.php
+frontend/src/
+  lib/api.js            the ONLY place that talks to the backend
+  context/AuthContext.jsx   session bootstrap + auth actions; useAuth() everywhere
+  components/ProtectedRoute.jsx  route guard (login + mandatory-MFA)
+  pages/ components/    see the file-level header comment in each
+sql/                    001_… migrations, applied in numeric order
+tests/run_all.sh        the whole suite
+tools/                  crons + one-off admin scripts
+```
+
+---
+
+## 2. The request lifecycle
+
+Trace a typical authenticated read, `GET /api/goals_projection.php?id=42`:
+
+1. **Frontend.** A page calls `api.getProjection(42)` in `frontend/src/lib/api.js`.
+   `request()` issues `fetch` with `credentials: 'include'`. For a mutation
+   (POST/PUT/PATCH/DELETE) it also attaches the `X-CSRF-Token` header, read from
+   the non-httpOnly `hp_csrf` cookie (the double-submit pattern, §4).
+2. **Bootstrapping.** The endpoint's first line is
+   `require_once __DIR__ . '/lib/security_gatekeeper.php';`, which installs the
+   JSON error handler (`installApiErrorHandlers()`) *before* anything else can
+   fatal — so even a broken `db_config.php` returns a structured 500, not a blank
+   page.
+3. **Method guard.** Each endpoint rejects the wrong HTTP method with `405`
+   before doing any work.
+4. **Auth + CSRF.** `verifyAccess($db, 'advisor')` (or `verifyAccessAny($db,
+   ['advisor','client'])`) runs the CSRF check on non-GET requests, validates the
+   session cookie against `active_sessions`, enforces the role (super_admin always
+   passes), enforces mandatory-MFA enrollment, and **returns the session** or
+   `exit()`s with a JSON error. Callers never handle a null return.
+5. **Tenant scope.** The endpoint constructs
+   `new TenantScopedDb($db, (int) $session['tenant_id'])`. The tenant id comes
+   from the *verified session*, never from request input.
+6. **Work.** Reads/writes go through the scoped helper. Mutations to
+   `base_plans`/`sub_scenarios` also call `$scopedDb->logChange(...)` (rule #4).
+   Pure math (projections, readiness score) is delegated to `PlanMath` — no DB
+   access lives in that layer.
+7. **Response.** The endpoint `echo json_encode([...])`s. The convention is
+   `{"status": "success", ...}` or `{"status": "error", "message": "..."}` with
+   an appropriate HTTP status code.
+
+The status-code contract used across the API: **400** bad input, **401**
+no/invalid session, **403** wrong role / privilege escalation / unapproved
+content, **404** not found (or not in this tenant — see §3), **405** wrong
+method, **409** conflict (e.g. duplicate email), **429** rate-limited, **202**
+`mfa_required` (a valid non-error the frontend branches on), **503** a feature
+not configured on this deployment (e.g. Google Sign-In with no Client ID).
+
+---
+
+## 3. Tenant isolation — the model that must never leak
+
+**Every query on tenant-scoped data goes through `api/lib/TenantScopedDb.php`.**
+This is non-negotiable rule #1. The class binds the tenant id once, at
+construction, from the verified session — there is no method that accepts a
+caller-supplied tenant id, so calling code has no path to bypass it.
+
+- `select()`, `insert()`, `update()`, `delete()` all AND-in
+  `tenant_id = :tenant_id` automatically. `insert()` overwrites any caller-passed
+  `tenant_id`; `update()` refuses to move a row across tenants and refuses a
+  condition-less bulk update.
+- An **allow-list** (`ALLOWED_TABLES`) guards against a typo silently querying an
+  unscoped table.
+- `logChange()` writes the `change_log` audit row for `base_plans`/`sub_scenarios`
+  mutations, taking the acting user id explicitly so it's always traceable.
+
+**Why "not in this tenant" surfaces as 404, not 403.** A scoped `update`/`delete`
+on a row that belongs to another firm simply matches 0 rows. Endpoints treat that
+as "doesn't exist" — the same response a genuinely missing id gets — so the API
+never confirms the existence of another tenant's data. See e.g.
+`cash_flow_delete.php`, `templates_customize.php`.
+
+**The two documented exception patterns** (both still safe, both explained at the
+point of use):
+
+1. **Raw tenant-scoped `JOIN` reads.** `TenantScopedDb::select()` can't express a
+   `JOIN`. Three read endpoints that need to join to `users.email` drop to a raw
+   query that is *still* `WHERE …tenant_id = :tenant_id`:
+   `clients_list.php`, `change_log_list.php`, `goals_review_queue.php`. That's the
+   whole exception — always still tenant-filtered.
+2. **Deliberate cross-tenant template methods.** A *global* strategy template is,
+   by definition, visible outside the tenant that owns its row. A small set of
+   methods on `TenantScopedDb` (`findTemplateStrategyById`,
+   `selectGlobalPublishedTemplates`, `countGlobalTemplateUsage`,
+   `approveGlobalTemplate`) are narrow, documented exceptions: reads return either
+   aggregate counts or rows already flagged `is_published = 1`, and the one write
+   is restricted to `is_system_template = 1` rows with the caller having verified
+   `super_admin` first. See the block comment above those methods.
+
+Never write a raw inline `WHERE tenant_id = …` in a *new* endpoint. If the helper
+can't express what you need, prefer extending the helper; only drop to a raw
+tenant-scoped query if you're following one of the three documented JOIN
+precedents, and comment why.
+
+---
+
+## 4. Security helpers (`api/lib/security_gatekeeper.php`)
+
+One file owns the security surface. Highlights (each function has its own
+docblock — read it before changing behaviour):
+
+- **Sessions.** `issueSession()` mints a random token, stores it in
+  `active_sessions`, and sets the httpOnly/secure/SameSite=Strict `hp_session`
+  cookie (8h TTL). `getCurrentSession()` looks it up; `destroySession()` clears it.
+- **Role gates.** `verifyAccess($db, $role)` and `verifyAccessAny($db, $roles)`
+  enforce role and return the session or `exit()`. **`super_admin` passes every
+  role gate** by convention — endpoints don't special-case it.
+- **CSRF — double-submit cookie.** The server sets a *readable* `hp_csrf` cookie
+  (`issueCsrfToken()`); the JS layer echoes it back as `X-CSRF-Token`;
+  `verifyCsrfToken()` compares them with `hash_equals`. Checked on every
+  non-GET/HEAD/OPTIONS request. GET is exempt (read-only).
+- **MFA.** RFC 6238 TOTP (`api/lib/Totp.php`) *or* a linked Google account each
+  satisfy the mandatory-MFA requirement (they're alternatives, not stacked).
+  `requireMfaEnrollment()` (called by the verify* helpers) 403s an unenrolled
+  session — **unless** `platform_settings.demo_mode='on'` or
+  `mfa_enforcement='disabled'`. Login is a two-step handshake: `login.php` checks
+  the password and issues a short-lived pending token; `mfa_verify.php` consumes
+  it (single-use) and issues the real session.
+- **Firm-role gate.** `requireFirmRole($db, $session, $allowed)` checks the
+  advisor's firm-level role (`jr_advisor`/`sr_advisor`/`firm_admin`). A `NULL`
+  firm_role (any advisor created before migration 020) is treated as
+  `sr_advisor` — the middle tier — so nothing silently gains or loses capability.
+- **Rate limiting.** `checkLoginRateLimit()`/`recordLoginAttempt()` cap failed
+  logins per email+IP. General rate limiting on `goals_*`/`subscenarios_*` is
+  deliberately deferred (see `CLAUDE.md`); `demo_reset.php` has its own cooldown
+  (`claimDemoResetSlot()`).
+- **Platform settings.** `getPlatformSettings()` reads the single-row
+  `platform_settings` config, request-cached, **failing closed** (stricter
+  posture) if the row is unreadable.
+
+> **Note on the current default:** mandatory MFA is *defaulted OFF*
+> (`platform_settings.mfa_enforcement`, migration 023) for the early-access
+> period. The mechanism is fully built — only the default is flipped. Re-enable
+> before real advisor/client data. Do not read "no open audit gap" as
+> "launch-ready" (`CLAUDE.md` → Security status).
+
+---
+
+## 5. Roles
+
+| Role (`users.role`) | Scope | Notes |
+|---------------------|-------|-------|
+| `super_admin` | Platform-wide | Passes every role gate; manages firms, platform settings, global templates. `advisory_mode` is super_admin-only (rule #2). |
+| `advisor` | One tenant | The working role. Sub-divided by `users.firm_role`. |
+| `client` | Own data only | Self-service login: own goals, what-if sliders, read-only portfolio/cash-flow/risk. Every advisor-only read/write is hidden client-side **and** blocked server-side. |
+
+Advisor **firm roles** (migration 020, `docs/09` Piece 2): `jr_advisor` (author,
+can't approve) < `sr_advisor` (approve, the `NULL` default) < `firm_admin`
+(also manage advisors + firm branding — but **not** `advisory_mode`).
+
+---
+
+## 6. Data model
+
+Schema lives in `sql/`, one numbered migration per change, applied in order. Each
+file has a header comment explaining what and why; read it before altering a
+table. Rough grouping:
+
+- **Tenancy & auth:** `tenants`, `users`, `active_sessions`, `login_attempts`,
+  `mfa_pending`, `password_resets`, `google_auth` (021), `firm_role` (020),
+  `platform_settings` (019/023/024), `trial_signup` (022).
+- **Planning core:** `base_plans` (goals), `sub_scenarios` (what-ifs),
+  `change_log` (audit), `accumulation` (016), `market_history` (015, global
+  reference data), corpus-composition columns (018).
+- **Strategy templates:** `template_strategies`, `template_customizations`,
+  `template_audit_log`, `template_approval_state` (013),
+  `base_plans_applied_template` (014).
+- **Risk / portfolio / cash-flow / households / reviews:** `risk_profiles` (017),
+  `client_portfolio` (018), `mf_nav_sync` (027), `households` (029),
+  `cash_flow` (030), `plan_review` (026) + `plan_review_schedule` (028).
+
+### FK / teardown-ordering landmine
+
+Several cross-table foreign keys mean **delete order matters** whenever you tear
+down or re-seed. In particular, migration 014 added
+`applied_template_id`/`applied_customization_id` FKs on `base_plans` pointing at
+`template_strategies`/`template_customizations`, so children must be deleted
+*before* their parents. This bites in exactly two places, and both already
+document the FK-safe order at the point it matters — copy from them, don't
+re-derive it:
+
+- **`api/demo_reset.php`** (the demo re-seed): see the block comment at the delete
+  loop for the full chain (`cash_flow_items` / `client_portfolio_items` /
+  `risk_profiles` / `sub_scenarios` / `template_audit_log` / `base_plans` →
+  `risk_question_sets` / `template_customizations` / `template_strategies` →
+  `households` → `active_sessions` → `users` → `tenants`).
+- **`tests/test_tenant_isolation.php`** (fixture setup): same ordering rationale.
+
+### Destructive-test landmine
+
+`tests/*_db.php` fixtures now wrap themselves in a transaction that rolls back
+(`docs/09` Session 2), but there is still **no hard guard** stopping
+`tests/run_all.sh` from running against a database that holds real/demo data.
+**Always point the suite at a disposable DB.** This is the one deliberately
+deferred item on the security/quality ledger.
+
+---
+
+## 7. `api/lib/` — the shared backend modules
+
+| File | Responsibility |
+|------|----------------|
+| `security_gatekeeper.php` | Auth, CSRF, MFA, sessions, rate limiting, firm-role gate, platform settings (§4). |
+| `TenantScopedDb.php` | Tenant-isolated data access (§3). |
+| `PlanMath.php` | **Pure** projection arithmetic — decumulation, accumulation, corpus composition (liquid-first), sequence-of-returns, historical replay, the 0–100 readiness score. No DB. |
+| `GoalFieldValidation.php` | Per-field range/type validation shared by goal create + update so the two entry points can't drift. |
+| `RiskProfileScoring.php` | Pure scoring of questionnaire answers against a firm's rubric. |
+| `CashFlowSummary.php` | Normalises income/expense lines to monthly, sums surplus, and (advisor-only) compares surplus to total goal SIPs. |
+| `HouseholdProjection.php` | Sums members' projections into a household aggregate. |
+| `TemplateValidation.php` | Shared allocation/risk-profile validation for template endpoints. |
+| `PlanReview.php` / `PlanReviewMailer.php` | Jr→Sr approval-workflow transitions + review emails. |
+| `MfNavSync.php` | Daily MF-NAV price sync (cached NAVs only; never a live AMFI call inside a request). |
+| `Totp.php` | RFC 6238 TOTP, no external deps. |
+| `GoogleAuth.php` | Google Sign-In: network / pure / DB layers split for testability. |
+| `InviteTokens.php` | Magic-link invite activation (reuses `password_resets`). |
+| `Mailer.php` | Thin wrapper over PHP `mail()` (Hostinger local MTA). |
+| `DemoAccess.php` / `DemoSeeder.php` / `TrialSignup.php` | Demo login boundary, demo data seeding, self-serve trial signup — each split out of its endpoint so it's testable against a real DB without an HTTP round-trip. |
+| `error_handler.php` | Turns fatals/uncaught exceptions into a structured JSON 500. |
+
+**House style for these:** a file/class-level docblock stating *why this exists /
+the invariant it protects*, plus PHPDoc (`@param`/`@return`/`@throws`) on public
+methods. `TenantScopedDb.php`, `PlanMath.php`, and `CashFlowSummary.php` are the
+bar — match them.
+
+---
+
+## 8. Frontend architecture
+
+- **`frontend/src/lib/api.js`** is the *only* module that talks to the backend.
+  One method per endpoint; each documents its shape. It owns CSRF-header
+  attachment and error normalisation (`ApiError`). Add new endpoints here, not
+  ad-hoc `fetch`es in components.
+- **`context/AuthContext.jsx`** bootstraps the session (`api.session`) and exposes
+  the auth actions + the resolved `user` / `tenant` / `platform` blocks.
+  **`useAuth()` is the single source of identity and role** for every page and
+  component.
+- **`components/ProtectedRoute.jsx`** wraps every authenticated route: redirects to
+  `/login` with no session and to `/settings` when MFA isn't satisfied (a soft
+  app-layer gate on top of the server 403).
+- **`App.jsx`** is the router table + provider tree; per-route role intentions are
+  in inline comments there. `Home()` routes clients to `/goals`, advisors/admins
+  to the Dashboard.
+- **Role-gating is defence-in-depth, not the enforcement.** Pages hide advisor-only
+  affordances from a client session (e.g. `isAdvisor` in `GoalDetail.jsx`), and
+  some client-guard/redirect (`AdminConsole.jsx`). **The real gate is always
+  server-side** on every endpoint — the UI guard is UX, not security.
+- Each page/component carries a **file-level header comment** describing its role,
+  key props, which `api.js` calls it makes, and any role-gating. Read it first.
+- Charts are Recharts (`SequenceRiskChart`, `LifecycleChart`); shared primitives
+  live in `components/ui.jsx`. The demo tour is `context/DemoTourContext.jsx`
+  (public demo accounts only). The in-app feature run-book is `pages/FeatureGuide.jsx`
+  (route `/guide`).
+
+---
+
+## 9. Local development
+
+```bash
+# 1. Database (MySQL/MariaDB). Create a *disposable* schema and apply migrations
+#    in numeric order:
+mysql -e "CREATE DATABASE horizonplan_dev;"
+for f in sql/*.sql; do mysql horizonplan_dev < "$f"; done
+
+# 2. Backend config (git-ignored):
+cp api/db_config.example.php api/db_config.php
+#    …edit DB_NAME/DB_USER/DB_PASS. GOOGLE_CLIENT_ID may stay empty (Sign-In 503s
+#    cleanly). APP_BASE_URL only matters for the plan-review email cron.
+
+# 3. PHP API (built-in server serving the api/ dir):
+php -S localhost:8000 -t api
+
+# 4. Frontend (Vite dev server; proxies /api → localhost:8000, see vite.config.js):
+cd frontend && npm install && npm run dev
+```
+
+Seed demo data with `php tools/seed_demo_data_full.php` (4 firms / 160 clients;
+`admin@nirvana` / `senior@nirvana` / a client, password `DemoPass@2026`). Set
+`platform_settings.demo_mode='on'` to allow those manual logins without MFA.
+**Only ever seed/point tests at a disposable DB** (§6).
+
+Google Sign-In's real OAuth round-trip has never been verified end-to-end in the
+sandbox (it can't reach `accounts.google.com`); do it once with a real Client ID
+before relying on it.
+
+---
+
+## 10. Test harness
+
+`bash tests/run_all.sh` runs the whole suite. It exits non-zero on any real
+failure, so it's CI-safe.
+
+- **Pure tests** (`test_plan_math`, `test_totp`, `test_password_hashing`,
+  `test_inheritance_cascade`, `test_corpus_composition`, …) always run — no DB
+  needed.
+- **DB-integration tests** (`*_db.php`, plus `test_tenant_isolation`) need
+  `api/db_config.php` pointed at a real DB; they **self-skip** when no DB is
+  configured, and wrap their fixtures in a transaction that rolls back.
+
+The bar for this codebase is a **real** MySQL/MariaDB + a real request/response
+cycle — not static review. Install the DB, apply every migration, run the suite,
+and (for UI) drive the actual dev servers. Nearly every entry in the build
+history was caught or confirmed this way.
+
+---
+
+## 11. How to add a new endpoint safely
+
+A checklist that keeps a new endpoint consistent with the rest of the API:
+
+1. **Schema first (if needed).** Add a numbered migration in `sql/` with a header
+   comment (what + why). Never silently degrade an existing tenant on a migration
+   — backfill explicitly. Mind FK ordering (§6).
+2. **Create `api/<name>.php`.** Start with a **top-of-file comment** stating:
+   purpose, HTTP method, auth/role, tenant-scoping, key inputs, outputs, and error
+   cases. (Match the existing headers — e.g. `cash_flow_list.php`.)
+3. **Boilerplate:**
+   ```php
+   <?php
+   declare(strict_types=1);
+   // <header comment>
+   require_once __DIR__ . '/lib/security_gatekeeper.php';
+   require_once __DIR__ . '/db_config.php';
+   require_once __DIR__ . '/lib/TenantScopedDb.php';
+   header('Content-Type: application/json; charset=UTF-8');
+   if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); /* … */ exit(); }
+   $db = getPdo();
+   $session = verifyAccess($db, 'advisor');           // or verifyAccessAny([...])
+   $scopedDb = new TenantScopedDb($db, (int) $session['tenant_id']);
+   ```
+4. **Read input** from `json_decode(file_get_contents('php://input'), true) ?? []`
+   (POST/PUT) or `$_GET` (GET). Validate every field; a client-supplied
+   `client_id` must be confirmed to belong to this tenant before use.
+5. **Never write a raw `WHERE tenant_id = …`.** Use `$scopedDb`. If you truly need
+   a JOIN, follow one of the three documented raw-tenant-scoped precedents (§3) and
+   comment why.
+6. **Audit mutations.** `base_plans`/`sub_scenarios` changes call
+   `$scopedDb->logChange(...)` (rule #4). Advice-field edits may trigger plan
+   review (`PlanReview.php`).
+7. **Keep math in `PlanMath`** (or the relevant pure lib). Endpoints orchestrate;
+   they don't re-implement arithmetic.
+8. **Respond** with `{"status": "success", ...}` / `{"status":"error","message":…}`
+   and the right status code (§2).
+9. **Wire the frontend:** add a method to `frontend/src/lib/api.js` (documented),
+   consume it from a page/component, and role-gate the UI affordance — remembering
+   the server is the real gate.
+10. **Test for real:** add a `*_db.php` test if it touches the DB, run
+    `tests/run_all.sh` green, and drive it in the browser.
+
+For anything with a real schema or product decision, **decide-then-build**:
+confirm the open choices with the user before writing the migration (`CLAUDE.md`
+→ Working conventions).
+
+---
+
+## 12. Deploy & further reading
+
+- **Deploy:** `DEPLOY.md` (automated `deploy.yml` → `deploy` branch, plus the
+  staging pipeline and manual fallback). SQL migrations are **not** auto-applied —
+  run new ones by hand after a deploy that includes one.
+- **Docs index:** `CLAUDE.md` lists `docs/01`–`docs/10` and when to read each.
+  `docs/CHANGELOG_SESSION_HISTORY.md` is the verbatim build narrative + full
+  security-audit findings — read it for the *why/how-verified* behind any piece.
+- **User-facing:** `docs/USER_GUIDE.html` (per-persona feature tour) and the
+  marketing one-pager `docs/HorizonPlan_One_Pager.html`.

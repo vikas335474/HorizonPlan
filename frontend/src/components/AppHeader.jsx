@@ -1,3 +1,9 @@
+// The app's top navigation bar. Role-aware: the nav links are built from
+// user.role — advisor / super_admin get the dashboard, templates, reviews,
+// households, activity and admin links; a client gets a minimal set. Collapses to
+// a hamburger below the `sm` breakpoint, carries the "MFA not enrolled" amber
+// nudge, and owns the logout action. useAuth.
+
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
