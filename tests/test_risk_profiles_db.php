@@ -35,6 +35,7 @@ $db->beginTransaction();
 // --- Setup: clean slate, two tenants ---
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items"); // migration 018 also FKs to users
 $db->exec("DELETE FROM template_audit_log");
 $db->exec("DELETE FROM change_log");
@@ -45,6 +46,7 @@ $db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
+$db->exec("DELETE FROM households"); // migration 029 FKs to tenants
 $db->exec("DELETE FROM tenants");
 
 $db->exec("INSERT INTO tenants (id, company_name) VALUES (1, 'Advisor Firm A'), (2, 'Advisor Firm B')");

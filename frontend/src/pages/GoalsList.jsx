@@ -4,6 +4,7 @@ import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
+import { ClientCashFlowCard } from '../components/CashFlowUI';
 import { ClientRiskProfileCard } from '../components/RiskProfileUI';
 import { Card, EmptyState, Spinner } from '../components/ui';
 
@@ -52,6 +53,10 @@ export default function GoalsList() {
             client could actually see them; no clientId passed, the server
             forces it to the session's own id regardless. */}
         <ClientPortfolioCard readOnly />
+
+        {/* docs/10 cash-flow module — the client's own income/expense/surplus,
+            read-only. The advisor-only surplus-vs-SIP framing is not exposed. */}
+        <ClientCashFlowCard />
 
         {/* docs/10 P0-4 — the client's own risk band, read-only, mirroring the
             portfolio card above. Advisor-only affordances (capture, suggested

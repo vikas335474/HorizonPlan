@@ -42,12 +42,14 @@ $db->exec("DELETE FROM template_strategies");
 // added those FKs.
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM mfa_pending");
 $db->exec("DELETE FROM password_resets");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
+$db->exec("DELETE FROM households"); // migration 029 FKs to tenants
 $db->exec("DELETE FROM tenants");
 
 $db->exec("INSERT INTO tenants (id, company_name) VALUES (1, 'Tenant A')");

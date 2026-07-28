@@ -37,6 +37,14 @@ const SECTIONS = [
         name: 'Corpus composition',
         body: "Split a goal's starting corpus into liquid (mutual funds, stocks, FDs) and locked (PPF, EPF, NPS) buckets, each with its own return assumption. Withdrawals draw from liquid first — useful when a meaningful chunk of a client's money genuinely isn't accessible on demand.",
       },
+      {
+        name: 'Cash flow & surplus',
+        body: "The plan assumes a client can keep paying their SIPs — this is where you check that's true. Record their income (salary, bonus, rental) and expenses (living costs, EMIs, insurance, school fees), each at its natural monthly or annual cadence, and the card shows the monthly surplus. Then it measures that surplus against the total SIPs the client's goals assume: \"surplus ₹X vs SIPs ₹Y, gap ₹Z.\" When the SIPs outrun the surplus, you see the shortfall before you promise a number the client can't sustain — the honest answer to \"is this plan actually fundable from cash flow?\" that a projection alone can't give. Everything here is a figure you (or the client) supply; nothing is assumed or fabricated, and it starts empty. The client sees their own income/expense/surplus in their login — read-only, and without the SIP-gap framing, which stays an advisor judgement.",
+      },
+      {
+        name: 'Household / family view',
+        body: "Group a client with their spouse and dependents into a household and see the family's combined picture: the summed retirement projection and readiness, and a combined cash-flow roll-up (every member's income, expenses, surplus, and SIPs added together, with the same fundability gap at the family level). It's deliberately a grouping, not a shared pool — each member's plan stays independently modelled, so one person's corpus is never quietly funding another's goal. Assign a client to a household from their own page; open the household to see the combined plan.",
+      },
     ],
   },
   {

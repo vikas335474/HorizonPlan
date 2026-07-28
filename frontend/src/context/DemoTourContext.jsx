@@ -91,6 +91,13 @@ const STEPS = [
     body: "Goal count, tracked corpus, and this client's lowest-scoring goal, in one glance.",
   },
   {
+    key: 'client-cash-flow',
+    match: (p) => CLIENT_RE.test(p),
+    selector: '[data-tour="cash-flow-card"]',
+    title: 'Can they actually afford the plan?',
+    body: "Income minus expenses gives the monthly surplus — and this card measures that surplus against the SIPs the plan assumes. When the SIPs outrun the surplus, you see the shortfall before you promise a number the client can't sustain.",
+  },
+  {
     key: 'client-goal-card',
     match: (p) => CLIENT_RE.test(p),
     selector: '[data-tour="goal-card"]',

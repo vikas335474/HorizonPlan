@@ -7,6 +7,7 @@ import GoalCard from '../components/GoalCard';
 import Modal from '../components/Modal';
 import { RiskProfileSummary } from '../components/RiskProfileUI';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
+import { CashFlowCard } from '../components/CashFlowUI';
 import { ReadinessScoreBadge } from '../components/ReadinessScore';
 import { Card, EmptyState, Spinner, Button } from '../components/ui';
 import { formatCurrency } from '../lib/format';
@@ -70,6 +71,10 @@ export default function ClientGoals() {
         {/* docs/05 item 3 / docs/06 corpus composition — what the client already
             owns, independent of any one goal. */}
         <ClientPortfolioCard clientId={clientId} />
+
+        {/* docs/10 cash-flow module — income + expenses + monthly surplus, and
+            whether that surplus covers the plan's SIPs. */}
+        <CashFlowCard clientId={clientId} />
 
         {/* docs/06 Section B — risk tolerance belongs to the client, not one goal. */}
         <RiskProfileSummary clientId={clientId} />

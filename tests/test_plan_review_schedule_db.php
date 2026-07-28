@@ -48,6 +48,7 @@ $db->beginTransaction();
 // FK-ordered teardown (same order as test_mf_nav_sync.php, with our table
 // first since it references both users and tenants).
 $db->exec("DELETE FROM plan_review_schedules");
+$db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM mf_nav_cache");
 $db->exec("DELETE FROM risk_profiles");
@@ -61,6 +62,7 @@ $db->exec("DELETE FROM template_strategies");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
+$db->exec("DELETE FROM households"); // migration 029 FKs to tenants
 $db->exec("DELETE FROM tenants");
 
 $db->exec("INSERT INTO tenants (id, company_name) VALUES (1, 'Firm A')");

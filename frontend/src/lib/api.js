@@ -380,6 +380,26 @@ export const api = {
   refreshClientPortfolio: (clientId) =>
     request('client_portfolio_refresh.php', { method: 'POST', body: JSON.stringify({ client_id: clientId }) }),
 
+  // --- Cash-flow module (docs/10) ---
+  // Income/expense line items + monthly surplus for one client. clientId is
+  // ignored for a client session (forced server-side to their own); the
+  // advisor-only SIP comparison is only present in an advisor response.
+  getClientCashFlow: (clientId) =>
+    request(`cash_flow_list.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // Create (no id) or update (id present) one line item. Advisor-only.
+  // fields: { client_id (create only), kind: 'income'|'expense', label,
+  // amount, cadence: 'monthly'|'annual', category, is_active? }
+  upsertCashFlowItem: (fields) =>
+    request('cash_flow_upsert.php', { method: 'POST', body: JSON.stringify(fields) }),
+
+  deleteCashFlowItem: (id) =>
+    request('cash_flow_delete.php', { method: 'POST', body: JSON.stringify({ id }) }),
+
+  // Household cash-flow roll-up (advisor-only): sum of members' statements.
+  getHouseholdCashFlow: (householdId) =>
+    request(`household_cash_flow.php?household_id=${encodeURIComponent(householdId)}`),
+
   // --- Scheduled plan-review emails (docs/10 P0-3, advisor-only) ---
   // Read/set a client's review cadence: 'off' | 'quarterly' | 'annually'.
   getPlanReviewSchedule: (clientId) =>

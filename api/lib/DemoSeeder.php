@@ -159,6 +159,73 @@ function makePortfolioItem(PDO $db, int $tenantId, int $clientId, int $creatorId
     ]);
 }
 
+function makeCashFlowItem(PDO $db, int $tenantId, int $clientId, int $creatorId, string $kind, string $label, float $amount, string $cadence, string $category): void
+{
+    $db->prepare(
+        'INSERT INTO cash_flow_items
+            (tenant_id, client_id, kind, label, amount, cadence, category, created_by_user_id)
+         VALUES (:t, :c, :kind, :label, :amount, :cadence, :cat, :creator)'
+    )->execute([
+        ':t' => $tenantId, ':c' => $clientId, ':kind' => $kind, ':label' => $label,
+        ':amount' => $amount, ':cadence' => $cadence, ':cat' => $category, ':creator' => $creatorId,
+    ]);
+}
+
+// docs/10 cash-flow module — a realistic income/expense statement per client so
+// the demo actually SHOWS "salary + other income − living expenses − EMIs =
+// monthly surplus", and the advisor-only surplus-vs-SIP comparison lands. The
+// deliberate mix is the selling story: most working clients comfortably fund
+// their plan's SIPs, but a ~25% `stretched` subset (high car-loan + lifestyle
+// burden) runs a surplus BELOW their SIPs — exactly the "is this plan actually
+// fundable from cash flow?" gap the module exists to surface. Retired clients
+// show a pension/SWP-funded statement with a fast-inflating healthcare line and
+// no SIP (funded trivially — the point there is a complete cash-flow picture,
+// not a gap). Amounts are deterministic from age/profile so re-seeding is stable.
+function seedClientCashFlow(PDO $db, int $tenantId, int $clientId, int $creatorId, int $age, string $profile, bool $stretched): void
+{
+    $working = in_array($profile, ['accumulation_only', 'mixed', 'full_composition'], true);
+
+    if ($working) {
+        $salary = 55000.0 + $age * 1800.0;
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'income', 'Salary', $salary, 'monthly', 'salary');
+        if ($profile !== 'accumulation_only') {
+            // A two-month annual bonus — an annual line the module spreads ÷ 12.
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'income', 'Annual bonus', $salary * 2, 'annual', 'salary');
+        }
+        if ($profile === 'full_composition') {
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'income', 'Rental income', 25000.0, 'monthly', 'rental');
+        }
+
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Household expenses', 30000.0 + $age * 500.0, 'monthly', 'food');
+        if ($age >= 35) {
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Home loan EMI', 35000.0, 'monthly', 'emi');
+        }
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Insurance premiums', 60000.0, 'annual', 'insurance');
+        if ($age >= 33 && $age <= 52) {
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', "Children's school fees", 180000.0, 'annual', 'education');
+        }
+        if ($stretched) {
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Car loan EMI', 45000.0, 'monthly', 'emi');
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Lifestyle & travel', 40000.0, 'monthly', 'lifestyle');
+        }
+    } else {
+        // Retired / pre-retirement: income is pension + drawdown, not salary.
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'income', 'Pension', 40000.0, 'monthly', 'pension');
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'income', 'Systematic withdrawal (SWP)', 55000.0, 'monthly', 'investment_income');
+        if ($profile === 'pure_decumulation') {
+            makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'income', 'Rental income', 30000.0, 'monthly', 'rental');
+        }
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Household expenses', 55000.0, 'monthly', 'food');
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Healthcare', 180000.0, 'annual', 'healthcare');
+        makeCashFlowItem($db, $tenantId, $clientId, $creatorId, 'expense', 'Insurance premiums', 40000.0, 'annual', 'insurance');
+    }
+}
+
+// One believable "family" surname per firm, for the demo household (docs/10
+// P0-1) — so the combined household projection AND the combined household
+// cash-flow roll-up both have real members to add up in the demo.
+const FAMILY_SURNAMES = ['Sharma', 'Iyer', 'Reddy', 'Nair'];
+
 // Same 4-question shape as tools/seed_demo_data.php, with per-firm text
 // variation (docs/09: "different question sets per firm to show
 // customization") — the rubric bands/labels are identical across firms
@@ -400,6 +467,10 @@ function seedDemoDataFull(PDO $db): array
         // ── Clients across age brackets ──────────────────────────────────
         $firstAppliedTemplateGoal = null;
         $subScenarioSeeded = false;
+        // docs/10 P0-1 — collect one working-age client per working bracket into
+        // a single demo "family" (a household spanning a 25–30, a 31–40, and a
+        // 41–50 member), assigned after the loop.
+        $familyMembers = [];
 
         foreach (AGE_BRACKETS as $bracket) {
             for ($i = 0; $i < $bracket['count']; $i++) {
@@ -417,6 +488,17 @@ function seedDemoDataFull(PDO $db): array
 
                 // Risk profile — captured against the firm's approved set.
                 captureRiskProfile($db, $tenantId, $clientId, $questionSetId, $srAdvisorId, $bracket['risk'], $firmIndex);
+
+                // docs/10 cash-flow module — a full income/expense statement.
+                // ~1 in 4 working clients is deliberately "stretched" (surplus
+                // below their SIPs) so the fundability gap is demonstrable.
+                $stretched = ($totalClients % 4 === 0);
+                seedClientCashFlow($db, $tenantId, $clientId, $srAdvisorId, $age, $bracket['profile'], $stretched);
+
+                // First client of each working bracket joins the demo household.
+                if ($i === 0 && in_array($bracket['profile'], ['accumulation_only', 'mixed', 'full_composition'], true)) {
+                    $familyMembers[] = $clientId;
+                }
 
                 $goalId = null;
                 switch ($bracket['profile']) {
@@ -536,6 +618,20 @@ function seedDemoDataFull(PDO $db): array
                     ]);
                     $firstAppliedTemplateGoal = $goalId;
                 }
+            }
+        }
+
+        // docs/10 P0-1 — group the collected members into one household so the
+        // combined projection AND the combined cash-flow roll-up both have real
+        // members to sum in the demo.
+        if (count($familyMembers) >= 2) {
+            $surname = FAMILY_SURNAMES[$firmIndex % count(FAMILY_SURNAMES)];
+            $db->prepare('INSERT INTO households (tenant_id, name) VALUES (:t, :n)')
+               ->execute([':t' => $tenantId, ':n' => "The {$surname} family"]);
+            $householdId = (int) $db->lastInsertId();
+            $assign = $db->prepare('UPDATE users SET household_id = :h WHERE id = :id AND tenant_id = :t');
+            foreach ($familyMembers as $memberId) {
+                $assign->execute([':h' => $householdId, ':id' => $memberId, ':t' => $tenantId]);
             }
         }
 
