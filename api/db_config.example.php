@@ -21,6 +21,12 @@ define('DB_CHARSET', 'utf8mb4');
 // real Client ID.
 define('GOOGLE_CLIENT_ID', '');
 
+// Absolute base URL of the deployed app (no trailing slash), e.g.
+// 'https://app.yourfirm.com'. Used by the scheduled plan-review email cron
+// (tools/plan_review_send.php) to build the client login link. Only the cron
+// needs it; leave it as-is if you don't run scheduled reviews.
+define('APP_BASE_URL', 'https://horizonplan.example');
+
 function getPdo(): PDO {
     $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
     $options = [

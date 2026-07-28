@@ -380,6 +380,17 @@ export const api = {
   refreshClientPortfolio: (clientId) =>
     request('client_portfolio_refresh.php', { method: 'POST', body: JSON.stringify({ client_id: clientId }) }),
 
+  // --- Scheduled plan-review emails (docs/10 P0-3, advisor-only) ---
+  // Read/set a client's review cadence: 'off' | 'quarterly' | 'annually'.
+  getPlanReviewSchedule: (clientId) =>
+    request(`plan_review_read.php?client_id=${encodeURIComponent(clientId)}`),
+
+  updatePlanReviewSchedule: (clientId, cadence) =>
+    request('plan_review_update.php', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: Number(clientId), cadence }),
+    }),
+
   // --- Jr -> Sr Advisor Plan-Approval Workflow ---
   // Puts a goal into (or back into) the pending_review queue. Most goals get
   // here automatically on an advice-field edit; this covers the cases that
