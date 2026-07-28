@@ -1,6 +1,19 @@
 <?php
 declare(strict_types=1);
 
+// Client portfolio ledger: read a client's holdings plus computed balance-sheet
+// totals. GET, advisor OR client (verifyAccessAny) — a client sees only their
+// own rows (client_id in the query string is ignored for a client session, same
+// pattern as goals_list.php / risk_profile_read.php); an advisor must pass
+// ?client_id=. Tenant-scoped.
+//
+// Attaches each NAV-tracked row's cached price/date/freshness (MfNavSync) and a
+// single portfolio-wide "data as of" claim. Totals — liquid, locked, assets,
+// liabilities, net worth — are computed on every read, never stored (same
+// posture as corpus_multiple in goals_read.php). Output: {status, items[],
+// totals{}, portfolio_nav_freshness}. Errors: 400 (missing client_id),
+// 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

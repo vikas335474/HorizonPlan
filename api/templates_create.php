@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates: create a strategy template. POST, advisor OR super_admin
+// (verifyAccess 'advisor' lets super_admin through; this endpoint's own logic is
+// what gates is_system_template). Tenant-scoped. is_system_template (a global
+// SaaS template) can only be set by a super_admin — every other role is silently
+// forced to 0 since the form is shared. Validates allocation_json and optional
+// risk_profile_enum (TemplateValidation). Writes a 'created' template_audit_log
+// row. Output: {status, template_id}. Errors: 400 (validation), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

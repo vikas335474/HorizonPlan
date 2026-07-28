@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Risk profiler authoring: create or replace the tenant's question set + scoring
+// rubric. POST or PUT, advisor-only, tenant-scoped. Validates the shape (each
+// question needs id/text/options; each option a value + numeric score; each
+// rubric band name/min/max/suggested_return_pct). Editing an already-approved
+// set reverts it to 'draft' and clears the sign-off (guardrail 2 — the principal
+// approved specific content, not whatever it becomes later). Output: {status,
+// question_set_id, approval_reverted}. Errors: 400 (shape validation),
+// 405 (other method).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

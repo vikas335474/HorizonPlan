@@ -1,6 +1,16 @@
 <?php
 declare(strict_types=1);
 
+// Risk profiler (docs/06 §B): read a client's latest captured risk profile plus
+// history. GET, advisor OR client (a client reads only their own — query-string
+// client_id ignored). Tenant-scoped.
+//
+// The band's suggested return assumption is surfaced ONLY when the backing
+// question set is CURRENTLY approved — re-checked here at read time, not trusted
+// from submission time (guardrail 2), so a since-reverted approval hides it and
+// a since-granted one reveals it. Output: {status, latest{...}|null, history[]}.
+// Errors: 400 (advisor missing client_id), 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

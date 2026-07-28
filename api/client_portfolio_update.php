@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Client portfolio ledger: partial-update ONE line item. POST or PUT,
+// advisor-only, tenant-scoped (404 if the row isn't this tenant's). Only the
+// fields sent are touched. item_kind is intentionally NOT editable — flipping an
+// asset to a liability is "delete and re-add", not an edit. NAV tracking fields
+// stay both-or-neither and are only re-validated when the request actually
+// touches one of them; changing the scheme re-seeds value from mf_nav_cache (no
+// live AMFI call). Output: {status, item_id, changed_fields[]}. Errors:
+// 400 (validation), 404 (not found), 405 (other method).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

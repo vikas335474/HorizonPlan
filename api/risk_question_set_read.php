@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Risk profiler authoring: read the tenant's single active question set. GET,
+// advisor-only. Tenant-scoped. A tenant with none yet gets an explicit
+// question_set:null (NOT a 404) — "not set up yet" is the normal starting state
+// for every firm, since no HorizonPlan-authored starter set exists (guardrail 2).
+// Output: {status, question_set{questions, scoring_rubric, status, ...}|null}.
+// Errors: 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

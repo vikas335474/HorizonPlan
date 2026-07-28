@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+// Client portfolio ledger: delete ONE line item. POST, advisor-only,
+// tenant-scoped. delete() carries the tenant filter, so an id owned by another
+// firm affects 0 rows and returns 404 rather than leaking or removing it.
+// Input: {id}. Output: {status, item_id}. Errors: 400 (missing id),
+// 404 (not found / not this tenant), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

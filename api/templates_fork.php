@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates: fork a base template into a tenant-owned customization.
+// POST, advisor, tenant-scoped. The base may live in another tenant (global or
+// another advisor's PUBLISHED template) — read unscoped, but a private template
+// that isn't yours is refused (403). Overrides (allocation_json,
+// return_assumption_pct) are optional; a bare fork inherits the base at read
+// time (stays linked, not silently copied). Writes a 'forked_from' audit row.
+// Output: {status, customization_id}. Errors: 400 (missing base_template_id /
+// bad allocation), 403 (private / not yours), 404 (base), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

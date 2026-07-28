@@ -1,6 +1,16 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates: edit one of this tenant's OWN customizations. POST or PUT,
+// advisor. Tenant-scoped select enforces "own only" — another tenant's row 404s
+// like a nonexistent one. Partial, change-tracked. Editing a math-affecting
+// field (allocation_json / return_assumption_pct) on an already-approved
+// customization reverts it to 'draft' (so goals_apply_template refuses the
+// changed numbers until re-approval); cosmetic fields (name, description, sharing
+// flags) don't. Writes a 'customized' audit row. Output: {status,
+// customization_id, changed_fields[], approval_reverted}. Errors: 400, 404,
+// 405 (other method).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

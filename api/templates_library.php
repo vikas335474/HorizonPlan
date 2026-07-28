@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates: one combined, searchable library view for the template
+// picker. GET, advisor, tenant-scoped. Merges global published templates
+// (cross-tenant by design), this tenant's own templates, and its customizations
+// into a single list, each tagged with `source` (global | own | customized) so
+// the frontend can show provenance. Optional filters: ?q= (name/description),
+// ?risk_profile=, ?market_code=. Output: {status, templates[]}. Errors:
+// 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: read one goal in full, including computed corpus_multiple.
+// GET, advisor OR client (verifyAccessAny). A client may read only their OWN
+// goal — a goal belonging to another client in the same tenant is 403.
+// Tenant-scoped. Optional ?sub_scenario_id= computes corpus_multiple against
+// that what-if's effective withdrawal rate instead of the parent's. Output:
+// {status, goal{...}} with review fields and corpus_multiple (computed, never
+// stored). Errors: 400 (missing id), 403 (not your goal), 404 (not found),
+// 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

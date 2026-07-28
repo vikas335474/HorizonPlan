@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Client portfolio ledger: recompute a client's NAV-tracked holdings from the
+// cached NAVs. POST, advisor-only, tenant-scoped. This is the manual "Refresh
+// prices" action — it NEVER calls AMFI live; it only re-derives value =
+// units_held x cached NAV from whatever the daily cron (tools/mf_nav_sync.php)
+// last stored (see MfNavSync.php). Input: {client_id} (must be a client in this
+// tenant, 404 otherwise). Output: {status, updated_count, nav_last_updated}.
+// Errors: 400 (missing client_id), 404 (client not in tenant), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

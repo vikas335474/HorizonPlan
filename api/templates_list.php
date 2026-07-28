@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates: the advisor's full template management view, grouped by
+// origin. POST (a read that takes no body — POST purely by this endpoint's
+// convention), advisor, tenant-scoped. Returns three lists — global_templates
+// (cross-tenant published system templates), my_templates (this tenant's own,
+// non-system), and my_customizations (this tenant's forks) — each row carrying
+// its approval_status and a usage_count (tenant-scoped for own rows, global
+// count for shared system templates). Output: {status, global_templates[],
+// my_templates[], my_customizations[]}. Errors: 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

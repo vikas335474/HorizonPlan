@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates: read this tenant's own provenance history for a template
+// or customization. POST (body carries template_id / customization_id), advisor.
+// Tenant-scoped select — deliberately returns only audit rows THIS tenant
+// generated (its own create/fork/customize/use events), not other tenants'
+// activity on the same shared global template; "my history with this template",
+// not a global feed. Output: {status, audit_log[]} sorted oldest-first. Errors:
+// 400 (neither id given), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
