@@ -4,6 +4,7 @@ import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
+import { ClientRiskProfileCard } from '../components/RiskProfileUI';
 import { Card, EmptyState, Spinner } from '../components/ui';
 
 // A client's own goals view. Clients never pass a client_id — the server uses
@@ -51,6 +52,11 @@ export default function GoalsList() {
             client could actually see them; no clientId passed, the server
             forces it to the session's own id regardless. */}
         <ClientPortfolioCard readOnly />
+
+        {/* docs/10 P0-4 — the client's own risk band, read-only, mirroring the
+            portfolio card above. Advisor-only affordances (capture, suggested
+            return) are not exposed here. */}
+        <ClientRiskProfileCard />
 
         {loading && <Spinner label="Loading your goals…" />}
 

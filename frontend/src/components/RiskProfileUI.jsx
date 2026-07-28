@@ -79,6 +79,55 @@ export function RiskProfileSummary({ clientId }) {
   );
 }
 
+// docs/10 P0-4 — the client's own read-only view of their risk profile, for
+// symmetry with the read-only portfolio they can already see (GoalsList.jsx).
+// Deliberately narrower than the advisor's RiskProfileSummary: it shows the
+// band (their risk category — about them, empowering) but NOT the suggested
+// return assumption or raw score. Those are advisor planning inputs; a client
+// could misread "suggested return X%" as a promised return, so they stay on
+// the advisor side. No capture/retake affordance — a client never self-scores;
+// the advisor runs the questionnaire with them. No clientId is passed, so
+// risk_profile_read.php forces it to the session's own id server-side.
+export function ClientRiskProfileCard() {
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getRiskProfile()
+      .then((res) => { if (!cancelled) setProfile(res.latest); })
+      .catch(() => { /* soft — an unreadable profile just shows the empty note */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <Card className="p-4 mb-4">
+      <h2 className="text-base font-semibold text-[var(--color-ink)] mb-1">Your risk profile</h2>
+      {loading && <Spinner label="Loading…" />}
+
+      {!loading && !profile && (
+        <p className="text-xs text-[var(--color-ink-2)]">
+          Your adviser hasn't captured your risk profile yet — you'll do this together.
+        </p>
+      )}
+
+      {!loading && profile && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">{profile.band}</Badge>
+          <span className="text-xs text-[var(--color-ink-2)] max-w-md">
+            How much investment ups-and-downs you're comfortable with, from the questionnaire you completed with your adviser.
+          </span>
+          {profile.created_at && (
+            <span className="text-[11px] text-[var(--color-ink-3)] ml-auto">{formatDate(profile.created_at)}</span>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function TakeQuestionnaireModal({ open, onClose, clientId, onSubmitted }) {
   const [questionSet, setQuestionSet] = useState(null);
   const [answers, setAnswers] = useState({});
