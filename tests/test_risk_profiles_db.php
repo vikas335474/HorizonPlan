@@ -35,6 +35,7 @@ $db->beginTransaction();
 // --- Setup: clean slate, two tenants ---
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items"); // migration 018 also FKs to users
 $db->exec("DELETE FROM template_audit_log");
 $db->exec("DELETE FROM change_log");

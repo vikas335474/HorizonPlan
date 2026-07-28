@@ -45,6 +45,7 @@ $db->exec("DELETE FROM template_strategies");
 // users — must clear before DELETE FROM users.
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM login_attempts");

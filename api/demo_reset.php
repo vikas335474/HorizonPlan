@@ -111,12 +111,13 @@ try {
     // template_customizations, so base_plans (and template_audit_log, which
     // also FKs into both) must be deleted before those two tables — not
     // after, which an earlier draft of this endpoint got backwards. Full
-    // chain: client_portfolio_items/risk_profiles/sub_scenarios/
+    // chain: cash_flow_items/client_portfolio_items/risk_profiles/sub_scenarios/
     // template_audit_log/base_plans (all children) before
     // risk_question_sets/template_customizations/template_strategies
-    // (their parents), and finally users/tenants.
+    // (their parents), and finally users/tenants. cash_flow_items (migration
+    // 030) FKs to users, so it must go before the users delete like the rest.
     foreach ([
-        'client_portfolio_items', 'risk_profiles', 'sub_scenarios',
+        'cash_flow_items', 'client_portfolio_items', 'risk_profiles', 'sub_scenarios',
         'template_audit_log', 'base_plans',
         'risk_question_sets', 'template_customizations', 'template_strategies',
         'change_log',

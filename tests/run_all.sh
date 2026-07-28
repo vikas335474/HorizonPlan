@@ -35,6 +35,7 @@ for t in \
   tests/test_plan_review_db.php \
   tests/test_plan_review_schedule_db.php \
   tests/test_household_projection_db.php \
+  tests/test_cash_flow_summary_db.php \
   tests/test_mf_nav_sync.php
 do
   echo "──────────────────────────────────────────────"

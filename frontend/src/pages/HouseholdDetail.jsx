@@ -15,6 +15,7 @@ import { formatCurrency } from '../lib/format';
 export default function HouseholdDetail() {
   const { householdId } = useParams();
   const [data, setData] = useState(null);
+  const [cashFlow, setCashFlow] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -26,6 +27,13 @@ export default function HouseholdDetail() {
       .then((res) => { if (!cancelled) setData(res); })
       .catch((err) => { if (!cancelled) setError(err.message || 'Could not load this household.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    // docs/10 cash-flow module — the household roll-up (sum of members'
+    // statements). Loaded alongside, soft-failing so a projection still renders
+    // even if this can't.
+    api
+      .getHouseholdCashFlow(householdId)
+      .then((res) => { if (!cancelled) setCashFlow(res); })
+      .catch(() => { /* soft — the cash-flow section just doesn't render */ });
     return () => { cancelled = true; };
   }, [householdId]);
 
@@ -96,6 +104,42 @@ export default function HouseholdDetail() {
               </Card>
             )}
 
+            {/* docs/10 cash-flow module — combined household cash flow: the sum
+                of each member's own income/expense/surplus + monthly SIP. */}
+            {cashFlow && cashFlow.members.length > 0 && (
+              <Card className="p-5 mb-6">
+                <h2 className="text-base font-semibold text-[var(--color-ink)]">Combined cash flow</h2>
+                <p className="mt-1 mb-3 text-sm text-[var(--color-ink-2)] leading-relaxed">
+                  Every member's monthly income and expenses added together — the household's combined surplus,
+                  and whether it covers the plans' total monthly SIPs.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                  <HouseholdTotal label="Monthly income" value={cashFlow.totals.monthly_income} />
+                  <HouseholdTotal label="Monthly expenses" value={cashFlow.totals.monthly_expense} />
+                  <HouseholdTotal
+                    label="Monthly surplus" value={cashFlow.totals.monthly_surplus}
+                    accent={cashFlow.totals.monthly_surplus >= 0 ? 'teal' : 'alert'}
+                  />
+                  <HouseholdTotal label="Total SIPs" value={cashFlow.totals.total_monthly_sip} />
+                </div>
+                <div
+                  className="rounded-[var(--radius-ctrl)] px-3 py-2 text-xs"
+                  style={{
+                    backgroundColor: cashFlow.totals.funded ? 'var(--color-teal-soft)' : 'var(--color-alert-soft)',
+                    color: cashFlow.totals.funded ? 'var(--color-teal-ink)' : 'var(--color-alert)',
+                  }}
+                >
+                  {cashFlow.totals.total_monthly_sip === 0 ? (
+                    <>No monthly SIP is set across the household's goals yet.</>
+                  ) : cashFlow.totals.funded ? (
+                    <>Combined surplus covers the household's SIPs with <strong>{formatCurrency(cashFlow.totals.gap)}/mo</strong> to spare.</>
+                  ) : (
+                    <>Combined surplus is short of the household's SIPs by <strong>{formatCurrency(Math.abs(cashFlow.totals.gap))}/mo</strong>.</>
+                  )}
+                </div>
+              </Card>
+            )}
+
             {/* Per-member breakdown. */}
             <h2 className="text-base font-semibold text-[var(--color-ink)] mb-2">Members</h2>
             {data.members.length === 0 ? (
@@ -140,6 +184,18 @@ export default function HouseholdDetail() {
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function HouseholdTotal({ label, value, accent }) {
+  const color = accent === 'teal' ? 'var(--color-teal-ink)' : accent === 'alert' ? 'var(--color-alert)' : 'var(--color-ink)';
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-[var(--color-ink-3)]">{label}</div>
+      <div className="tnum text-[15px] font-semibold mt-0.5" style={{ color }}>
+        {formatCurrency(value)}<span className="text-[11px] text-[var(--color-ink-3)] font-normal">/mo</span>
+      </div>
     </div>
   );
 }

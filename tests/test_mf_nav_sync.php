@@ -71,6 +71,7 @@ assertTrue($emptyParsed === [], 'an empty held-schemes filter returns nothing, h
 $db = getPdo();
 $db->beginTransaction();
 
+$db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM mf_nav_cache");
 $db->exec("DELETE FROM risk_profiles");
