@@ -58,6 +58,9 @@ export default function PlanReport() {
   }, [id, replayYear]);
 
   const firmName = tenant?.whiteLabel?.company_name || tenant?.companyName || 'HorizonPlan';
+  // Use the firm's own uploaded logo on the leave-behind when they've set one
+  // (Settings → Firm branding); fall back to the HorizonPlan mark otherwise.
+  const brandLogo = tenant?.whiteLabel?.logo_url || null;
   const isRetirement = goal?.goal_type === 'retirement';
 
   return (
@@ -97,11 +100,15 @@ export default function PlanReport() {
             {/* Letterhead */}
             <header className="flex items-baseline justify-between border-b border-[var(--color-line-2)] pb-4">
               <div className="flex items-center gap-2">
-                <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <line x1="2" y1="15" x2="20" y2="15" stroke="var(--color-line-2)" strokeWidth="1.5" />
-                  <path d="M4 15 L11 6 L18 11" stroke="var(--color-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  <circle cx="18" cy="11" r="2" fill="var(--color-amber)" />
-                </svg>
+                {brandLogo ? (
+                  <img src={brandLogo} alt="" className="h-6 w-auto max-w-[150px] object-contain" />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                    <line x1="2" y1="15" x2="20" y2="15" stroke="var(--color-line-2)" strokeWidth="1.5" />
+                    <path d="M4 15 L11 6 L18 11" stroke="var(--color-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <circle cx="18" cy="11" r="2" fill="var(--color-amber)" />
+                  </svg>
+                )}
                 <span className="text-sm font-semibold tracking-tight text-[var(--color-ink)]">{firmName}</span>
               </div>
               <span className="text-xs text-[var(--color-ink-3)]">Prepared {formatDate(new Date().toISOString())}</span>
