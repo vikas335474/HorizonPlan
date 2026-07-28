@@ -25,6 +25,7 @@ final class TenantScopedDb
         'base_plans', 'sub_scenarios', 'change_log', 'users',
         'template_strategies', 'template_customizations', 'template_audit_log',
         'risk_question_sets', 'risk_profiles', 'client_portfolio_items',
+        'plan_review_schedules',
     ];
 
     public function __construct(PDO $db, int $tenantId)
