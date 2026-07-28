@@ -1,6 +1,20 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: partial-update a goal's parameters. POST or PUT,
+// advisor-only (assumption edits are an advisor action). Tenant-scoped.
+//
+// Only fields actually sent are changed (no full-row replace). Per-field
+// validation is shared with goals_create.php (GoalFieldValidation.php); the
+// age-order and liquid+locked=net-worth invariants are re-checked against
+// effective values so a partial update can't silently break them. Every changed
+// field writes a change_log row. The Global Inheritance Engine then cascades the
+// seven overridable rate/contribution fields to non-overridden sub_scenarios
+// only (is_overridden=1 rows are structurally excluded), logging each. An edit
+// to an advice field can move the goal into/out of plan review (PlanReview).
+// Output: {status, goal_id, changed_fields[], cascaded_fields[]}. Errors:
+// 400 (validation), 404 (not found), 405 (other method).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

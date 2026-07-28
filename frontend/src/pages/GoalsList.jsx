@@ -1,3 +1,8 @@
+// Route /goals — the CLIENT's own self-service home. Lists the client's goals
+// (api.listGoals, which the server forces to the caller's own id) plus read-only
+// portfolio, cash-flow and risk cards and the compliance DisclosureBanner. An
+// advisor reaches a specific client's goals through ClientGoals, not here.
+
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import AppHeader from '../components/AppHeader';

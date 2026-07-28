@@ -1,3 +1,8 @@
+// Guided demo-tour state machine — active only for the synthetic public-demo
+// accounts (session.is_demo). Sequences spotlight steps across pages so a first
+// visitor to the live demo gets a walkthrough. No API calls of its own; pure
+// client state. useDemoTour() is the accessor.
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';

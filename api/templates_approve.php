@@ -1,6 +1,16 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates (docs/07 Bet 1): approve a template or customization for
+// real client use. POST, advisor session. Approval authority splits by kind: a
+// GLOBAL (is_system_template) template needs a super_admin; a firm's own
+// template or a customization needs firm role sr_advisor/firm_admin in the
+// OWNING tenant (a super_admin does NOT get a blanket cross-firm bypass for a
+// firm-owned template — approving one is tenant-scoped, 0 rows -> 403). Exactly
+// one of template_id / customization_id. Writes the approval fields + an
+// 'approved' template_audit_log row. Output: {status, template_id|customization_id}.
+// Errors: 400 (input), 403 (authority / other firm), 404, 405.
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

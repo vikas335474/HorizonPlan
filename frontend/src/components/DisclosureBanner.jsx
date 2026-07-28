@@ -1,3 +1,9 @@
+// The compliance disclosure copy that must render on every client-facing plan
+// view (non-negotiable rule #3). Reads the tenant's advisory_mode from useAuth
+// (or an explicit `mode` prop) to pick distribution vs. advisory wording;
+// `compact` tightens it for dense layouts. It only displays a mode set
+// server-side — it can never change it.
+
 import { useAuth } from '../context/AuthContext';
 
 // docs/02 Section 3.6: these strings are compliance-relevant, not cosmetic —

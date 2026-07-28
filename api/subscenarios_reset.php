@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: clear a sub_scenario's override. POST, advisor OR client
+// (a client only on their own, 403). Tenant-scoped. Re-snapshots the parent's
+// CURRENT values and sets is_overridden=0, so the row rejoins the cascade;
+// logs every field that actually changed plus the flag flip. Idempotent — a row
+// that isn't overridden returns success with no writes. Output: {status,
+// sub_scenario_id, reset_to{}}. Errors: 400 (missing id), 403, 404, 405.
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

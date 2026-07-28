@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: create a what-if sub_scenario under a goal. POST, advisor
+// OR client (a client only on their own goal, 403 otherwise). Tenant-scoped.
+// The new row snapshots the parent's current rate/contribution values with
+// is_overridden=0, so it keeps inheriting future cascade updates until something
+// is actually customized on it. Writes a 'created' change_log row. Output:
+// {status, sub_scenario_id}. Errors: 400 (missing base_plan_id), 403 (not your
+// goal), 404 (goal), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

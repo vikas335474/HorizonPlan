@@ -1,3 +1,9 @@
+// Cash-flow module UI (docs/10). Exports CashFlowCard (advisor-facing, editable —
+// api.upsertCashFlowItem / deleteCashFlowItem) and the client-facing read-only
+// card. Props: clientId. The monthly-normalised income/expense/surplus totals
+// (and, for the advisor, the surplus-vs-SIP "is the plan fundable?" gap) come
+// straight from the endpoint; the client card never renders the SIP framing.
+
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Card, Badge, Button, Spinner } from './ui';

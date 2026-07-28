@@ -1,3 +1,9 @@
+// Route / for advisor / super_admin sessions (Home() redirects a client to
+// /goals). The client roster with at-a-glance health badges (readiness + risk
+// band), sort/filter, an add-client form (api.createClient) and the first-run
+// onboarding checklist / spotlight. Roster data comes from clients_list via the
+// dashboard load; useAuth for identity.
+
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';

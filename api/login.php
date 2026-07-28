@@ -1,6 +1,20 @@
 <?php
 declare(strict_types=1);
 
+// Authentication step 1: email + password. POST, UNAUTHENTICATED and
+// CSRF-exempt (no session exists yet). Rate-limited before password_verify()
+// so a locked-out attacker can't keep guessing (429). "No such user" and "wrong
+// password" return the identical 401 to prevent email enumeration — do not make
+// this more specific.
+//
+// On a correct password it branches on the account's second factor: TOTP
+// enrolled -> 202 {status: mfa_required} plus a short-lived pending token, and
+// the client must POST the OTP to mfa_verify.php; Google-linked (no TOTP) ->
+// 401 {google_signin_required} (password alone must not bypass the second
+// factor); neither -> issues a full session (usable only for enrollment
+// endpoints until mandatory MFA is satisfied). Output on the plain-session path:
+// {status, user{...}}. Errors: 400 (missing fields), 401, 429, 405.
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/Totp.php';

@@ -1,3 +1,9 @@
+// Client portfolio ledger UI. ClientPortfolioCard({clientId, readOnly}) renders
+// the balance sheet — liquid/locked buckets, net worth, NAV freshness — with CAS
+// CSV import and cached-price refresh. Data: api.getClientPortfolio plus
+// create / update / delete / import / refresh. readOnly=true hides every edit
+// affordance (the client self-service view).
+
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Card, Badge, Button, Spinner } from './ui';

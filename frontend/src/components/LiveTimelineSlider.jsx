@@ -1,3 +1,7 @@
+// The "live timeline" scrubber used in Meeting Mode — drag to walk a projection
+// year by year. A controlled component driven entirely by its props (current
+// value + change callbacks); no data fetching or role logic of its own.
+
 import { useEffect, useState, useRef } from 'react';
 
 /**

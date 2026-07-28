@@ -1,3 +1,8 @@
+// Summary card for one goal in a grid — prop {goal}. Shows the label, type and
+// readiness signal and links to /goals/:id. Uses useAuth so an advisor
+// (role !== 'client') sees advisor-oriented framing while a client sees the
+// client-facing version.
+
 import { Link } from 'react-router-dom';
 import { Badge } from './ui';
 import { ReadinessScoreBadge } from './ReadinessScore';

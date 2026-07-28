@@ -1,3 +1,7 @@
+// Recharts area chart of the full accumulation -> decumulation lifecycle. Props:
+// {series, yearsToRetirement}; a ReferenceLine marks the retirement year. Purely
+// presentational — it renders series it is handed, it never fetches.
+
 import { ComposedChart, Area, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatCurrencyCompact, formatCurrency } from '../lib/format';
 

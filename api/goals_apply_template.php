@@ -1,6 +1,22 @@
 <?php
 declare(strict_types=1);
 
+// Strategy templates (docs/07 Bet 1): apply an APPROVED template's or
+// customization's return assumption to a retirement goal. POST, advisor-only,
+// tenant-scoped. Retirement goals only (400 otherwise). Exactly one of
+// template_id / customization_id.
+//
+// The approval gate is the whole point: an unapproved template/customization is
+// illustration-only and is refused here (403) regardless of the caller's role —
+// the data-level guarantee behind the workflow. A template may live in another
+// tenant (global or another advisor's published one), read unscoped via
+// findTemplateStrategyById but only usable if published+approved. On success:
+// writes drawdown_return_rate on base_plans, cascades to non-overridden
+// sub_scenarios, writes change_log for each, may move the goal into plan review
+// (PlanReview), and records a 'used_in_plan' template_audit_log row (the event
+// templates_list.php's usage_count counts). Output: {status, goal_id,
+// drawdown_return_rate, cascaded_scenarios}. Errors: 400/403/404/405.
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

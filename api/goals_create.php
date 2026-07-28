@@ -1,6 +1,21 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios (docs/02 §4): create a base_plans goal (retirement /
+// education / home_purchase / other) for a client. POST, advisor-only
+// (verifyAccess 'advisor'; super_admin passes). Tenant-scoped — the client must
+// be a 'client' in this advisor's tenant (404 otherwise; base_plans has no DB-level
+// FK enforcing tenant/client agreement, so this check is the boundary).
+//
+// goal_type gates which fields are meaningful: advice (withdrawal_rate default
+// 3.5, drawdown_return_rate), accumulation (ages, SIP), and corpus composition
+// (liquid/locked, both-or-neither and must sum to initial_net_worth) apply to
+// retirement goals only and are silently nulled otherwise. Per-field validation
+// is shared with goals_update.php via GoalFieldValidation.php. If the tenant
+// opted into plan review, a retirement goal enters 'pending_review' immediately.
+// Writes a 'created' change_log row. Output: {status, goal_id}. Errors:
+// 400 (validation), 404 (client), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

@@ -1,3 +1,11 @@
+// Route /goals/:id — the main goal workspace, shared by advisor and client. Shows
+// the projection chart, readiness score, what-if scenarios, history, and (for an
+// advisor) the edit forms and template-apply action. Every advisor-only
+// affordance is gated behind isAdvisor (role advisor/super_admin), so a client
+// session sees a read-only view. Data: api.getGoal, getProjection,
+// listSubScenarios, createSubScenario, updateSubScenario, updateGoal,
+// listTemplates. useParams for the id, useAuth for the role.
+
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';

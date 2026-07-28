@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: list a client's goals with an at-a-glance readiness signal.
+// GET, advisor OR client (verifyAccessAny). A client lists only their own goals
+// (query-string client_id ignored); an advisor must pass ?client_id=.
+// Tenant-scoped.
+//
+// Each goal carries a readiness_score computed on read (shared PlanMath, same as
+// goals_projection's baseline) — null when the goal can't be projected at all
+// (non-retirement, or withdrawal/drawdown rate unset) — plus its review_status.
+// Output: {status, goals[]}. Errors: 400 (advisor missing client_id),
+// 405 (non-GET).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

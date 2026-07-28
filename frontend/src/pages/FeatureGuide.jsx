@@ -1,3 +1,7 @@
+// Route /guide — the in-app feature run-book. Static content only (no endpoint).
+// Advisor / super_admin; a client session is redirected away (role === 'client'
+// -> Navigate). This is the existing in-app help surface referenced in CLAUDE.md.
+
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';

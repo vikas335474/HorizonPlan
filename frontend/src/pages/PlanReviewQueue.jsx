@@ -1,3 +1,8 @@
+// Route /reviews — the Jr -> Sr plan-approval queue. Advisor / super_admin can
+// view it (api.listReviewQueue); the actual approve / request-changes action on a
+// row is restricted to sr_advisor / firm_admin server-side (requireFirmRole),
+// surfaced through the shared PlanReviewUI rows.
+
 import { useCallback, useEffect, useState } from 'react';
 import AppHeader from '../components/AppHeader';
 import { Card, Spinner } from '../components/ui';

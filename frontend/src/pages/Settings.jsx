@@ -1,3 +1,9 @@
+// Route /settings — per-user and per-firm settings: password change, MFA
+// enrollment / Google unlink, and (advisor with firm-admin branding rights) the
+// white-label branding editor. Also the mandatory-MFA landing target —
+// ProtectedRoute redirects an unenrolled session here. Data: api.mfaEnroll /
+// mfaEnrollConfirm / unlinkGoogle / updatePassword / updateTenant. useAuth.
+
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';

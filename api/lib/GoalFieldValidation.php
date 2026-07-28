@@ -90,6 +90,12 @@ function validateGoalField(string $field, mixed $value): ?string
     }
 }
 
+/**
+ * Shared "money-like field" rule: must be numeric, > 0, and <= $ceiling.
+ * Returns a human-readable error string naming the field, or null if it passes.
+ *
+ * @return string|null first failure message, or null when valid
+ */
 function validatePositiveAmount(mixed $value, string $field, float $ceiling): ?string
 {
     if (!is_numeric($value) || (float) $value <= 0) {

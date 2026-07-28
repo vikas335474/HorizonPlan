@@ -1,3 +1,7 @@
+// A single onboarding spotlight step for advisors (wraps the shared Spotlight).
+// Props: {step, onDismiss}. Presentational — the sequencing lives in the
+// Dashboard's onboarding state, not here.
+
 import { useEffect, useState } from 'react';
 import Spotlight from './Spotlight';
 

@@ -1,3 +1,8 @@
+// Audit-trail UI. ChangeLogPanel({entityType, entityId, tenantId, pageSize})
+// fetches paginated change_log history via api.getChangeLog and renders it;
+// ChangeLogCard wraps that panel in a titled Card. Used by GoalDetail (a goal's
+// own History) and ActivityLog (the firm-wide feed, no entity filter).
+
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { Card, Spinner, Button } from './ui';

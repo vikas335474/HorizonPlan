@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HorizonPlan — User Guide</title>
+<meta name="description" content="HorizonPlan user guide: what each role can see and do, and a plain-language tour of every major feature — for advisors evaluating or onboarding the platform.">
+<style>
+  :root {
+    --paper:#f6f8f8; --surface:#ffffff; --ink:#10201d; --ink-2:#3f5551; --ink-3:#6f8480;
+    --line:#e2e9e7; --line-2:#cfdad7; --teal:#0e7c6b; --teal-ink:#0a5c50; --teal-soft:#e4f1ee;
+    --amber:#c9781c; --amber-soft:#fbefdc; --amber-line:#ecc998;
+    --shadow:0 1px 2px rgba(16,32,29,.05), 0 8px 24px -12px rgba(16,32,29,.12);
+    --radius:14px; --maxw:960px;
+    --sans:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font-family:var(--sans); line-height:1.6;
+         -webkit-font-smoothing:antialiased; padding:44px 20px 72px; }
+  .wrap { max-width:var(--maxw); margin:0 auto; }
+  h1,h2,h3,h4 { margin:0; letter-spacing:-0.02em; text-wrap:balance; }
+  a { color:var(--teal-ink); }
+  .eyebrow { font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--teal-ink); }
+
+  /* masthead */
+  .mast { display:flex; align-items:center; gap:13px; margin-bottom:26px; }
+  .mark { flex:none; width:42px; height:42px; display:grid; place-items:center; border-radius:11px; background:var(--teal-soft); }
+  .brand { font-size:21px; font-weight:750; letter-spacing:-0.03em; }
+  .brand-sub { font-size:12.5px; color:var(--ink-3); margin-top:1px; }
+
+  /* hero */
+  .hero { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);
+          padding:30px 32px; margin-bottom:14px; }
+  .hero h1 { font-size:clamp(24px,4vw,34px); font-weight:750; line-height:1.1; max-width:24ch; }
+  .hero p { margin:14px 0 0; font-size:15.5px; color:var(--ink-2); max-width:70ch; }
+  .hero p strong { color:var(--ink); font-weight:650; }
+
+  /* table of contents */
+  .toc { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 6px; }
+  .toc a { font-size:12.5px; text-decoration:none; color:var(--ink-2); background:var(--surface);
+           border:1px solid var(--line); border-radius:999px; padding:6px 13px; }
+  .toc a:hover { border-color:var(--teal); color:var(--teal-ink); }
+
+  /* section heads */
+  .sec { margin:42px 0 16px; display:flex; align-items:baseline; gap:12px; }
+  .sec h2 { font-size:17px; font-weight:720; }
+  .sec .hairline { flex:1; height:1px; background:var(--line-2); }
+  .lead { font-size:14.5px; color:var(--ink-2); margin:0 0 18px; max-width:74ch; }
+
+  /* persona cards */
+  .persona { background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);
+             padding:20px 22px; margin-bottom:14px; }
+  .persona .top { display:flex; align-items:center; gap:11px; margin-bottom:4px; }
+  .persona .chip { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+                   color:#fff; background:var(--teal); padding:3px 9px; border-radius:6px; }
+  .persona .chip.admin { background:#334e49; }
+  .persona .chip.client { background:var(--amber); }
+  .persona h3 { font-size:16px; font-weight:700; }
+  .persona .role { font-family:var(--mono); font-size:11.5px; color:var(--ink-3); }
+  .persona .who { font-size:13.5px; color:var(--ink-2); margin:6px 0 12px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:8px 24px; }
+  @media (max-width:640px){ .cols { grid-template-columns:1fr; } .matrix-scroll{ overflow-x:auto; } }
+  .cols h4 { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); margin-bottom:6px; }
+  .cols ul { margin:0 0 6px; padding-left:0; list-style:none; }
+  .cols li { font-size:13px; color:var(--ink); padding:3px 0 3px 18px; position:relative; }
+  .cols li::before { content:"◆"; position:absolute; left:0; color:var(--teal); font-size:9px; top:5px; }
+  .cols li.no::before { content:"×"; color:var(--amber); font-size:12px; top:3px; }
+
+  /* matrix */
+  table.matrix { width:100%; border-collapse:collapse; font-size:12.5px; background:var(--surface);
+                 border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  table.matrix th, table.matrix td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--line); }
+  table.matrix thead th { background:var(--teal-soft); color:var(--teal-ink); font-weight:700; font-size:11.5px; }
+  table.matrix td.c { text-align:center; }
+  table.matrix tbody tr:last-child td { border-bottom:none; }
+  table.matrix td.feat { font-weight:600; color:var(--ink); }
+  .yes { color:var(--teal-ink); font-weight:700; }
+  .ro { color:var(--amber); font-weight:700; }
+  .dash { color:var(--ink-3); }
+
+  /* feature blocks */
+  .feature { background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);
+             padding:18px 22px; margin-bottom:12px; }
+  .feature h3 { font-size:15.5px; font-weight:700; margin-bottom:3px; }
+  .feature .k { font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); margin-bottom:8px; }
+  .feature p { margin:6px 0 0; font-size:13.5px; color:var(--ink-2); }
+  .feature p .who { color:var(--ink); font-weight:650; }
+  .feature p.val { color:var(--ink); }
+  .feature p.val::before { content:"Why it matters — "; font-weight:650; color:var(--teal-ink); }
+
+  /* callout */
+  .callout { border-radius:12px; padding:18px 22px; margin:18px 0; font-size:13.5px; }
+  .callout.amber { background:var(--amber-soft); border:1px solid var(--amber-line); }
+  .callout.teal { background:var(--teal-soft); border:1px solid color-mix(in srgb, var(--teal) 25%, transparent); }
+  .callout h3 { font-size:14px; font-weight:700; margin-bottom:6px; }
+  .callout.amber h3 { color:var(--amber); }
+  .callout.teal h3 { color:var(--teal-ink); }
+  .callout p { margin:0; color:var(--ink-2); }
+
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
+
+  .foot { margin-top:44px; padding-top:16px; border-top:1px solid var(--line-2);
+          display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--ink-3); }
+
+  @media print {
+    body { background:#fff; color:#000; padding:0; font-size:11.5px; }
+    .toc { display:none; }
+    .hero,.persona,.feature,table.matrix { box-shadow:none; }
+    .sec { break-after:avoid; }
+    .persona,.feature { break-inside:avoid; }
+    a { color:#000; text-decoration:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <span class="mark" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 22 22" fill="none">
+        <line x1="2" y1="15" x2="20" y2="15" stroke="var(--line-2)" stroke-width="1.5"/>
+        <path d="M4 15 L11 6 L18 11" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="18" cy="11" r="2" fill="var(--amber)"/>
+      </svg>
+    </span>
+    <div>
+      <div class="brand">HorizonPlan</div>
+      <div class="brand-sub">User guide — retirement &amp; goal planning for Indian MFDs, IFAs and SEBI-RIA firms</div>
+    </div>
+  </div>
+
+  <section class="hero">
+    <p class="eyebrow" style="margin-bottom:11px;">A guide for advisors</p>
+    <h1>What everyone can do, and what every feature is for.</h1>
+    <p>
+      HorizonPlan is the <strong>planning and client-conversation layer</strong> for a modern advisory
+      practice: model a client's retirement properly, show them the risk a spreadsheet hides, and keep a
+      clean record of every plan and every change. This guide walks through <strong>who can see and do
+      what</strong> (by role), then gives a plain-language tour of every major feature and the value it
+      delivers. No technical background needed.
+    </p>
+  </section>
+
+  <nav class="toc" aria-label="Contents">
+    <a href="#roles">Who can do what</a>
+    <a href="#matrix">Capability matrix</a>
+    <a href="#tour">Feature tour</a>
+    <a href="#planning">Planning &amp; risk</a>
+    <a href="#money">Money &amp; households</a>
+    <a href="#advice">Advice &amp; governance</a>
+    <a href="#meeting">The meeting &amp; the client</a>
+    <a href="#trust">Security &amp; trust</a>
+    <a href="#start">Getting started</a>
+    <a href="#boundary">What it isn't</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+
+  <!-- ============ ROLES ============ -->
+  <div class="sec" id="roles"><h2>Who can do what — the five roles</h2><span class="hairline"></span></div>
+  <p class="lead">
+    Everyone signs in to the same app, but what they see depends on their role. Roles are enforced on the
+    server for every single action — hiding a button is never the only thing standing between a person and
+    data they shouldn't reach. A firm's data is also completely isolated from every other firm's.
+  </p>
+
+  <div class="persona">
+    <div class="top"><span class="chip admin">Platform</span><h3>Super Admin</h3><span class="role">super_admin</span></div>
+    <div class="who">The HorizonPlan platform operator (not one of the advisory firms). Sees across all firms.</div>
+    <div class="cols">
+      <div>
+        <h4>Can do</h4>
+        <ul>
+          <li>Create and manage advisory firms; add the first advisor to a firm</li>
+          <li>Set a firm's compliance mode (<em>advisory</em> vs <em>distribution</em>) — this is a Super-Admin-only control</li>
+          <li>Approve the <em>global</em> strategy templates every firm can draw from</li>
+          <li>Turn platform-wide settings on/off: mandatory 2FA, demo mode, self-serve signup</li>
+          <li>Reset the public demo data</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Good to know</h4>
+        <ul>
+          <li>Passes every role check, but still can't approve <em>another firm's own</em> templates — that stays with the firm</li>
+          <li>Exists to run the platform, not to advise clients day to day</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="persona">
+    <div class="top"><span class="chip">Firm</span><h3>Firm Admin</h3><span class="role">advisor · firm_admin</span></div>
+    <div class="who">The principal / owner of an advisory firm. Full advisor abilities, plus firm-level control.</div>
+    <div class="cols">
+      <div>
+        <h4>Can do</h4>
+        <ul>
+          <li>Everything a senior advisor can do (below)</li>
+          <li>Set the firm's white-label branding — name, logo, colour — across every client view</li>
+          <li>Approve the firm's own strategy templates, risk questionnaire, and plans</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Cannot do</h4>
+        <ul>
+          <li class="no">Change the firm's compliance mode (<em>advisory_mode</em>) — that's Super-Admin-only, on purpose</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="persona">
+    <div class="top"><span class="chip">Firm</span><h3>Senior Advisor</h3><span class="role">advisor · sr_advisor</span></div>
+    <div class="who">A senior advisor who can sign off on advice. The default level for existing advisor accounts.</div>
+    <div class="cols">
+      <div>
+        <h4>Can do</h4>
+        <ul>
+          <li>Onboard clients and build their goals, portfolios, cash-flow and risk profiles</li>
+          <li>Run projections, what-if scenarios, and present in Meeting Mode</li>
+          <li><strong>Approve</strong> plans a junior advisor submitted for review</li>
+          <li>Approve the firm's strategy templates and risk questionnaire</li>
+          <li>Set each client's review reminder cadence</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Good to know</h4>
+        <ul>
+          <li>The plan-review sign-off role — the second pair of eyes before advice reaches a client</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="persona">
+    <div class="top"><span class="chip">Firm</span><h3>Junior Advisor</h3><span class="role">advisor · jr_advisor</span></div>
+    <div class="who">A junior advisor who prepares the work but doesn't have final sign-off.</div>
+    <div class="cols">
+      <div>
+        <h4>Can do</h4>
+        <ul>
+          <li>Onboard clients; build and edit goals, portfolios, cash-flow, risk profiles</li>
+          <li>Create and fork strategy templates; draft the risk questionnaire</li>
+          <li>Submit a plan for a senior advisor's review</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Cannot do</h4>
+        <ul>
+          <li class="no">Approve plans, templates, or the risk questionnaire — those go to a senior advisor / firm admin</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="persona">
+    <div class="top"><span class="chip client">Client</span><h3>Client</h3><span class="role">client</span></div>
+    <div class="who">The end investor, with their own self-service login into just their own plan.</div>
+    <div class="cols">
+      <div>
+        <h4>Can do</h4>
+        <ul>
+          <li>See their own goals and readiness score</li>
+          <li>Move the what-if sliders to explore scenarios themselves</li>
+          <li>View their portfolio, cash flow, and risk band — read-only</li>
+          <li>Open their own plan in Meeting Mode or as a printable report</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Never sees</h4>
+        <ul>
+          <li class="no">Other clients, or anything firm-wide</li>
+          <li class="no">Advisor-only framing (e.g. the "is this fundable from cash flow?" judgement)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MATRIX ============ -->
+  <div class="sec" id="matrix"><h2>Capability matrix</h2><span class="hairline"></span></div>
+  <p class="lead">At a glance. <span class="yes">●</span> can do &nbsp; <span class="ro">◐</span> read-only / their own only &nbsp; <span class="dash">—</span> not available.</p>
+  <div class="matrix-scroll">
+  <table class="matrix">
+    <thead>
+      <tr><th>Capability</th><th class="c">Super&nbsp;Admin</th><th class="c">Firm&nbsp;Admin</th><th class="c">Sr&nbsp;Advisor</th><th class="c">Jr&nbsp;Advisor</th><th class="c">Client</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="feat">Create / manage firms</td><td class="c yes">●</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">Set firm compliance mode</td><td class="c yes">●</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">White-label branding</td><td class="c yes">●</td><td class="c yes">●</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">Onboard clients &amp; build goals</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">Portfolio, cash flow, risk, households</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c ro">◐</td></tr>
+      <tr><td class="feat">Run projections &amp; what-ifs</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td></tr>
+      <tr><td class="feat">Submit a plan for review</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">Approve plans / templates / risk set</td><td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c dash">—</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">Approve <em>global</em> templates</td><td class="c yes">●</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">Platform settings &amp; demo reset</td><td class="c yes">●</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td></tr>
+      <tr><td class="feat">See own plan &amp; move sliders</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td><td class="c dash">—</td><td class="c yes">●</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- ============ FEATURE TOUR ============ -->
+  <div class="sec" id="tour"><h2>Feature tour</h2><span class="hairline"></span></div>
+  <p class="lead">
+    Every major feature, in plain language: what it is, who uses it, and the value it delivers. Grouped into
+    the parts of the job — the plan and its risk, the money and the household, the advice and its governance,
+    the meeting itself, and the trust that holds it together.
+  </p>
+
+  <h3 id="planning" style="font-size:14px; color:var(--teal-ink); margin:24px 0 10px; letter-spacing:.02em;">▸ Planning &amp; risk</h3>
+
+  <div class="feature">
+    <div class="k">Plan</div>
+    <h3>Goals, modelled properly</h3>
+    <p><span class="who">Advisors build; clients view.</span> Each client can have several goals — retirement, a child's education, a home — each with its own numbers. Retirement goals model the full lifecycle: the <em>accumulation</em> years (a monthly SIP that can step up each year) flowing straight into the <em>decumulation</em> (drawdown) years, as one continuous picture. You can also split the corpus into <em>liquid</em> and <em>locked</em> buckets (EPF/NPS/PPF) so the plan spends the liquid money first.</p>
+    <p class="val">Assumptions built for Indian markets and inflation, not a generic overseas calculator — and the accumulation and drawdown phases join up instead of living in two separate spreadsheets.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">Explore</div>
+    <h3>What-if scenarios</h3>
+    <p><span class="who">Advisors and clients.</span> Spin up a "what if" variant of a goal — retire two years later, save a bit more, assume a lower return — without disturbing the base plan. Change an assumption on the base plan and every non-customised scenario keeps up automatically; the ones you've deliberately tweaked stay frozen.</p>
+    <p class="val">Answer "what would it take?" live in the meeting, safely, without ever losing the original plan.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">See the risk</div>
+    <h3>Readiness score, sequence risk &amp; historical replay</h3>
+    <p><span class="who">Advisors and clients.</span> A single <strong>Retirement Readiness Score (0–100)</strong> a client can hold onto. A <strong>sequence-of-returns chart</strong> that shows how the <em>same</em> average return plays out very differently if the bad years come early. And a <strong>historical replay</strong> — "what if you'd retired in a specific real market year?" — using actual market history.</p>
+    <p class="val">Makes the risk that averages hide visible and memorable — the difference between a client nodding along and a client who genuinely understands their plan.</p>
+  </div>
+
+  <h3 id="money" style="font-size:14px; color:var(--teal-ink); margin:24px 0 10px; letter-spacing:.02em;">▸ Money &amp; households</h3>
+
+  <div class="feature">
+    <div class="k">Portfolio</div>
+    <h3>Portfolio ledger &amp; daily price sync</h3>
+    <p><span class="who">Advisors build; clients view read-only.</span> A running balance sheet per client — assets and liabilities, liquid vs. locked, net worth computed for you. Import holdings straight from a CAS / MFCentral CSV. Mutual-fund holdings are refreshed daily from cached NAVs, and a "Refresh prices" button re-values them on demand.</p>
+    <p class="val">The client's real financial picture sits alongside the plan — no re-keying, no separate spreadsheet. (It tracks values from cached prices; it is not a live RTA folio feed.)</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">Cash flow</div>
+    <h3>Cash-flow view &amp; the fundability gap</h3>
+    <p><span class="who">Advisors build; clients see a simpler read-only version.</span> List a client's income and expenses (monthly or annual) and HorizonPlan sums them into one monthly surplus. For the advisor, it compares that surplus against the plan's total SIPs and answers the blunt question: <strong>is this plan actually fundable from the client's cash flow?</strong> The client's view shows the cash flow without that advisor-only framing.</p>
+    <p class="val">Catches the plan that looks great on paper but the client can't actually afford — before it's promised.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">Household</div>
+    <h3>Household / family planning</h3>
+    <p><span class="who">Advisors.</span> Group a family into a household and see their goals, corpus and readiness <em>combined</em>, plus a cash-flow roll-up summed across every member — instead of planning each spouse or parent one at a time.</p>
+    <p class="val">Families retire as a unit; this plans them as one.</p>
+  </div>
+
+  <h3 id="advice" style="font-size:14px; color:var(--teal-ink); margin:24px 0 10px; letter-spacing:.02em;">▸ Advice &amp; governance</h3>
+
+  <div class="feature">
+    <div class="k">Risk profiler</div>
+    <h3>Your firm's own risk questionnaire</h3>
+    <p><span class="who">Advisors author; clients answer &amp; see their band.</span> The firm supplies its <em>own</em> questions and scoring — HorizonPlan never authors the questionnaire for you. Once a senior advisor approves the set, a client's answers produce a risk band, and only then does a suggested return assumption surface. Clients can see their own band read-only.</p>
+    <p class="val">A risk process that's genuinely yours and compliant, not a black box — and a suggested number never appears until a principal has signed off on the questions behind it.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">Templates</div>
+    <h3>Strategy templates, approval-gated</h3>
+    <p><span class="who">Advisors; global ones curated by the platform.</span> A library of model asset allocations and return assumptions — global templates every firm can draw from, plus your firm's own and forked variants. A template can't be applied to a real client's plan until it's <strong>approved</strong>; applying one writes the assumption into the goal and records exactly where it came from.</p>
+    <p class="val">Consistent, defensible advice across the firm — with a deliberate sign-off step before any model touches a real client.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">Oversight</div>
+    <h3>Jr → Sr plan-approval workflow</h3>
+    <p><span class="who">Junior advisors submit; senior advisors / firm admins approve.</span> When switched on for a firm, a plan a junior advisor changes enters a review queue. A senior advisor approves it or requests changes, with notes. Every advice edit can move a plan into review automatically.</p>
+    <p class="val">A real second-pair-of-eyes control before advice reaches a client — the oversight a firm principal needs, built in rather than bolted on.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">Follow-through</div>
+    <h3>Scheduled review reminders</h3>
+    <p><span class="who">Advisors set the cadence.</span> Put a client on a quarterly or annual review cadence and HorizonPlan emails a reminder when it's due. Off by default — no client is enrolled without you choosing it.</p>
+    <p class="val">The plan doesn't go stale in a drawer; the review conversation actually happens.</p>
+  </div>
+
+  <div class="feature">
+    <div class="k">The record</div>
+    <h3>Full audit trail</h3>
+    <p><span class="who">Advisors &amp; firm admins.</span> Every change to a plan or scenario is logged — who changed what, and when — visible per goal and as a firm-wide activity feed. Read-only; you can't quietly rewrite history.</p>
+    <p class="val">A clean, defensible record for compliance and for the "why did we change this?" conversation a year later.</p>
+  </div>
+
+  <h3 id="meeting" style="font-size:14px; color:var(--teal-ink); margin:24px 0 10px; letter-spacing:.02em;">▸ The meeting &amp; the client</h3>
+
+  <div class="grid2">
+    <div class="feature">
+      <div class="k">Present</div>
+      <h3>Meeting Mode</h3>
+      <p><span class="who">Advisors &amp; clients.</span> A full-screen, presentation-ready walkthrough of a plan with a live timeline slider — built for the room, not a screen-share of a spreadsheet.</p>
+      <p class="val">The retirement conversation your client actually remembers.</p>
+    </div>
+    <div class="feature">
+      <div class="k">Leave-behind</div>
+      <h3>Printable client report</h3>
+      <p><span class="who">Advisors &amp; clients.</span> A clean, branded, printable summary of the plan — export to PDF straight from the browser.</p>
+      <p class="val">A professional leave-behind that carries the firm's name, not a screenshot.</p>
+    </div>
+    <div class="feature">
+      <div class="k">Self-service</div>
+      <h3>Client login</h3>
+      <p><span class="who">Clients.</span> Clients sign in to see just their own goals, move the sliders, and view their portfolio, cash flow and risk band — read-only, anytime.</p>
+      <p class="val">Engagement between meetings, without exposing anything firm-wide.</p>
+    </div>
+    <div class="feature">
+      <div class="k">Brand</div>
+      <h3>White-label branding</h3>
+      <p><span class="who">Firm admins set it.</span> The firm's name, logo and colour across every client-facing view.</p>
+      <p class="val">Clients experience <em>your</em> firm, not a generic tool.</p>
+    </div>
+  </div>
+
+  <h3 id="trust" style="font-size:14px; color:var(--teal-ink); margin:24px 0 10px; letter-spacing:.02em;">▸ Security &amp; trust</h3>
+
+  <div class="feature">
+    <div class="k">Trust</div>
+    <h3>Two-factor, isolation &amp; disclosures</h3>
+    <p><span class="who">Everyone.</span> Sign in with an authenticator app or Google as a second factor. Every firm's data is strictly isolated from every other firm's. And the right compliance disclosure — matching whether the firm operates in <em>advisory</em> or <em>distribution</em> mode — renders on every client-facing plan view, right next to the projection and the withdrawal-rate slider.</p>
+    <p class="val">The basics that let a client, and a regulator, trust what they're looking at.</p>
+  </div>
+
+  <div class="callout teal">
+    <h3>A note on the compliance disclosure</h3>
+    <p>The disclosure wording is driven by the firm's compliance mode, which only a Super Admin can set. It always appears on client-facing plan views — advisors and clients can read it, but no one inside a firm can quietly change or remove it.</p>
+  </div>
+
+  <!-- ============ GETTING STARTED ============ -->
+  <div class="sec" id="start"><h2>Getting started</h2><span class="hairline"></span></div>
+  <div class="grid2">
+    <div class="feature">
+      <div class="k">Step 1</div>
+      <h3>Try a live demo</h3>
+      <p>Explore a fully populated firm — real-looking clients, goals and portfolios — before you commit anything. Nothing you touch there is real client data.</p>
+    </div>
+    <div class="feature">
+      <div class="k">Step 2</div>
+      <h3>Start a free trial</h3>
+      <p>Create your own firm and your first plan without a sales call. A trial firm starts in distribution mode with you as its firm admin.</p>
+    </div>
+    <div class="feature">
+      <div class="k">Step 3</div>
+      <h3>Follow the onboarding checklist</h3>
+      <p>A first-run checklist walks you through adding your first client and building their first goal, so you're not staring at a blank screen.</p>
+    </div>
+    <div class="feature">
+      <div class="k">Anytime</div>
+      <h3>Open the in-app guide</h3>
+      <p>A built-in feature guide (the "Guide" link in the app) is a quick run-book of everything here, right where you're working.</p>
+    </div>
+  </div>
+
+  <!-- ============ BOUNDARY ============ -->
+  <div class="sec" id="boundary"><h2>What HorizonPlan is — and isn't</h2><span class="hairline"></span></div>
+  <div class="grid2">
+    <div class="callout teal" style="margin:0;">
+      <h3>What it is</h3>
+      <p>The planning and client-relationship layer: deep on the retirement story, the meeting, the follow-through, and the record — the part transaction platforms treat as a bolt-on. Make the planning and the client experience genuinely good.</p>
+    </div>
+    <div class="callout amber" style="margin:0;">
+      <h3>What it isn't</h3>
+      <p>Not a transaction back-office. It doesn't place orders, do Video KYC, or reconcile commissions — it focuses on advice, not execution. We're straight about that boundary on purpose. Keep your back-office; let HorizonPlan own the planning.</p>
+    </div>
+  </div>
+
+  <!-- ============ GLOSSARY ============ -->
+  <div class="sec" id="glossary"><h2>Glossary</h2><span class="hairline"></span></div>
+  <div class="feature" style="padding:8px 22px;">
+    <p style="margin:12px 0;"><b>Accumulation</b> — the saving-up years before retirement (e.g. a monthly SIP). &nbsp; <b>Decumulation / drawdown</b> — the years after retirement, living off the corpus.</p>
+    <p style="margin:12px 0;"><b>Corpus</b> — the total pot of retirement savings. &nbsp; <b>Liquid vs. locked</b> — money you can spend now vs. tied up in EPF/NPS/PPF until a later age.</p>
+    <p style="margin:12px 0;"><b>Withdrawal rate</b> — the % of the corpus drawn each year in retirement. &nbsp; <b>Sequence-of-returns risk</b> — the danger that a bad run of returns early in retirement does lasting damage, even at the same average.</p>
+    <p style="margin:12px 0;"><b>Readiness score</b> — a single 0–100 measure of how well a plan holds up. &nbsp; <b>What-if scenario</b> — a saved variation of a goal with different assumptions.</p>
+    <p style="margin:12px 0;"><b>Advisory vs. distribution mode</b> — a firm's compliance posture, which sets the disclosure wording clients see. &nbsp; <b>SIP</b> — a Systematic Investment Plan, i.e. a regular monthly investment.</p>
+  </div>
+
+  <div class="foot">
+    <div>HorizonPlan — User Guide · for advisors evaluating or onboarding the platform</div>
+    <div>Features described are live as of July 2026</div>
+  </div>
+
+</div>
+</body>
+</html>

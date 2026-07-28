@@ -120,6 +120,14 @@ const EMPLOYEE_ROSTER = [
     ['handle' => 'junior2', 'firm_role' => 'jr_advisor'],
 ];
 
+/**
+ * Insert one demo user (advisor or client) with the shared DEMO_PASSWORD hash.
+ * Raw INSERT, not TenantScopedDb — the seeder runs outside any request/session,
+ * so there is no verified tenant to bind the helper to; tenant_id is passed
+ * explicitly on every call instead.
+ *
+ * @return int the new user's id
+ */
 function makeUser(PDO $db, int $tenantId, string $email, string $role, ?string $firmRole = null, ?string $mfaSecret = null): int
 {
     $stmt = $db->prepare(
@@ -133,6 +141,14 @@ function makeUser(PDO $db, int $tenantId, string $email, string $role, ?string $
     return (int) $db->lastInsertId();
 }
 
+/**
+ * Insert one demo base_plans goal. $fields is a column=>value map (the goal's
+ * parameters); tenant_id/client_id are injected here so callers only pass the
+ * planning fields. Raw INSERT for the same no-session reason as makeUser().
+ *
+ * @param array<string,mixed> $fields
+ * @return int the new goal's id
+ */
 function makeGoal(PDO $db, int $tenantId, int $clientId, array $fields): int
 {
     $fields['tenant_id'] = $tenantId;
@@ -147,6 +163,11 @@ function makeGoal(PDO $db, int $tenantId, int $clientId, array $fields): int
     return (int) $db->lastInsertId();
 }
 
+/**
+ * Insert one demo client_portfolio_items row (asset or liability). $bucket is
+ * liquid|locked for an asset, null for a liability — same shape the real
+ * client_portfolio_create.php endpoint enforces.
+ */
 function makePortfolioItem(PDO $db, int $tenantId, int $clientId, int $creatorId, string $kind, ?string $bucket, string $category, string $description, float $value): void
 {
     $db->prepare(
@@ -159,6 +180,10 @@ function makePortfolioItem(PDO $db, int $tenantId, int $clientId, int $creatorId
     ]);
 }
 
+/**
+ * Insert one demo cash_flow_items row (income or expense). $cadence is
+ * monthly|annual — CashFlowSummary normalises annual to monthly on read.
+ */
 function makeCashFlowItem(PDO $db, int $tenantId, int $clientId, int $creatorId, string $kind, string $label, float $amount, string $cadence, string $category): void
 {
     $db->prepare(

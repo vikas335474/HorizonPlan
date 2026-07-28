@@ -1,6 +1,19 @@
 <?php
 declare(strict_types=1);
 
+// Risk profiler (docs/06 §B): score a completed questionnaire and store the
+// profile. POST, advisor-only (the advisor administers/records the
+// questionnaire). Tenant-scoped; the client must be in this tenant (404).
+//
+// Scores the answers against the firm's own question set + rubric
+// (RiskProfileScoring) — HorizonPlan never authors these. The profile is stored
+// regardless of the set's approval state; only the suggested_return_pct in the
+// RESPONSE is gated on current approval (guardrail 2), never invented as a
+// fallback. Output: {status, risk_profile_id, score, band,
+// suggested_return_assumption_pct|null, question_set_approved}. Errors:
+// 400 (missing input / no set / score outside every band), 404 (client),
+// 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

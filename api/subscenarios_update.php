@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Plans & scenarios: customize a sub_scenario's what-if values. POST, advisor
+// OR client (a client only on their own, 403). Tenant-scoped. Setting any of the
+// seven overridable fields flips is_overridden=1, which freezes the WHOLE row
+// from future parent cascade (one shared flag, not per-field — documented
+// behavior, docs/02 §4.2). Logs each changed field and the flag flip. Output:
+// {status, sub_scenario_id, changed_fields[]}. Errors: 400 (missing id),
+// 403 (not your sub-scenario), 404 (not found), 405 (non-POST).
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';

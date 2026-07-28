@@ -1,3 +1,9 @@
+// Route /templates — the advisor / super_admin strategy-template workbench.
+// Tabs for the global library, the firm's own templates, and its customizations;
+// data via api.listTemplates, with fork / create / approve / customize handled by
+// the shared TemplateUI modals. Client-side guarded; every API call is also
+// server-gated.
+
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import AppHeader from '../components/AppHeader';

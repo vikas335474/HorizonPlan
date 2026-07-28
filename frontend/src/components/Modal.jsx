@@ -1,3 +1,7 @@
+// Accessible modal-dialog primitive. Props: {open, onClose, title, description,
+// children, size}. Handles focus management and escape-to-close. Shared by the
+// create/edit flows across the app.
+
 import { useEffect, useRef } from 'react';
 
 const SIZES = {

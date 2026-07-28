@@ -1,3 +1,9 @@
+// Routes /reset-password and /accept-invite (UNAUTHENTICATED) — step 2 of the
+// token flows: redeem an emailed token to set a new password
+// (api.confirmPasswordReset). The `mode` prop switches the copy between a plain
+// password reset ('reset') and advisor invite activation ('invite'); the
+// redemption mechanism is identical (docs/09 Session 4).
+
 import { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';

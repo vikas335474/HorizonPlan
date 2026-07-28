@@ -1,6 +1,16 @@
 <?php
 declare(strict_types=1);
 
+// Authentication / bootstrap: "who am I, and what does my UI need to know?"
+// Accepts any method. Returns 401 {No active session} when not logged in — an
+// expected, normal response on first page load, not an error. On a valid
+// session it re-issues the CSRF token (keeping it fresh across reloads) and
+// returns three blocks: user (ids, role, firm_role, MFA flags derived from
+// mfa_secret/google_sub, is_demo), tenant (company_name, advisory_mode — read
+// here but only ever set server-side by a super_admin — white_label branding,
+// requires_plan_review), and platform (mfa_enforcement, demo_mode). Reads
+// tenants/users directly (not via TenantScopedDb) for its own session's row.
+
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/DemoAccess.php';

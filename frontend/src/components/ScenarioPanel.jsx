@@ -1,3 +1,8 @@
+// The what-if editor for one sub-scenario. Props: {goal, subScenario, onChanged}.
+// Sliders write overrides through api.updateSubScenario (which flips the row's
+// single is_overridden flag, freezing it from parent cascade); the reset control
+// calls api.resetSubScenario to rejoin the cascade.
+
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../lib/api';
 import LiveTimelineSlider from './LiveTimelineSlider';

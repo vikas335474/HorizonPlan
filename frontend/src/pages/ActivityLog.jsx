@@ -1,3 +1,9 @@
+// Route /activity — the firm-wide read-only audit trail (docs/09 Session 6).
+// Advisor / super_admin (server-enforced via verifyAccessAny on
+// change_log_list.php). Renders <ChangeLogPanel> with no entity filter, i.e. the
+// whole-tenant feed; the data fetch (api.getChangeLog) lives inside that panel,
+// so this page itself is just layout.
+
 import AppHeader from '../components/AppHeader';
 import { Card } from '../components/ui';
 import ChangeLogPanel from '../components/ChangeLogUI';

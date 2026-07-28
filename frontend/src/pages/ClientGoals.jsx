@@ -1,3 +1,10 @@
+// Route /clients/:clientId — the advisor's view of ONE client. Goal grid +
+// create-goal, plus the client's portfolio, cash-flow and risk cards, a
+// review-schedule card and a household-assignment card. Data: api.createGoal,
+// getClientPortfolio, getClientHousehold, listHouseholds, assignHousehold,
+// updatePlanReviewSchedule (goals themselves load inside GoalCard/child cards).
+// Advisor-facing — a client sees their own goals through GoalsList instead.
+
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';

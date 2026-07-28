@@ -1,3 +1,9 @@
+// Risk-profiler UI. RiskProfileSummary({clientId}) is the advisor view — latest
+// band plus a take-the-questionnaire modal (api.getRiskProfile /
+// getRiskQuestionSet / submitRiskProfile). ClientRiskProfileCard is the client's
+// own read-only band. The suggested return assumption only surfaces when the
+// firm's question set is currently approved (read-time gate).
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';

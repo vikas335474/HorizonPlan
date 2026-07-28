@@ -1,3 +1,7 @@
+// Route /signup (UNAUTHENTICATED) — self-serve trial signup. Creates a
+// distribution-mode firm plus its first firm_admin and logs straight in via
+// useAuth.signup (api.signup). Redirects to the app if already authenticated.
+
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

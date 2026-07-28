@@ -1,3 +1,9 @@
+// Route /households/:householdId — advisor-only household aggregate view
+// (docs/10 P0-1). Combined steady/adverse projection and readiness summed across
+// the household's members (api.getHouseholdProjection), plus the household
+// cash-flow roll-up (api.getHouseholdCashFlow, soft-failing so the projection
+// still renders if it can't load).
+
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
