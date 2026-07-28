@@ -50,6 +50,7 @@ $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM active_sessions");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
+$db->exec("DELETE FROM households"); // migration 029 FKs to tenants
 $db->exec("DELETE FROM tenants");
 
 $db->exec("INSERT INTO tenants (id, company_name) VALUES (1, 'HorizonPlan Admin'), (2, 'Advisor Firm A'), (3, 'Advisor Firm B')");

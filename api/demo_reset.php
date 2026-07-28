@@ -116,11 +116,15 @@ try {
     // risk_question_sets/template_customizations/template_strategies
     // (their parents), and finally users/tenants. cash_flow_items (migration
     // 030) FKs to users, so it must go before the users delete like the rest.
+    // households (migration 029) is seeded for the demo (DemoSeeder groups a
+    // family per firm); users.household_id FKs to it ON DELETE SET NULL, so
+    // clearing it here before the users/tenants delete un-groups the members
+    // and lets the tenant delete proceed without an FK block.
     foreach ([
         'cash_flow_items', 'client_portfolio_items', 'risk_profiles', 'sub_scenarios',
         'template_audit_log', 'base_plans',
         'risk_question_sets', 'template_customizations', 'template_strategies',
-        'change_log',
+        'change_log', 'households',
     ] as $table) {
         $db->prepare("DELETE FROM {$table} WHERE tenant_id IN ($tenantPlaceholders)")
            ->execute($demoTenantIds);

@@ -83,7 +83,7 @@ export function CashFlowCard({ clientId }) {
   const expense = items.filter((it) => it.kind === 'expense');
 
   return (
-    <Card className="p-4 mb-4">
+    <Card className="p-4 mb-4" data-tour="cash-flow-card">
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-base font-semibold text-[var(--color-ink)]">Cash flow &amp; surplus</h2>
         {!adding && (

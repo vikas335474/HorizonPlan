@@ -46,6 +46,7 @@ $db->exec("DELETE FROM mfa_pending");
 $db->exec("DELETE FROM password_resets");
 $db->exec("DELETE FROM login_attempts");
 $db->exec("DELETE FROM users");
+$db->exec("DELETE FROM households"); // migration 029 FKs to tenants
 $db->exec("DELETE FROM tenants");
 
 $db->exec("INSERT INTO tenants (id, company_name) VALUES (1, 'Tenant A'), (2, 'Tenant B')");
