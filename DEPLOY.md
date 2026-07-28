@@ -145,6 +145,34 @@ shipped by the deploy pipeline (only `api/lib/MfNavSync.php`, which the two
 API endpoints that need it in-request also `require_once`, is; `tools/`
 itself stays server-side-only, run via cron or SSH).
 
+## Scheduled plan-review emails cron
+
+`tools/plan_review_send.php` sends the periodic "your plan, refreshed" review
+emails (docs/10 P0-3). It emails **only** clients an advisor has explicitly
+opted in — a per-client cadence of `quarterly` or `annually`, set on the
+client's page in-app — whose review is due, and links each one to their own
+self-service login. Off by default; nobody is ever auto-enrolled. See
+`api/lib/PlanReviewMailer.php` for the logic.
+
+**Before enabling:** set `APP_BASE_URL` in `api/db_config.php` (see
+`api/db_config.example.php`) to the deployed app's absolute URL — it's the
+login link in the email. Without it the email ships a placeholder link.
+
+**hPanel → Advanced → Cron Jobs → Create a new cron job:**
+- Command: `php /home/<your-hostinger-user>/public_html/tools/plan_review_send.php`
+  (adjust the path as with the NAV cron above).
+- Schedule: once daily is plenty — e.g. `0 8 * * *` (8 AM server time). Cadence
+  is measured from each client's own last-sent date, so a daily run simply
+  picks up whoever crossed their quarterly/annual mark that day; it never
+  double-sends within a period.
+- When `platform_settings.demo_mode = 'on'`, every email is suppressed (logged,
+  not sent) by the shared `Mailer` — a demo/staging environment never emails a
+  real inbox, and the client is still marked as "reviewed" so it doesn't pile up.
+
+Same CLI-only, never-shipped-by-deploy posture as the NAV cron
+(`api/lib/PlanReviewMailer.php` is the shared part; `tools/` stays
+server-side-only).
+
 ## Google Sign-In setup
 
 Google Sign-In (api/auth_google.php) needs one OAuth 2.0 Client ID, created

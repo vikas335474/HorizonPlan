@@ -74,6 +74,10 @@ export default function ClientGoals() {
         {/* docs/06 Section B — risk tolerance belongs to the client, not one goal. */}
         <RiskProfileSummary clientId={clientId} />
 
+        {/* docs/10 P0-3 — opt a client into periodic "your plan, refreshed"
+            review emails. Advisor-set, default off. */}
+        <ReviewScheduleCard clientId={clientId} />
+
         {loading && <Spinner label="Loading goals…" />}
 
         {error && (
@@ -109,6 +113,86 @@ export default function ClientGoals() {
         onCreated={() => { setAddOpen(false); load(); }}
       />
     </div>
+  );
+}
+
+// docs/10 P0-3 — a client's scheduled-review cadence. A recurring "your plan,
+// refreshed" email (quarterly/annually) that links the client to their own
+// self-service login. Opt-in, default off; the daily cron sends the ones due.
+function ReviewScheduleCard({ clientId }) {
+  const [cadence, setCadence] = useState(null); // null = loading
+  const [lastSentAt, setLastSentAt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getPlanReviewSchedule(clientId)
+      .then((res) => {
+        if (cancelled) return;
+        setCadence(res.cadence || 'off');
+        setLastSentAt(res.last_sent_at || null);
+      })
+      .catch(() => { if (!cancelled) setCadence('off'); });
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  async function change(next) {
+    const prev = cadence;
+    setCadence(next);
+    setBusy(true);
+    setError('');
+    setSaved(false);
+    try {
+      await api.updatePlanReviewSchedule(clientId, next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch (err) {
+      setCadence(prev); // revert on failure
+      setError(err.message || 'Could not update the review schedule.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-5 mb-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--color-ink)]">Scheduled reviews</h2>
+          <p className="mt-0.5 text-sm text-[var(--color-ink-2)] max-w-md">
+            Email this client a periodic reminder to revisit their plan, with a link to their own login.
+            Off by default — nothing is sent unless you turn it on.
+          </p>
+          {lastSentAt && (
+            <p className="mt-1 text-xs text-[var(--color-ink-3)]">Last sent {lastSentAt.slice(0, 10)}</p>
+          )}
+          {error && <p className="mt-1 text-xs" style={{ color: 'var(--color-alert)' }}>{error}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          {cadence === null ? (
+            <span className="text-sm text-[var(--color-ink-3)]">Loading…</span>
+          ) : (
+            <>
+              <select
+                value={cadence}
+                disabled={busy}
+                onChange={(e) => change(e.target.value)}
+                className="field !w-auto"
+                aria-label="Review cadence"
+              >
+                <option value="off">Off</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="annually">Annually</option>
+              </select>
+              {saved && <span className="text-xs" style={{ color: 'var(--color-teal-ink)' }}>Saved</span>}
+            </>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
