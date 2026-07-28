@@ -391,6 +391,25 @@ export const api = {
       body: JSON.stringify({ client_id: Number(clientId), cadence }),
     }),
 
+  // --- Households / family aggregate planning (docs/10 P0-1, advisor-only) ---
+  listHouseholds: () => request('households_list.php'),
+
+  createHousehold: (name) =>
+    request('households_create.php', { method: 'POST', body: JSON.stringify({ name }) }),
+
+  // householdId null clears the client's household.
+  assignHousehold: (clientId, householdId) =>
+    request('household_assign.php', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: Number(clientId), household_id: householdId == null ? null : Number(householdId) }),
+    }),
+
+  getHouseholdProjection: (householdId) =>
+    request(`household_projection.php?household_id=${encodeURIComponent(householdId)}`),
+
+  getClientHousehold: (clientId) =>
+    request(`household_read.php?client_id=${encodeURIComponent(clientId)}`),
+
   // --- Jr -> Sr Advisor Plan-Approval Workflow ---
   // Puts a goal into (or back into) the pending_review queue. Most goals get
   // here automatically on an advice-field edit; this covers the cases that

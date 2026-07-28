@@ -78,6 +78,10 @@ export default function ClientGoals() {
             review emails. Advisor-set, default off. */}
         <ReviewScheduleCard clientId={clientId} />
 
+        {/* docs/10 P0-1 — which household this client belongs to (for the
+            combined family view). */}
+        <HouseholdAssignCard clientId={clientId} />
+
         {loading && <Spinner label="Loading goals…" />}
 
         {error && (
@@ -186,6 +190,90 @@ function ReviewScheduleCard({ clientId }) {
                 <option value="off">Off</option>
                 <option value="quarterly">Quarterly</option>
                 <option value="annually">Annually</option>
+              </select>
+              {saved && <span className="text-xs" style={{ color: 'var(--color-teal-ink)' }}>Saved</span>}
+            </>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// docs/10 P0-1 — assign this client to a household (or clear it). Reads the
+// firm's households + the client's current one; changes go through
+// household_assign.php (tenant-scoped). Links out to the combined view.
+function HouseholdAssignCard({ clientId }) {
+  const [households, setHouseholds] = useState(null);
+  const [current, setCurrent] = useState(''); // '' = none
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.listHouseholds(), api.getClientHousehold(clientId)])
+      .then(([list, cur]) => {
+        if (cancelled) return;
+        setHouseholds(list.households);
+        setCurrent(cur.household_id ? String(cur.household_id) : '');
+      })
+      .catch((err) => { if (!cancelled) setError(err.message || 'Could not load households.'); });
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  async function change(next) {
+    const prev = current;
+    setCurrent(next);
+    setBusy(true);
+    setError('');
+    setSaved(false);
+    try {
+      await api.assignHousehold(clientId, next === '' ? null : Number(next));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch (err) {
+      setCurrent(prev);
+      setError(err.message || 'Could not update the household.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-4 mb-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--color-ink)]">Household</h2>
+          <p className="mt-0.5 text-sm text-[var(--color-ink-2)] max-w-md">
+            Group this client with family members to see a combined retirement plan.{' '}
+            <Link to="/households" className="text-[var(--color-teal-ink)] underline">Manage households</Link>.
+          </p>
+          {error && <p className="mt-1 text-xs" style={{ color: 'var(--color-alert)' }}>{error}</p>}
+          {current && (
+            <Link to={`/households/${current}`} className="mt-1 inline-block text-xs text-[var(--color-teal-ink)] underline">
+              View combined plan →
+            </Link>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {households === null ? (
+            <span className="text-sm text-[var(--color-ink-3)]">Loading…</span>
+          ) : households.length === 0 ? (
+            <span className="text-xs text-[var(--color-ink-3)]">No households yet — <Link to="/households" className="underline">create one</Link>.</span>
+          ) : (
+            <>
+              <select
+                value={current}
+                disabled={busy}
+                onChange={(e) => change(e.target.value)}
+                className="field !w-auto"
+                aria-label="Household"
+              >
+                <option value="">Not in a household</option>
+                {households.map((h) => (
+                  <option key={h.id} value={String(h.id)}>{h.name}</option>
+                ))}
               </select>
               {saved && <span className="text-xs" style={{ color: 'var(--color-teal-ink)' }}>Saved</span>}
             </>

@@ -8,6 +8,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import ClientGoals from './pages/ClientGoals';
+import Households from './pages/Households';
+import HouseholdDetail from './pages/HouseholdDetail';
 import GoalsList from './pages/GoalsList';
 import GoalDetail from './pages/GoalDetail';
 import PlanReport from './pages/PlanReport';
@@ -71,6 +73,12 @@ export default function App() {
           {/* Super Admin console — role is enforced server-side on every
               endpoint; AdminConsole also client-guards and redirects non-admins. */}
           <Route path="/admin" element={<ProtectedRoute><AdminConsole /></ProtectedRoute>} />
+
+          {/* docs/10 P0-1 — household / family aggregate planning; advisor-only,
+              server-enforced (verifyAccess 'advisor' on every households_* /
+              household_* endpoint). Clients never see households. */}
+          <Route path="/households" element={<ProtectedRoute><Households /></ProtectedRoute>} />
+          <Route path="/households/:householdId" element={<ProtectedRoute><HouseholdDetail /></ProtectedRoute>} />
 
           {/* Strategy Templates — advisor/super_admin view; client-side guard in page,
               server-side gate on every API call. */}

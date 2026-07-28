@@ -109,6 +109,14 @@ export default function AppHeader() {
           )}
           {(user?.role === 'advisor' || user?.role === 'super_admin') && (
             <Link
+              to="/households"
+              className="text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
+            >
+              Households
+            </Link>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <Link
               to="/templates"
               className="text-sm font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)] transition-colors"
             >
@@ -227,6 +235,9 @@ export default function AppHeader() {
         <div className="sm:hidden border-t border-[var(--color-line)] bg-[var(--color-surface)] px-5 py-3 flex flex-col gap-1">
           {user?.role === 'super_admin' && (
             <button onClick={() => go('/admin')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Firms</button>
+          )}
+          {(user?.role === 'advisor' || user?.role === 'super_admin') && (
+            <button onClick={() => go('/households')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Households</button>
           )}
           {(user?.role === 'advisor' || user?.role === 'super_admin') && (
             <button onClick={() => go('/templates')} className="py-2 text-left text-sm font-medium text-[var(--color-ink-2)]">Templates</button>
