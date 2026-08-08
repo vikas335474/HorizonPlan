@@ -556,6 +556,71 @@ final class PlanMath
      * @return float[] index 0 = starting balance, index yearsToRetirement =
      *   retirement-day corpus, subsequent indices = decumulation years
      */
+    /**
+     * "How much will I need, and am I on track for it?" — the two numbers a
+     * person planning for themselves actually asks for, which nothing in this
+     * app previously computed.
+     *
+     * The advisor product never needed this because an advisor arrives with a
+     * target already in mind and enters a corpus to model. Someone planning
+     * alone has no target: they know what they spend today, and need the app to
+     * turn that into a number for a year that is decades away.
+     *
+     * THE ARITHMETIC, all of it visible so nothing is smuggled in:
+     *   1. today's annual spend, inflated to the retirement year;
+     *   2. the corpus that sustains it at the plan's own withdrawal rate
+     *      (spend ÷ rate — the same corpus-multiple mechanic as
+     *      corpusMultiple(), docs/02 §4.2);
+     *   3. what the plan is actually projected to reach by then, read off the
+     *      lifecycle series the goal already projects with — not a second,
+     *      subtly different curve.
+     *
+     * THE ASSUMPTION THIS MAKES, and callers MUST show it rather than bury it:
+     * that the person will spend in retirement roughly what they spend now,
+     * adjusted for inflation. That is the standard planning starting point and
+     * it is also frequently wrong for an individual (a paid-off home, grown
+     * children, higher medical costs). Presenting the output as a fact rather
+     * than as the consequence of a stated assumption would be the dishonest
+     * version of this feature.
+     *
+     * Returns NULL when the inputs to state it honestly are missing —
+     * specifically when no monthly expense figure has been recorded. There is
+     * no defensible way to invent someone's cost of living, and a guessed
+     * target is worse than no target: it would anchor a real decision.
+     *
+     * @param float $monthlyExpensesToday total recorded monthly spend, 0 if unknown
+     * @return array{annual_spend_at_retirement:float,corpus_needed:float,projected_corpus:float,gap:float,covered_pct:float,years_to_retirement:int}|null
+     */
+    public static function retirementTarget(
+        float $monthlyExpensesToday,
+        float $inflationRatePercent,
+        ?float $withdrawalRatePercent,
+        int $yearsToRetirement,
+        float $projectedCorpusAtRetirement
+    ): ?array {
+        if ($monthlyExpensesToday <= 0.0 || $yearsToRetirement < 0) {
+            return null;
+        }
+        if ($withdrawalRatePercent === null || $withdrawalRatePercent <= 0.0) {
+            return null; // no sustainable-withdrawal assumption → no corpus to name
+        }
+
+        $inflation = max(0.0, $inflationRatePercent) / 100.0;
+        $annualSpendAtRetirement = $monthlyExpensesToday * 12.0 * ((1.0 + $inflation) ** $yearsToRetirement);
+        $corpusNeeded = $annualSpendAtRetirement / ($withdrawalRatePercent / 100.0);
+
+        $projected = max(0.0, $projectedCorpusAtRetirement);
+
+        return [
+            'annual_spend_at_retirement' => round($annualSpendAtRetirement, 2),
+            'corpus_needed'              => round($corpusNeeded, 2),
+            'projected_corpus'           => round($projected, 2),
+            'gap'                        => round($projected - $corpusNeeded, 2),
+            'covered_pct'                => $corpusNeeded > 0.0 ? round(($projected / $corpusNeeded) * 100.0, 1) : 0.0,
+            'years_to_retirement'        => $yearsToRetirement,
+        ];
+    }
+
     public static function lifecycleSeries(
         float $initialNetWorth,
         float $accumulationReturnRatePercent,

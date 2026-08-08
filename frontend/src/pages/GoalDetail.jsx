@@ -17,6 +17,7 @@ import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
 import { FoundationsCaveat } from '../components/FoundationsUI';
+import RetirementTargetCard from '../components/RetirementTargetCard';
 import LifecycleChart from '../components/LifecycleChart';
 import SequenceRiskChart from '../components/SequenceRiskChart';
 import { GoalProgressCard } from '../components/ProgressUI';
@@ -53,6 +54,17 @@ export default function GoalDetail() {
   // subscenarios_update.php are genuinely verifyAccessAny(['advisor','client']),
   // so those aren't broken for a client session.
   const isAdvisor = user?.role === 'advisor' || user?.role === 'super_admin';
+  // WHO MAY EDIT THIS PLAN. Not the same question as "is this an advisor",
+  // and conflating the two shipped a real bug: the self-serve tier (sql/033)
+  // opened up the SERVER-side writes via verifySelfServiceWrite(), but every
+  // edit affordance on this page stayed gated on isAdvisor. A personal user is
+  // role='client', so the wizard built them a plan and then locked them out of
+  // it permanently — they could not change a single number they had entered.
+  //
+  // Gated on tenant KIND, matching api/lib/SelfService.php exactly: an
+  // advisor-managed client gains nothing here, so the Jr->Sr approval workflow
+  // and the change_log's meaning are untouched.
+  const canEdit = isAdvisor || isSelfDirected;
   const [goal, setGoal] = useState(null);
   const [subScenarios, setSubScenarios] = useState(null);
   const [error, setError] = useState('');
@@ -422,7 +434,7 @@ export default function GoalDetail() {
             <Card className="p-5 mb-4">
               <div className="flex items-center justify-between gap-3 mb-1">
                 <h2 className="text-base font-semibold text-[var(--color-ink)]">Plan parameters</h2>
-                {!editingBasics && isAdvisor && (
+                {!editingBasics && canEdit && (
                   <Button variant="outline" size="sm" onClick={startEditingBasics}>
                     Edit
                   </Button>
@@ -564,6 +576,18 @@ export default function GoalDetail() {
             {/* Retirement Readiness Score (docs/07 Bet 3) — the goal's own
                 baseline, computed from goals_projection.php. Null while the
                 goal is missing withdrawal_rate/drawdown_return_rate. */}
+            {/* "How much will I need, and am I on track?" — placed ABOVE the
+                readiness score deliberately. The score is an abstraction; the
+                target is the concrete number the person came for, and it is
+                what makes the score mean anything. */}
+            {isRetirement && baselineProjection && (
+              <RetirementTargetCard
+                target={baselineProjection.retirement_target}
+                plain={isSelfDirected}
+                retirementAge={goal.retirement_age}
+              />
+            )}
+
             {isRetirement && baselineProjection?.readiness_score != null && (
               <div className="mb-4" data-tour="readiness-score-card">
                 <ReadinessScoreCard score={baselineProjection.readiness_score} />
@@ -711,7 +735,7 @@ export default function GoalDetail() {
               <Card className="p-4 mb-4">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <h2 className="text-base font-semibold text-[var(--color-ink)]">Accumulation phase</h2>
-                  {!editingAccumulation && isAdvisor && (
+                  {!editingAccumulation && canEdit && (
                     <Button variant="outline" size="sm" onClick={startEditingAccumulation}>
                       {goal.current_age !== null ? 'Edit' : 'Add saving years'}
                     </Button>
@@ -802,7 +826,7 @@ export default function GoalDetail() {
               <Card className="p-4 mb-4">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <h2 className="text-base font-semibold text-[var(--color-ink)]">Corpus composition</h2>
-                  {!editingCorpus && isAdvisor && (
+                  {!editingCorpus && canEdit && (
                     <Button variant="outline" size="sm" onClick={startEditingCorpus}>
                       {goal.liquid_corpus_amount !== null ? 'Edit' : 'Split corpus'}
                     </Button>

@@ -133,4 +133,43 @@ assertTrue(
     'a funded goal still scores normally'
 );
 
+// --- retirementTarget: "how much will I need, am I on track?" ---------------
+// The consumer question the advisor product never had to answer, because an
+// advisor arrives with a target already in mind.
+
+// No recorded spend → no target. A guessed cost of living would anchor a real
+// decision, so this must stay null rather than invent one.
+assertTrue(
+    PlanMath::retirementTarget(0.0, 6.0, 3.5, 20, 50000000.0) === null,
+    'no recorded monthly spend → NO target, rather than a guessed one'
+);
+assertTrue(
+    PlanMath::retirementTarget(60000.0, 6.0, null, 20, 50000000.0) === null,
+    'no withdrawal-rate assumption → no corpus can be named'
+);
+assertTrue(
+    PlanMath::retirementTarget(60000.0, 6.0, 0.0, 20, 50000000.0) === null,
+    'a zero withdrawal rate would divide by zero → null, not infinity'
+);
+
+// 60k/month today, 6% inflation, 20 years, 3.5% withdrawal.
+// Annual today = 720000; inflated = 720000 * 1.06^20 = 2,308,977.
+// Needed = that / 0.035 = 65,970,776.
+$t = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0);
+assertClose($t['annual_spend_at_retirement'], 2308977.0, "today's spend is inflated to the retirement year", 2000.0);
+assertClose($t['corpus_needed'], 65970776.0, 'the corpus needed is that spend at the plan\'s own withdrawal rate', 60000.0);
+assertClose($t['gap'], 50000000.0 - $t['corpus_needed'], 'the gap is projected minus needed');
+assertTrue($t['gap'] < 0, 'a 5cr projection against a 6.6cr need reads as a shortfall');
+assertClose($t['covered_pct'], 75.8, 'coverage is reported as a percentage of the target', 0.6);
+
+// Retiring today: no inflation applied at all.
+$now = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 0, 30000000.0);
+assertClose($now['annual_spend_at_retirement'], 720000.0, 'with zero years to go, spend is not inflated');
+assertClose($now['corpus_needed'], 720000.0 / 0.035, 'and the corpus needed is simply this year\'s spend over the rate');
+
+// A funded plan reports a positive gap rather than clamping at the target.
+$funded = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 90000000.0);
+assertTrue($funded['gap'] > 0, 'a plan ahead of its target reports the surplus, not a capped 100%');
+assertTrue($funded['covered_pct'] > 100.0, 'and coverage above 100% is reported honestly');
+
 echo "\nAll goal-progress tests passed.\n";
