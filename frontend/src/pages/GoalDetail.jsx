@@ -15,7 +15,7 @@ import DisclosureBanner from '../components/DisclosureBanner';
 import ScenarioPanel from '../components/ScenarioPanel';
 import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
-import { ReadinessScoreCard } from '../components/ReadinessScore';
+import { ReadinessScoreCard, scoreContradictsTarget } from '../components/ReadinessScore';
 import { FoundationsCaveat } from '../components/FoundationsUI';
 import RetirementTargetCard from '../components/RetirementTargetCard';
 import LifecycleChart from '../components/LifecycleChart';
@@ -583,6 +583,7 @@ export default function GoalDetail() {
             {isRetirement && baselineProjection && (
               <RetirementTargetCard
                 target={baselineProjection.retirement_target}
+                levers={baselineProjection.gap_closing_levers}
                 plain={isSelfDirected}
                 retirementAge={goal.retirement_age}
               />
@@ -590,13 +591,39 @@ export default function GoalDetail() {
 
             {isRetirement && baselineProjection?.readiness_score != null && (
               <div className="mb-4" data-tour="readiness-score-card">
-                <ReadinessScoreCard score={baselineProjection.readiness_score} />
-                {/* docs/10 P1-4 — the score answers "does the money last" and
-                    nothing else. Uncaptioned next to a high number that
-                    silence reads as endorsement, so any foundation gap or
-                    unanswered question is named here. Renders nothing when
-                    there is nothing to say. */}
-                <FoundationsCaveat clientId={isAdvisor ? goal.client_id : null} />
+                {/* docs/11 Prompt E-1 — the score answers "does the corpus
+                    survive its own withdrawal rate", the target above answers
+                    "does it cover what this person actually spends", and they
+                    can disagree sharply (89/100 next to 44%-of-target on the
+                    same screen was the defect that framed this plan). Rather
+                    than show two numbers that contradict each other, the
+                    score is suppressed in exactly that case and the target
+                    above is left as the one number on screen — see the
+                    decide-then-build note in docs/11 for the alternatives
+                    considered (stronger framing / blended metric). */}
+                {scoreContradictsTarget(baselineProjection.readiness_score, baselineProjection.retirement_target) ? (
+                  <Card className="p-4">
+                    <p className="text-[13px] leading-relaxed text-[var(--color-ink-2)]">
+                      The readiness score isn&rsquo;t shown here — it measures whether this corpus survives being
+                      drawn down at its own withdrawal rate, not whether it covers what {isSelfDirected ? 'you' : 'the client'}{' '}
+                      actually spend{isSelfDirected ? '' : 's'}. The target above, which does, is the more useful number for
+                      this plan right now.
+                    </p>
+                  </Card>
+                ) : (
+                  <>
+                    <ReadinessScoreCard score={baselineProjection.readiness_score} />
+                    {/* docs/10 P1-4 — the score answers "does the money last"
+                        and nothing else. Uncaptioned next to a high number
+                        that silence reads as endorsement, so any foundation
+                        gap or unanswered question is named here. Renders
+                        nothing when there is nothing to say. Only shown
+                        alongside the score itself — it reads "this score…",
+                        so it has nothing to attach to once the score above is
+                        suppressed for contradicting the target. */}
+                    <FoundationsCaveat clientId={isAdvisor ? goal.client_id : null} />
+                  </>
+                )}
               </div>
             )}
 

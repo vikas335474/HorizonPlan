@@ -621,6 +621,125 @@ final class PlanMath
         ];
     }
 
+    /**
+     * docs/11 Prompt E-1: "never pair a gap with silence." Given a
+     * retirementTarget() result that shows a shortfall, name the smallest
+     * concrete lever that closes it — never render the gap on its own.
+     *
+     * Two independent levers, both solved with the same accumulation
+     * arithmetic the goal already projects with (accumulationSeries()):
+     *
+     *   (i)  EXTRA MONTHLY SIP — the flat additional monthly amount that,
+     *        invested for the remaining years to retirement at the plan's
+     *        own accumulation return, closes the shortfall by itself. Held
+     *        FLAT (no step-up) deliberately: the goal's existing SIP already
+     *        carries its own step-up, and stacking a second stepped series on
+     *        top would make the "how much more" number depend on a modelling
+     *        choice instead of being the one clean unknown it should be.
+     *        Standard future-value-of-an-ordinary-annuity solve:
+     *        shortfall = extraAnnualSip * ((1+r)^n - 1) / r.
+     *
+     *   (ii) DEFERRAL YEARS — how many additional years of working (and
+     *        saving, at the SAME sip/step-up) closes it. This is NOT solved
+     *        with a formula — deferring moves both sides of the target (the
+     *        corpus needed inflates further out, the projected corpus gets
+     *        more years to compound and step up), so this recomputes
+     *        retirementTarget() at each additional year, using the exact same
+     *        two methods the caller already used, until the gap closes or
+     *        $maxDeferralYears is reached. Returns null for this lever if it
+     *        doesn't close within that cap — waiting alone isn't a realistic
+     *        lever for every shortfall, and null says so rather than a
+     *        misleadingly large number.
+     *
+     * "Show whichever is smaller first" (docs/11) can't compare rupees to
+     * years directly, so each lever is also expressed relative to what the
+     * goal already has — extra SIP as a fraction of the current SIP, deferral
+     * as a fraction of the years already planned. Whichever asks for the
+     * smaller relative change is named 'smaller_lever'; a lever that could not
+     * be solved is never picked.
+     *
+     * @param array $target retirementTarget()'s result — must be non-null.
+     *   Callers should not call this when $target['gap'] >= 0: there is
+     *   nothing to close, and this returns null in that case rather than a
+     *   zero-value lever that would read as an assumption a person hit their
+     *   number exactly. Refuses to render a distinguished shape either way.
+     */
+    public static function gapClosingLevers(
+        array $target,
+        float $initialNetWorth,
+        float $accumulationReturnRatePercent,
+        float $monthlySipAmount,
+        float $sipStepUpRatePercent,
+        int $yearsToRetirement,
+        float $monthlyExpensesToday,
+        float $inflationRatePercent,
+        float $withdrawalRatePercent,
+        int $maxDeferralYears = 40
+    ): ?array {
+        $gap = (float) ($target['gap'] ?? 0.0);
+        if ($gap >= 0.0) {
+            return null; // already on track — no lever to name
+        }
+        $shortfall = -$gap;
+
+        // (i) Extra monthly SIP, solved as a flat ordinary annuity against the
+        // remaining years to retirement. Not solvable when there are no years
+        // left to save into (retiring this year or already past it).
+        $extraMonthlySip = null;
+        if ($yearsToRetirement > 0) {
+            $r = $accumulationReturnRatePercent / 100.0;
+            $n = $yearsToRetirement;
+            $annuityFactor = $r > 0.0 ? ((1.0 + $r) ** $n - 1.0) / $r : (float) $n;
+            if ($annuityFactor > 0.0) {
+                $extraAnnualSip = $shortfall / $annuityFactor;
+                $extraMonthlySip = round($extraAnnualSip / 12.0, 2);
+            }
+        }
+
+        // (ii) Deferral years — recompute the same target, one year further
+        // out at a time, using the goal's own accumulation series and its own
+        // withdrawal rate, until the gap closes.
+        $deferralYears = null;
+        for ($d = 1; $d <= $maxDeferralYears; $d++) {
+            $laterYears = $yearsToRetirement + $d;
+            $laterAccumulation = self::accumulationSeries(
+                $initialNetWorth, $accumulationReturnRatePercent, $monthlySipAmount, $sipStepUpRatePercent, $laterYears
+            );
+            $laterProjected = (float) end($laterAccumulation);
+            $laterTarget = self::retirementTarget(
+                $monthlyExpensesToday, $inflationRatePercent, $withdrawalRatePercent, $laterYears, $laterProjected
+            );
+            if ($laterTarget !== null && $laterTarget['gap'] >= 0.0) {
+                $deferralYears = $d;
+                break;
+            }
+        }
+
+        // Relative size of each ask, for "show whichever is smaller first".
+        // A lever that couldn't be solved is never the smaller one.
+        $relativeSip = ($extraMonthlySip !== null && $monthlySipAmount > 0.0)
+            ? $extraMonthlySip / $monthlySipAmount
+            : ($extraMonthlySip !== null ? INF : null);
+        $relativeDeferral = ($deferralYears !== null && $yearsToRetirement > 0)
+            ? $deferralYears / $yearsToRetirement
+            : ($deferralYears !== null ? INF : null);
+
+        $smallerLever = null;
+        if ($relativeSip !== null && $relativeDeferral !== null) {
+            $smallerLever = $relativeSip <= $relativeDeferral ? 'sip' : 'deferral';
+        } elseif ($relativeSip !== null) {
+            $smallerLever = 'sip';
+        } elseif ($relativeDeferral !== null) {
+            $smallerLever = 'deferral';
+        }
+
+        return [
+            'extra_monthly_sip' => $extraMonthlySip,
+            'deferral_years'    => $deferralYears,
+            'smaller_lever'     => $smallerLever,
+        ];
+    }
+
     public static function lifecycleSeries(
         float $initialNetWorth,
         float $accumulationReturnRatePercent,
