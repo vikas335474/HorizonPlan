@@ -61,6 +61,9 @@ $items = array_map(static function (array $r): array {
         'category'         => $r['category'],
         'description'      => $r['description'],
         'value'            => (float) $r['value'],
+        // Liabilities only (docs/10 P1-4); NULL on assets and on any loan
+        // whose rate has not been recorded.
+        'interest_rate'    => $r['interest_rate'] !== null ? (float) $r['interest_rate'] : null,
         'amfi_scheme_code' => $r['amfi_scheme_code'],
         'units_held'       => $r['units_held'] !== null ? (float) $r['units_held'] : null,
         'nav_value'        => $r['nav_value'],

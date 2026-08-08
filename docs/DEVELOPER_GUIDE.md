@@ -277,6 +277,17 @@ re-derive it:
   `households` → `active_sessions` → `users` → `tenants`).
 - **`tests/test_tenant_isolation.php`** (fixture setup): same ordering rationale.
 
+**Adding a table that FKs to `users` costs more than the migration.** `client_protection`
+(migration 034) is the worked example: its two plain FKs to `users` mean every
+teardown path has to clear it *before* `DELETE FROM users`, and there are more
+of those than you'd guess — `api/demo_reset.php` plus roughly a dozen
+`tests/*_db.php` fixture blocks. The failure is also delayed and confusing: the
+suite stays green until something actually writes a row to the new table, then a
+dozen unrelated tests start failing with an FK violation naming a table they've
+never heard of. If you add one, grep for `DELETE FROM users` and fix every hit in
+the same commit. (Tables that FK with `ON DELETE CASCADE`/`SET NULL` — e.g.
+`goal_snapshots`, migration 032 — don't have this problem.)
+
 ### Destructive-test landmine
 
 `tests/*_db.php` fixtures now wrap themselves in a transaction that rolls back
@@ -300,6 +311,7 @@ deferred item on the security/quality ledger.
 | `HouseholdProjection.php` | Sums members' projections into a household aggregate. |
 | `TemplateValidation.php` | Shared allocation/risk-profile validation for template endpoints. |
 | `PlanReview.php` / `PlanReviewMailer.php` | Jr→Sr approval-workflow transitions + review emails. |
+| `FinancialFoundations.php` | The four pre-goal adequacy checks (P1-4): emergency reserve, life cover, health cover, debt costing more than the plan assumes to earn. Pure, no DB — every threshold is a sourced reference point, and the three "not a pass" states (`not_recorded`, `not_applicable`, shortfall) are kept strictly distinct on purpose. |
 | `ProgressSnapshot.php` | Goal-progress capture (P1-1). Tenant-scoped in-request path for "Record now"; raw-SQL cross-tenant path for the monthly cron — same split, and same reasoning, as `MfNavSync.php`. |
 | `MfNavSync.php` | Daily MF-NAV price sync (cached NAVs only; never a live AMFI call inside a request). |
 | `Totp.php` | RFC 6238 TOTP, no external deps. |

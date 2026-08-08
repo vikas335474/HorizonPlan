@@ -15,6 +15,7 @@ import Modal from '../components/Modal';
 import { RiskProfileSummary } from '../components/RiskProfileUI';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { CashFlowCard } from '../components/CashFlowUI';
+import { FoundationsCard } from '../components/FoundationsUI';
 import { ReadinessScoreBadge } from '../components/ReadinessScore';
 import { Card, EmptyState, Spinner, Button } from '../components/ui';
 import { formatCurrency } from '../lib/format';
@@ -82,6 +83,11 @@ export default function ClientGoals() {
         {/* docs/10 cash-flow module — income + expenses + monthly surplus, and
             whether that surplus covers the plan's SIPs. */}
         <CashFlowCard clientId={clientId} />
+
+        {/* docs/10 P1-4 — the adequacy checks that sit under the goal plan:
+            emergency reserve and debt cost read from the two cards above,
+            protection recorded here. */}
+        <FoundationsCard clientId={clientId} />
 
         {/* docs/06 Section B — risk tolerance belongs to the client, not one goal. */}
         <RiskProfileSummary clientId={clientId} />

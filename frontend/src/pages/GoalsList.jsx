@@ -11,6 +11,7 @@ import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { ClientCashFlowCard } from '../components/CashFlowUI';
+import { ClientFoundationsCard } from '../components/FoundationsUI';
 import { ClientRiskProfileCard } from '../components/RiskProfileUI';
 import { Card, EmptyState, Spinner } from '../components/ui';
 
@@ -69,6 +70,11 @@ export default function GoalsList() {
         {/* docs/10 cash-flow module — the client's own income/expense/surplus,
             read-only. The advisor-only surplus-vs-SIP framing is not exposed. */}
         <ClientCashFlowCard />
+
+        {/* docs/10 P1-4 — reserve, protection and debt. Editable for a
+            self-serve individual (there is nobody else to record it);
+            read-only for a firm-managed client, whose adviser owns it. */}
+        <ClientFoundationsCard />
 
         {/* docs/10 P0-4 — the client's own risk band, read-only, mirroring the
             portfolio card above. Advisor-only affordances (capture, suggested

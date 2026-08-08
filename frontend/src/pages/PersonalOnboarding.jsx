@@ -83,6 +83,23 @@ export default function PersonalOnboarding() {
         // the caller's own id), but sending it keeps the payload honest.
         await api.createGoal({ ...fields, client_id: user.userId });
       }
+      // docs/10 P1-4 — the one answer from this Q&A that is kept. Everything
+      // else here is used transiently to pick goals and then discarded; this
+      // is stored because the foundations check cannot tell "no dependants"
+      // (life cover not needed) from "not asked" (life cover unknown) without
+      // it, and those two must not render the same way.
+      if (answers.dependants !== undefined && answers.dependants !== '') {
+        try {
+          await api.saveFoundations({
+            client_id: user.userId,
+            dependants_count: Number(answers.dependants),
+          });
+        } catch {
+          // Non-fatal: the plan itself is created, and the foundations card
+          // will simply ask again. Failing the whole onboarding here would
+          // lose goals that already saved successfully.
+        }
+      }
       await refreshSession();
       navigate('/goals');
     } catch (err) {
