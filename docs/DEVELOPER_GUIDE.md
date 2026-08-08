@@ -220,6 +220,30 @@ table. Rough grouping:
   `client_portfolio` (018), `mf_nav_sync` (027), `households` (029),
   `cash_flow` (030), `plan_review` (026) + `plan_review_schedule` (028).
 - **Client→advisor assignment:** `users.assigned_advisor_id` (031).
+- **Progress over time:** `goal_snapshots`, `client_net_worth_snapshots` (032).
+
+### Progress snapshots are a record, not a projection
+
+`goal_snapshots` (032) stores what a goal's corpus actually was AND what the
+plan expected, on each captured date. The expected figure is **stored at
+capture time, never recomputed on read** — recomputing from the goal's current
+assumptions would let an advisor editing a return rate retroactively turn a
+"behind" history into an "on track" one. Same immutable-record instinct as
+`change_log`.
+
+Two consequences worth knowing before you touch it:
+
+- **Nothing is backfilled.** History starts the first time a snapshot runs. A
+  date with no row is a date nobody observed, and the chart deliberately breaks
+  the line there rather than bridging it.
+- **Capture is idempotent per day** via the unique keys on
+  `(goal_id, as_of_date)` / `(client_id, as_of_date)`, so the monthly cron and a
+  manual "Record now" on the same date converge on one row. Any new capture path
+  must upsert, not insert.
+
+The two series are kept separate on purpose: a client's net worth is never
+summed into a goal's progress, because docs/02 §4.1 says the portfolio is not a
+pool a goal draws from.
 
 ### Assignment is attribution, not access control
 
@@ -276,6 +300,7 @@ deferred item on the security/quality ledger.
 | `HouseholdProjection.php` | Sums members' projections into a household aggregate. |
 | `TemplateValidation.php` | Shared allocation/risk-profile validation for template endpoints. |
 | `PlanReview.php` / `PlanReviewMailer.php` | Jr→Sr approval-workflow transitions + review emails. |
+| `ProgressSnapshot.php` | Goal-progress capture (P1-1). Tenant-scoped in-request path for "Record now"; raw-SQL cross-tenant path for the monthly cron — same split, and same reasoning, as `MfNavSync.php`. |
 | `MfNavSync.php` | Daily MF-NAV price sync (cached NAVs only; never a live AMFI call inside a request). |
 | `Totp.php` | RFC 6238 TOTP, no external deps. |
 | `GoogleAuth.php` | Google Sign-In: network / pure / DB layers split for testability. |

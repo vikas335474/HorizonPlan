@@ -117,6 +117,36 @@ to build up manually. Staging is exactly where to point anything that would
 be too risky to run against production first — a new migration, the demo
 reset endpoint, a rate-limit change — before it goes anywhere near real data.
 
+## Monthly goal-progress snapshot cron
+
+`tools/progress_snapshot.php` records, once a month, what each goal's corpus
+actually was and what the plan expected it to be on that date — the history
+behind the "Progress over time" chart and the dashboard's "Behind plan" badge
+(docs/10 P1-1). Without it the feature still works, but only from readings an
+advisor takes by hand via "Record now"; the cron is what makes the series
+accumulate on its own.
+
+**hPanel → Advanced → Cron Jobs → Create a new cron job:**
+- Command: `php /home/<your-hostinger-user>/public_html/tools/progress_snapshot.php`
+  (same path caveat as the NAV cron below).
+- Schedule: monthly, after the daily NAV sync has run so portfolio values are
+  fresh — e.g. `0 3 1 * *` (3 AM on the 1st). Monthly, not daily, is
+  deliberate: a plan's corpus moves in steps, so a daily series would be
+  thousands of identical rows saying nothing, and a review conversation works
+  off months.
+- Safe to run more than once. Capture is idempotent per (goal, date) and per
+  (client, date) — a re-run updates that day's rows instead of duplicating
+  them, so a retried or overlapping cron cannot corrupt the series.
+- Rows written by the cron carry `created_by_user_id = NULL`, which is how the
+  UI distinguishes a scheduled reading from one an advisor took before a
+  meeting.
+- No backfill, ever: history starts the first time a snapshot runs. The app
+  does not invent readings for dates nobody observed.
+
+This is CLI-only and never shipped by the deploy pipeline, same as the NAV
+cron below (only `api/lib/ProgressSnapshot.php` ships, which
+`api/progress_capture.php` also uses in-request for "Record now").
+
 ## Daily MF NAV price-sync cron
 
 `tools/mf_nav_sync.php` keeps mutual fund holdings' displayed value current by

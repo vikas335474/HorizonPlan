@@ -156,9 +156,46 @@ foreach ($scopedDb->select('risk_profiles') as $profile) {
     }
 }
 
-$clients = array_map(static function (array $c) use ($minReadinessByClient, $latestRiskProfileByClient): array {
+// P1-1 · Worst drift-from-plan per client, from the MOST RECENT snapshot of
+// each of their goals. The minimum, not an average — same reasoning as
+// min_readiness_score above: one badly-drifting goal shouldn't be diluted by
+// healthy ones into looking fine at a glance.
+//
+// Only the latest row per goal counts; older snapshots are history, not
+// current status. Goals with no expected_value (target-based ones) contribute
+// nothing here — they track coverage, not drift, and have no "behind" to report.
+$latestSnapshotByGoal = [];
+foreach ($scopedDb->select('goal_snapshots') as $snap) {
+    $goalId = (int) $snap['goal_id'];
+    $existing = $latestSnapshotByGoal[$goalId] ?? null;
+    if ($existing === null || $snap['as_of_date'] > $existing['as_of_date']) {
+        $latestSnapshotByGoal[$goalId] = $snap;
+    }
+}
+$worstDriftByClient = [];
+foreach ($latestSnapshotByGoal as $snap) {
+    if ($snap['expected_value'] === null) {
+        continue;
+    }
+    $progress = PlanMath::progressStatus((float) $snap['corpus_value'], (float) $snap['expected_value']);
+    if ($progress === null) {
+        continue;
+    }
+    $clientId = (int) $snap['client_id'];
+    $existing = $worstDriftByClient[$clientId] ?? null;
+    if ($existing === null || $progress['drift_pct'] < $existing['drift_pct']) {
+        $worstDriftByClient[$clientId] = $progress;
+    }
+}
+
+$clients = array_map(static function (array $c) use ($minReadinessByClient, $latestRiskProfileByClient, $worstDriftByClient): array {
     $c['min_readiness_score'] = $minReadinessByClient[$c['client_id']] ?? null;
     $c['risk_band'] = $latestRiskProfileByClient[$c['client_id']]['band'] ?? null;
+    // Null when nothing has been snapshotted for this client yet — the UI
+    // shows no badge at all rather than implying an untracked client is fine.
+    $drift = $worstDriftByClient[$c['client_id']] ?? null;
+    $c['progress_status'] = $drift['status'] ?? null;
+    $c['progress_drift_pct'] = $drift['drift_pct'] ?? null;
     return $c;
 }, $clients);
 

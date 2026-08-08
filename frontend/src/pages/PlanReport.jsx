@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import DisclosureBanner from '../components/DisclosureBanner';
 import SequenceRiskChart from '../components/SequenceRiskChart';
+import ProgressChart from '../components/ProgressChart';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
 import { ReplayYearSelect, UnverifiedHistoryNotice } from '../components/HistoricalReplay';
 import { Spinner } from '../components/ui';
@@ -32,6 +33,10 @@ export default function PlanReport() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [replayYear, setReplayYear] = useState(null);
+  // P1-1 · Recorded progress history for this goal. Loaded independently of
+  // the projection and soft-failing: a report must still print if progress
+  // has never been captured (the common case for a new plan).
+  const [progress, setProgress] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +65,15 @@ export default function PlanReport() {
       });
     return () => { cancelled = true; };
   }, [id, replayYear]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getGoalProgress(id)
+      .then((res) => { if (!cancelled) setProgress(res); })
+      .catch(() => { if (!cancelled) setProgress(null); });
+    return () => { cancelled = true; };
+  }, [id]);
 
   const firmName = tenant?.whiteLabel?.company_name || tenant?.companyName || 'HorizonPlan';
   // Use the firm's own uploaded logo on the leave-behind when they've set one
@@ -175,6 +189,28 @@ export default function PlanReport() {
                 {projection.historical_replay_meta && !projection.historical_replay_meta.is_verified && (
                   <UnverifiedHistoryNotice />
                 )}
+              </section>
+            )}
+
+            {/* P1-1 · Progress over time. Included in the leave-behind because
+                a review conversation is exactly where "how have we actually
+                tracked against this plan" belongs. Omitted entirely when
+                fewer than two readings exist — a single point is a position,
+                not a trend, and a one-dot chart in a printed report reads as
+                a mistake. */}
+            {progress && progress.points.length > 1 && (
+              <section className="mt-8">
+                <h2 className="text-base font-semibold text-[var(--color-ink)]">
+                  {progress.tracking_mode === 'coverage'
+                    ? 'How much of this goal is funded, over time'
+                    : 'Progress against the plan'}
+                </h2>
+                <p className="mt-1 mb-3 text-sm text-[var(--color-ink-2)] leading-relaxed">
+                  {progress.tracking_mode === 'coverage'
+                    ? 'The share of this goal\'s inflation-adjusted cost already covered, on each date it was recorded. Assumes no growth on what is saved.'
+                    : 'What the corpus actually was on each date it was recorded, against what this plan expected on those dates.'}
+                </p>
+                <ProgressChart points={progress.points} mode={progress.tracking_mode} />
               </section>
             )}
 

@@ -428,6 +428,29 @@ export const api = {
   getHouseholdCashFlow: (householdId) =>
     request(`household_cash_flow.php?household_id=${encodeURIComponent(householdId)}`),
 
+  // --- Goal-progress tracking over time (docs/10 P1-1) ---
+  // One goal's recorded snapshot history + its current drift from plan.
+  // tracking_mode is 'drift' (projectable goal — expected_value per point),
+  // 'coverage' (target-based — funding_covered_pct per point), or 'none'.
+  // Points are only ever what was observed; there is no modelled backfill.
+  getGoalProgress: (goalId) =>
+    request(`goal_progress_read.php?goal_id=${encodeURIComponent(goalId)}`),
+
+  // A client's net-worth history from the portfolio ledger. Deliberately a
+  // SEPARATE series from any goal's (docs/02 §4.1 — the portfolio is not a
+  // pool a goal draws from). clientId is ignored for a client session.
+  getClientProgress: (clientId) =>
+    request(`client_progress_read.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // Advisor-only "Record now": snapshots every goal of this client plus their
+  // net worth, dated today. Idempotent per day — the monthly cron writes the
+  // same rows unattended.
+  captureProgress: (clientId) =>
+    request('progress_capture.php', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: Number(clientId) }),
+    }),
+
   // --- Scheduled plan-review emails (docs/10 P0-3, advisor-only) ---
   // Read/set a client's review cadence: 'off' | 'quarterly' | 'annually'.
   getPlanReviewSchedule: (clientId) =>
