@@ -1,13 +1,38 @@
 <?php
 declare(strict_types=1);
 
-// Advisor dashboard data: lists every client in the advisor's tenant, each with
-// a count of their goals and total tracked net worth across those goals. This is
-// what the advisor lands on — it replaces the old "type a client_id blind" flow.
+// Advisor dashboard data: the clients in the advisor's tenant, each with a goal
+// count, total tracked net worth, at-a-glance health (readiness + risk band),
+// and the advisor they're assigned to. This is what the advisor lands on — it
+// replaces the old "type a client_id blind" flow.
 //
 // Tenant-scoped: an advisor only ever sees clients in their own tenant. A client
 // role has no business here (they don't have a client list) — advisor and
 // super_admin only.
+//
+// Filtering / paging (added with the persona-dashboard work). The whole book
+// used to be returned in one unbounded array and filtered/sorted in the
+// browser, which is fine at 40 clients and a real problem at a few thousand
+// (docs/10 §4 pain point 2: tools that stop fitting "past a few hundred
+// clients"). Sorting and filtering therefore moved SERVER-side — paginating
+// alone would have silently broken client-side sort, since page 1 of an
+// unsorted set is not the top of a sorted one.
+//
+//   ?page=       1-based page number (default 1)
+//   ?per_page=   default 25, clamped to 100 — same convention change_log_list.php set
+//   ?q=          case-insensitive email substring
+//   ?scope=      all (default) | mine | unassigned — see below
+//   ?attention_only=1  only clients that need attention
+//   ?sort=       recent (default) | attention | readiness | corpus
+//
+// `scope=mine` is a FILTER, never a permission boundary: assigned_advisor_id
+// (migration 031) is attribution only, and every advisor in the firm can still
+// read every client in the tenant exactly as before. Tenant isolation remains
+// the one security boundary.
+//
+// `stats` and `attention_count` are always computed across the WHOLE tenant
+// book, never just the returned page — a firm-level number that changed when
+// you turned a page would be a lie.
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
@@ -30,31 +55,46 @@ $tenantId = (int) $session['tenant_id'];
 // with zero goals still appear. Aggregate goal count and summed starting corpus
 // per client. Tenant filter is explicit on both sides of the join to keep the
 // hard-isolation guarantee (per the blueprint's Explicit Column Isolation rule).
+// The join to the assigned advisor is a second LEFT JOIN on users, also
+// tenant-pinned: an assignment can only ever point at an advisor in the same
+// firm (client_assign_advisor.php enforces that on write), and pinning it here
+// too means even a row somehow assigned cross-tenant renders as unassigned
+// rather than leaking another firm's advisor email.
 $stmt = $db->prepare(
     "SELECT
         u.id            AS client_id,
         u.email         AS email,
         u.created_at    AS client_since,
+        u.assigned_advisor_id AS assigned_advisor_id,
+        adv.email       AS assigned_advisor_email,
         COUNT(bp.id)    AS goal_count,
         COALESCE(SUM(bp.initial_net_worth), 0) AS total_net_worth
      FROM users u
      LEFT JOIN base_plans bp
         ON bp.client_id = u.id AND bp.tenant_id = :tenant_id_join
+     LEFT JOIN users adv
+        ON adv.id = u.assigned_advisor_id AND adv.tenant_id = :tenant_id_adv
      WHERE u.tenant_id = :tenant_id
        AND u.role = 'client'
-     GROUP BY u.id, u.email, u.created_at
+     GROUP BY u.id, u.email, u.created_at, u.assigned_advisor_id, adv.email
      ORDER BY u.created_at DESC"
 );
-$stmt->execute([':tenant_id' => $tenantId, ':tenant_id_join' => $tenantId]);
+$stmt->execute([
+    ':tenant_id'      => $tenantId,
+    ':tenant_id_join' => $tenantId,
+    ':tenant_id_adv'  => $tenantId,
+]);
 $rows = $stmt->fetchAll();
 
 $clients = array_map(static function (array $r): array {
     return [
-        'client_id'       => (int) $r['client_id'],
-        'email'           => $r['email'],
-        'client_since'    => $r['client_since'],
-        'goal_count'      => (int) $r['goal_count'],
-        'total_net_worth' => (float) $r['total_net_worth'],
+        'client_id'              => (int) $r['client_id'],
+        'email'                  => $r['email'],
+        'client_since'           => $r['client_since'],
+        'assigned_advisor_id'    => $r['assigned_advisor_id'] !== null ? (int) $r['assigned_advisor_id'] : null,
+        'assigned_advisor_email' => $r['assigned_advisor_email'],
+        'goal_count'             => (int) $r['goal_count'],
+        'total_net_worth'        => (float) $r['total_net_worth'],
     ];
 }, $rows);
 
@@ -122,17 +162,116 @@ $clients = array_map(static function (array $c) use ($minReadinessByClient, $lat
     return $c;
 }, $clients);
 
-// Aggregate stats for the dashboard header cards.
+// Aggregate stats for the dashboard header cards — computed over the WHOLE
+// tenant book, before any scope/search/attention filter or paging is applied,
+// so "clients: 240" always means the firm has 240 clients regardless of which
+// page or filter the advisor is looking at.
 $totalClients = count($clients);
 $totalGoals   = array_sum(array_column($clients, 'goal_count'));
 $totalAum     = array_sum(array_column($clients, 'total_net_worth'));
 
+// "Needs attention" — the same definition the dashboard UI used to apply
+// client-side, moved here so it can drive both the firm-wide count and the
+// server-side filter/sort from ONE rule rather than two that could drift:
+// no goals yet, never risk-profiled, or a worst-goal readiness below 40 (the
+// "Needs attention" band in ReadinessScore.jsx).
+$needsAttention = static function (array $c): bool {
+    return $c['goal_count'] === 0
+        || $c['risk_band'] === null
+        || ($c['min_readiness_score'] !== null && $c['min_readiness_score'] < 40);
+};
+$attentionCount = count(array_filter($clients, $needsAttention));
+
+// Readiness distribution across the firm's scored clients — powers the
+// dashboard's health bar. Buckets match ReadinessScore.jsx's own bands so a
+// client counted "at risk" here is the one badged "Needs attention" there.
+$distribution = ['strong' => 0, 'fair' => 0, 'at_risk' => 0, 'unscored' => 0];
+foreach ($clients as $c) {
+    $s = $c['min_readiness_score'];
+    if ($s === null)      { $distribution['unscored']++; }
+    elseif ($s >= 70)     { $distribution['strong']++; }
+    elseif ($s >= 40)     { $distribution['fair']++; }
+    else                  { $distribution['at_risk']++; }
+}
+
+// --- scope / search / attention filters ------------------------------------
+$scope = (string) ($_GET['scope'] ?? 'all');
+if (!in_array($scope, ['all', 'mine', 'unassigned'], true)) {
+    $scope = 'all';
+}
+$viewerId = (int) $session['user_id'];
+if ($scope === 'mine') {
+    $clients = array_values(array_filter($clients, static fn(array $c) => $c['assigned_advisor_id'] === $viewerId));
+} elseif ($scope === 'unassigned') {
+    $clients = array_values(array_filter($clients, static fn(array $c) => $c['assigned_advisor_id'] === null));
+}
+
+$q = trim((string) ($_GET['q'] ?? ''));
+if ($q !== '') {
+    $clients = array_values(array_filter(
+        $clients,
+        static fn(array $c) => stripos($c['email'], $q) !== false
+    ));
+}
+
+if (!empty($_GET['attention_only'])) {
+    $clients = array_values(array_filter($clients, $needsAttention));
+}
+
+// --- sort ------------------------------------------------------------------
+// Default 'recent' is the SQL ORDER BY above (created_at DESC) — left alone
+// rather than re-sorted, so the untouched path stays byte-identical.
+$sort = (string) ($_GET['sort'] ?? 'recent');
+if ($sort === 'attention') {
+    // Stable partition — needs-attention first, original order within groups.
+    usort($clients, static fn(array $a, array $b) => (int) $needsAttention($b) <=> (int) $needsAttention($a));
+} elseif ($sort === 'readiness') {
+    // Unscored clients sort last: "no score" isn't the same signal as
+    // "scored and struggling," and shouldn't crowd it out.
+    usort($clients, static function (array $a, array $b) {
+        if ($a['min_readiness_score'] === null) return 1;
+        if ($b['min_readiness_score'] === null) return -1;
+        return $a['min_readiness_score'] <=> $b['min_readiness_score'];
+    });
+} elseif ($sort === 'corpus') {
+    usort($clients, static fn(array $a, array $b) => $b['total_net_worth'] <=> $a['total_net_worth']);
+}
+
+// --- paginate --------------------------------------------------------------
+$filteredTotal = count($clients);
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$perPage = (int) ($_GET['per_page'] ?? 25);
+if ($perPage < 1) {
+    $perPage = 25;
+}
+$perPage = min($perPage, 100);
+$pageItems = array_slice($clients, ($page - 1) * $perPage, $perPage);
+
+// The firm's advisors — needed by the dashboard for the assign-to dropdown and
+// the "mine / unassigned" scope control, and cheap enough (a handful of rows
+// per firm) to include here rather than cost a second round trip. Tenant-scoped
+// via the helper. Never includes password/MFA columns — just what the picker needs.
+$advisors = array_map(
+    static fn(array $a) => [
+        'user_id'   => (int) $a['id'],
+        'email'     => $a['email'],
+        'firm_role' => $a['firm_role'],
+    ],
+    $scopedDb->select('users', ['role' => 'advisor'], 'id, email, firm_role')
+);
+
 echo json_encode([
     'status' => 'success',
     'stats'  => [
-        'total_clients' => $totalClients,
-        'total_goals'   => $totalGoals,
-        'total_aum'     => $totalAum, // sum of initial_net_worth across all goals
+        'total_clients'   => $totalClients,
+        'total_goals'     => $totalGoals,
+        'total_aum'       => $totalAum, // sum of initial_net_worth across all goals
+        'attention_count' => $attentionCount,
+        'distribution'    => $distribution,
     ],
-    'clients' => $clients,
+    'advisors' => $advisors,
+    'clients'  => $pageItems,
+    'page'     => $page,
+    'per_page' => $perPage,
+    'total'    => $filteredTotal, // count AFTER filters, for the pager
 ]);

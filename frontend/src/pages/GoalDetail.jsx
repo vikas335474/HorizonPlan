@@ -17,6 +17,7 @@ import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
 import LifecycleChart from '../components/LifecycleChart';
+import SequenceRiskChart from '../components/SequenceRiskChart';
 import { ChangeLogCard } from '../components/ChangeLogUI';
 import { GoalReviewCard, ReviewStatusBadge } from '../components/PlanReviewUI';
 import {
@@ -555,6 +556,98 @@ export default function GoalDetail() {
               <div className="mb-4" data-tour="readiness-score-card">
                 <ReadinessScoreCard score={baselineProjection.readiness_score} />
               </div>
+            )}
+
+            {/* Funding status — the target-based goal's counterpart to the
+                Readiness Score above. Retirement goals get a score; education
+                / home / other goals carry a target and a date but no rate to
+                project from, and so showed nothing at all on this page. The
+                two are mutually exclusive by construction (goals_read.php
+                returns target_funding only when target_amount + target_date
+                are both set, which no retirement goal has), so they never
+                both render. Assumes no growth — stated plainly rather than
+                implied away, see PlanMath::targetGoalFunding(). */}
+            {goal.target_funding && (
+              <Card className="p-4 mb-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-[var(--color-ink)]">Funding status</h2>
+                    <p className="mt-0.5 text-xs text-[var(--color-ink-2)]">
+                      What today's corpus covers of this goal's cost at the target date.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-semibold tabular-nums text-[var(--color-ink)]">
+                      {goal.target_funding.covered_pct}%
+                    </div>
+                    <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">covered</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 h-2 w-full rounded-full bg-[var(--color-line)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-teal)]"
+                    style={{ width: `${Math.max(2, goal.target_funding.covered_pct)}%` }}
+                  />
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <Param
+                    label="Cost at target date"
+                    value={formatCurrency(goal.target_funding.inflated_target)}
+                    sub={`${formatCurrency(goal.target_amount)} in today's money`}
+                  />
+                  <Param
+                    label="Still to fund"
+                    value={formatCurrency(goal.target_funding.shortfall)}
+                  />
+                  <Param
+                    label="Time remaining"
+                    value={`${goal.target_funding.years_remaining} yrs`}
+                  />
+                </div>
+
+                <p className="mt-3 text-xs text-[var(--color-ink-3)] leading-relaxed">
+                  The target is inflated to the goal's target date at {formatPercent(goal.inflation_rate)}.
+                  Coverage assumes <strong className="text-[var(--color-ink-2)]">no growth</strong> on what's
+                  already saved — a floor, not a forecast. This goal type carries no return assumption, and
+                  the app won't invent one.
+                </p>
+              </Card>
+            )}
+
+            {/* The goal's own baseline projection — steady vs. adverse
+                sequence, from the SAME average return.
+
+                This used to render only inside a sub-scenario (ScenarioPanel)
+                or, for the lifecycle variant, only once accumulation ages were
+                set — so a plain decumulation-only goal with no scenarios showed
+                no chart at all, and the product's headline differentiator (the
+                sequence-of-returns risk a spreadsheet hides) stayed invisible
+                until the advisor happened to create a scenario. It needs no
+                extra request: goals_projection.php already returns both series
+                in the baseline response this page loads on mount.
+
+                Rendered directly above the DisclosureBanner below, per
+                CLAUDE.md rule #3 — the compliance copy must sit adjacent to
+                the projection chart specifically. */}
+            {isRetirement
+              && baselineProjection?.steady_return_series
+              && baselineProjection?.adverse_sequence_series && (
+              <Card className="p-4 mb-4">
+                <h2 className="text-base font-semibold text-[var(--color-ink)] mb-1">
+                  Projection — steady vs. a bad early decade
+                </h2>
+                <p className="text-xs text-[var(--color-ink-2)] mb-3 leading-relaxed">
+                  Both lines assume the same average return. The dashed line front-loads the weak
+                  years — showing how much the <em>order</em> of returns matters once withdrawals
+                  start. Create a scenario below to vary the assumptions behind it.
+                </p>
+                <SequenceRiskChart
+                  steadySeries={baselineProjection.steady_return_series}
+                  adverseSeries={baselineProjection.adverse_sequence_series}
+                />
+              </Card>
             )}
 
             <div className="mb-6">

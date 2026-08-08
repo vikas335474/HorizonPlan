@@ -23,6 +23,76 @@ final class PlanMath
     }
 
     /**
+     * Funding status for a TARGET-BASED goal (education / home_purchase /
+     * other) — the goal types that carry a target_amount + target_date but,
+     * by schema design, never carry a return rate or a SIP (goals_create.php
+     * nulls accumulation_return_rate / monthly_sip_amount for every
+     * non-retirement goal). Retirement goals have the Readiness Score; these
+     * had no progress signal at all until this helper existed.
+     *
+     * What it deliberately does NOT do: project growth. With no return
+     * assumption anywhere on the row, any "you'll have ₹X by then" figure
+     * would be an invented rate presented as a plan — exactly the kind of
+     * opinion CLAUDE.md's guardrail says to leave to the firm. So this
+     * answers only the two questions that ARE honestly answerable from the
+     * data on hand:
+     *
+     *   1. What will this actually cost by then? — target_amount inflated to
+     *      the target date at the goal's own inflation_rate (a goal set at
+     *      "₹20L for college in 2034" really needs ₹31L in 2034 rupees).
+     *   2. What does today's corpus cover of that? — initial_net_worth as a
+     *      percentage of the inflated cost, with NO growth assumed. This is a
+     *      deliberate floor, not a forecast: the real figure can only be
+     *      better once the money is invested, and understating is the safe
+     *      direction for a client-facing number.
+     *
+     * Returns null when the goal isn't target-based (no target_amount or no
+     * target_date), so callers can simply omit the block — same convention as
+     * corpusMultiple() returning null for a non-retirement goal.
+     *
+     * @param float|null  $targetAmount   target in TODAY's rupees
+     * @param string|null $targetDate     'Y-m-d'
+     * @param float       $currentCorpus  base_plans.initial_net_worth
+     * @param float       $inflationPct   the goal's own inflation_rate
+     * @param string|null $asOf           'Y-m-d' override for testing; defaults to today
+     * @return array{years_remaining: float, inflated_target: float, covered_pct: float, shortfall: float}|null
+     */
+    public static function targetGoalFunding(
+        ?float $targetAmount,
+        ?string $targetDate,
+        float $currentCorpus,
+        float $inflationPct,
+        ?string $asOf = null
+    ): ?array {
+        if ($targetAmount === null || $targetAmount <= 0.0 || $targetDate === null || $targetDate === '') {
+            return null;
+        }
+
+        $now = strtotime($asOf ?? date('Y-m-d'));
+        $then = strtotime($targetDate);
+        if ($now === false || $then === false) {
+            return null;
+        }
+
+        // Fractional years, floored at 0 — a target date already in the past
+        // means "due now", not a negative horizon that would deflate the target.
+        $yearsRemaining = max(0.0, ($then - $now) / (365.25 * 24 * 60 * 60));
+
+        $inflatedTarget = $targetAmount * pow(1 + ($inflationPct / 100.0), $yearsRemaining);
+        // Guard against a zero/absurd inflated target producing a division by zero.
+        $coveredPct = $inflatedTarget > 0.0
+            ? min(100.0, max(0.0, ($currentCorpus / $inflatedTarget) * 100.0))
+            : 0.0;
+
+        return [
+            'years_remaining' => round($yearsRemaining, 2),
+            'inflated_target' => round($inflatedTarget, 2),
+            'covered_pct'     => round($coveredPct, 1),
+            'shortfall'       => round(max(0.0, $inflatedTarget - $currentCorpus), 2),
+        ];
+    }
+
+    /**
      * Section 4.3: year-by-year decumulation balance under a flat, constant
      * assumed return. balance[n] = balance[n-1]*(1+r) - annualWithdrawal*(1+inflation)^n.
      * annualWithdrawal is fixed at the year-1 rupee amount (initial_net_worth *
