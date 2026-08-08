@@ -107,5 +107,14 @@ echo json_encode([
         'review_notes'            => $goal['review_notes'],
         // Computed, never stored — docs/02 Section 4.2.
         'corpus_multiple'          => PlanMath::corpusMultiple($effectiveWithdrawalRate),
+        // Target-based goals' counterpart to the Readiness Score — inflated
+        // cost + what today's corpus covers, no growth assumed. Null for a
+        // goal with no target_amount/target_date. See PlanMath.
+        'target_funding'           => PlanMath::targetGoalFunding(
+            $goal['target_amount'] !== null ? (float) $goal['target_amount'] : null,
+            $goal['target_date'],
+            (float) $goal['initial_net_worth'],
+            (float) $goal['inflation_rate']
+        ),
     ],
 ]);

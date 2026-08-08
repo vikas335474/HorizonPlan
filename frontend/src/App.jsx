@@ -22,6 +22,7 @@ import GoalDetail from './pages/GoalDetail';
 import PlanReport from './pages/PlanReport';
 import MeetingMode from './pages/MeetingMode';
 import AdminConsole from './pages/AdminConsole';
+import PracticeAnalytics from './pages/PracticeAnalytics';
 import AdvisorTemplates from './pages/AdvisorTemplates';
 import RiskQuestionnaireBuilder from './pages/RiskQuestionnaireBuilder';
 import ActivityLog from './pages/ActivityLog';
@@ -80,6 +81,11 @@ export default function App() {
           {/* Super Admin console — role is enforced server-side on every
               endpoint; AdminConsole also client-guards and redirects non-admins. */}
           <Route path="/admin" element={<ProtectedRoute><AdminConsole /></ProtectedRoute>} />
+
+          {/* Firm practice analytics — the principal's counterpart to the
+              dashboard. sr_advisor/firm_admin (and super_admin); the page
+              client-guards and firm_analytics.php enforces requireFirmRole. */}
+          <Route path="/practice" element={<ProtectedRoute><PracticeAnalytics /></ProtectedRoute>} />
 
           {/* docs/10 P0-1 — household / family aggregate planning; advisor-only,
               server-enforced (verifyAccess 'advisor' on every households_* /

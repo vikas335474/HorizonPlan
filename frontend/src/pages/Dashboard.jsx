@@ -1,35 +1,42 @@
 // Route / for advisor / super_admin sessions (Home() redirects a client to
-// /goals). The client roster with at-a-glance health badges (readiness + risk
-// band), sort/filter, an add-client form (api.createClient) and the first-run
-// onboarding checklist / spotlight. Roster data comes from clients_list via the
-// dashboard load; useAuth for identity.
+// /goals). The advisor's working view of their book:
+//
+//   * a persona-aware heading + default scope (see PERSONA below) — a junior
+//     advisor lands on "my clients", a firm admin on the whole practice;
+//   * the attention queue promoted to a banner with the firm-wide count,
+//     rather than hidden behind a filter checkbox;
+//   * a book-health bar (readiness spread across every client, not the page);
+//   * the roster itself — scope tabs, search, sort, per-row advisor
+//     assignment, and pagination, ALL server-side via api.listClients();
+//   * the first-run onboarding checklist / spotlight, and add-client.
+//
+// Data: api.listClients() (paged rows + firm-wide stats + the firm's advisor
+// list) and api.assignClientAdvisor(); useAuth for identity and firmRole.
+// Assignment here is attribution only — it never changes who can read a
+// client (see migration 031 / client_assign_advisor.php).
 
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
 import { Card, Button, Badge } from '../components/ui';
-import { ReadinessScoreBadge, bandFor } from '../components/ReadinessScore';
+import { ReadinessScoreBadge } from '../components/ReadinessScore';
 import OnboardingChecklist, { isOnboardingDismissed, dismissOnboarding } from '../components/OnboardingChecklist';
 import OnboardingSpotlight from '../components/OnboardingSpotlight';
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/format';
 
-// docs/08 gap #5 — the client list previously only showed goal count and
-// corpus, with no signal for which clients actually need the advisor's
-// attention. A client needs it if they have no goals yet, haven't taken a
-// risk profile, or their worst goal's readiness score reads "Needs
-// attention" per ReadinessScore.jsx's own band (score < 40) — reusing that
-// band definition rather than a second hardcoded cutoff.
-function needsAttention(client) {
-  if (client.goal_count === 0) return true;
-  if (client.risk_band === null) return true;
-  if (client.min_readiness_score !== null && bandFor(client.min_readiness_score).label === 'Needs attention') {
-    return true;
-  }
-  return false;
-}
+// docs/08 gap #5 — "which clients actually need the advisor's attention":
+// no goals yet, no risk profile on file, or a worst-goal readiness score in
+// ReadinessScore.jsx's "Needs attention" band (< 40).
+//
+// That rule used to live here and run in the browser over the whole client
+// list. It now lives in clients_list.php, which owns both the firm-wide
+// attention_count and the server-side attention filter/sort — the list is
+// paginated, so a browser-side rule could only ever see the current page and
+// would have quietly disagreed with the total shown above it. One definition,
+// on the server, is the only version that stays true.
 
 const SORT_OPTIONS = [
   { value: 'recent', label: 'Recently added' },
@@ -37,6 +44,37 @@ const SORT_OPTIONS = [
   { value: 'readiness', label: 'Lowest readiness first' },
   { value: 'corpus', label: 'Highest corpus first' },
 ];
+
+const PER_PAGE = 25;
+
+// What each advisor tier lands on. The data is identical — assignment is
+// attribution, not access control, and every advisor can still reach every
+// client in the firm — but the DEFAULT view differs, because the question
+// each role opens the app to answer differs. A jr_advisor wants "what's on my
+// desk"; a principal wants "how is the practice doing". Any advisor can switch
+// scope; this only picks where they start.
+const PERSONA = {
+  jr_advisor: {
+    title: 'My clients',
+    subtitle: 'The clients assigned to you, and what needs your attention first.',
+    defaultScope: 'mine',
+  },
+  sr_advisor: {
+    title: 'Your book',
+    subtitle: 'Clients you look after, plus the firm\'s wider book.',
+    defaultScope: 'mine',
+  },
+  firm_admin: {
+    title: 'The firm\'s book',
+    subtitle: 'Every client across the practice, and how the work is distributed.',
+    defaultScope: 'all',
+  },
+};
+const DEFAULT_PERSONA = {
+  title: 'Your book',
+  subtitle: 'Clients, goals, and corpus under plan across your firm.',
+  defaultScope: 'all',
+};
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -53,53 +91,66 @@ export default function Dashboard() {
   // cheap enough (one localStorage read) not to need memoizing.
   const [dismissed, setDismissed] = useState(() => isOnboardingDismissed(user?.userId));
 
-  function load() {
+  const persona = PERSONA[user?.firmRole] ?? DEFAULT_PERSONA;
+  const canSeeFirmAnalytics = user?.role === 'super_admin'
+    || user?.firmRole === 'sr_advisor' || user?.firmRole === 'firm_admin'
+    // firm_role is NULL for every advisor created before migration 020, and
+    // requireFirmRole() reads that as sr_advisor — mirror it here so those
+    // accounts don't lose a link the server would happily serve them.
+    || (user?.role === 'advisor' && !user?.firmRole);
+
+  const [scope, setScope] = useState(persona.defaultScope);
+  const [page, setPage] = useState(1);
+  // Debounced copy of `query` — the search box stays instant to type in, but
+  // only settles into a request 300ms after the last keystroke. Without this
+  // every character would be its own round trip now that filtering is
+  // server-side.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Any change to a filter resets to page 1 — staying on page 4 of a result
+  // set that just shrank to one page would show an empty table.
+  useEffect(() => { setPage(1); }, [debouncedQuery, scope, attentionOnly, sortBy]);
+
+  const load = useCallback(() => {
     setLoading(true);
+    setError('');
     api
-      .listClients()
+      .listClients({ page, perPage: PER_PAGE, q: debouncedQuery, scope, attentionOnly, sort: sortBy })
       .then(setData)
       .catch((err) => setError(err.message || 'Could not load your clients.'))
       .finally(() => setLoading(false));
-  }
+  }, [page, debouncedQuery, scope, attentionOnly, sortBy]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   // Memoized so its reference is stable across renders where `data` hasn't
   // changed — otherwise `data?.clients ?? []` mints a fresh array on every
-  // render while `data` is still null (the loading phase), which would
-  // needlessly re-run the filtered/sorted useMemo below on every render.
+  // render while `data` is still null (the loading phase).
   const clients = useMemo(() => data?.clients ?? [], [data]);
+  const advisors = useMemo(() => data?.advisors ?? [], [data]);
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PER_PAGE));
 
-  const filtered = useMemo(() => {
-    let list = query
-      ? clients.filter((c) => c.email.toLowerCase().includes(query.toLowerCase()))
-      : clients;
-
-    if (attentionOnly) {
-      list = list.filter(needsAttention);
+  // Assignment is a fire-and-reload action: the row's own advisor cell is the
+  // only thing that changes, but the firm-wide per-advisor counts behind the
+  // scope tabs change too, so a reload is both simpler and more honest than
+  // patching one row in place.
+  const [assigningId, setAssigningId] = useState(null);
+  async function handleAssign(clientId, advisorId) {
+    setAssigningId(clientId);
+    try {
+      await api.assignClientAdvisor(clientId, advisorId === '' ? null : advisorId);
+      load();
+    } catch (err) {
+      setError(err.message || 'Could not update the assignment.');
+    } finally {
+      setAssigningId(null);
     }
-
-    if (sortBy === 'recent') return list;
-
-    const sorted = [...list];
-    if (sortBy === 'attention') {
-      // Stable partition — needs-attention clients first, original order
-      // preserved within each group (Array.sort is stable per spec).
-      sorted.sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
-    } else if (sortBy === 'readiness') {
-      // Nulls (no computable retirement goal) sort last, not first — an
-      // unscored client isn't necessarily "fine," but it's not the same
-      // signal as a scored-and-struggling one, so it shouldn't crowd it out.
-      sorted.sort((a, b) => {
-        if (a.min_readiness_score === null) return 1;
-        if (b.min_readiness_score === null) return -1;
-        return a.min_readiness_score - b.min_readiness_score;
-      });
-    } else if (sortBy === 'corpus') {
-      sorted.sort((a, b) => b.total_net_worth - a.total_net_worth);
-    }
-    return sorted;
-  }, [clients, query, attentionOnly, sortBy]);
+  }
 
   return (
     <div className="min-h-screen">
@@ -110,18 +161,33 @@ export default function Dashboard() {
         <div className="mx-auto max-w-6xl px-5 py-6 flex items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-ink)]">
-              Your book
+              {persona.title}
             </h1>
             <p className="mt-1 text-sm text-[var(--color-ink-2)]">
-              Clients, goals, and corpus under plan across your firm.
+              {persona.subtitle}
             </p>
           </div>
+          <div className="flex items-center gap-2">
+          {/* Practice analytics is the firm-level counterpart to this page:
+              this one is the book, that one is how the practice is running.
+              Gated to the same roles the endpoint enforces (requireFirmRole
+              sr_advisor/firm_admin), so a jr_advisor never sees a link that
+              would 403 — the server remains the real gate either way. */}
+          {canSeeFirmAnalytics && (
+            <Link
+              to="/practice"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-line-2)] px-3 py-2 text-sm font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-surface-2)] transition-colors"
+            >
+              Practice analytics
+            </Link>
+          )}
           <Button data-tour="onboarding-add-client" onClick={() => setAddOpen(true)}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
             Add client
           </Button>
+          </div>
         </div>
       </div>
 
@@ -160,7 +226,16 @@ export default function Dashboard() {
               </>
             )}
 
-            {/* Stat band */}
+            {/* Stat band. These are FIRM-WIDE totals and stay firm-wide
+                whatever scope/page the roster below is showing — a headline
+                number that shifted when you switched tab or turned a page
+                would be worse than useless. That does mean a junior advisor
+                sees "40 clients" above a list of their own 8, so the band
+                says plainly which set it is counting rather than leaving the
+                mismatch to be puzzled out. */}
+            <p className="mb-2 text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">
+              Across the whole firm
+            </p>
             <div className="stagger-children grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
               <MetricCard
                 label="Clients"
@@ -180,6 +255,55 @@ export default function Dashboard() {
                 highlight
               />
             </div>
+
+            {/* The attention queue, promoted out of a checkbox.
+                "Which clients need me today" is the single most valuable
+                thing this page knows, and it used to be reachable only by
+                ticking a filter nobody sees. Now it leads — with the firm-wide
+                count from the server (never just this page's slice) and a
+                one-click jump into the filtered, worst-first list. */}
+            {data.stats.attention_count > 0 && (
+              <Card className="p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <span
+                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: 'var(--color-amber-soft)' }}
+                    aria-hidden="true"
+                  >
+                    <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 5v3.5M8 11h.01" stroke="var(--color-amber)" strokeWidth="1.7" strokeLinecap="round" />
+                      <circle cx="8" cy="8" r="6.2" stroke="var(--color-amber)" strokeWidth="1.4" />
+                    </svg>
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-[var(--color-ink)]">
+                      {data.stats.attention_count} {data.stats.attention_count === 1 ? 'client needs' : 'clients need'} attention
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[var(--color-ink-2)]">
+                      No goals yet, no risk profile on file, or a readiness score below 40.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setAttentionOnly(true); setSortBy('readiness'); }}
+                >
+                  Review them
+                </Button>
+              </Card>
+            )}
+
+            {/* Book health at a glance — the readiness spread across the whole
+                firm, as one bar rather than a number the advisor has to build
+                in their head by scrolling the roster. Counts come from the
+                server and cover every client, not the current page. */}
+            {data.stats.distribution && data.stats.total_clients > 0 && (
+              <ReadinessDistributionBar
+                distribution={data.stats.distribution}
+                total={data.stats.total_clients}
+              />
+            )}
 
             {clients.length === 0 ? (
               <Card className="py-16">
@@ -203,6 +327,31 @@ export default function Dashboard() {
               </Card>
             ) : (
               <Card className="overflow-hidden">
+                {/* Scope tabs. Purely a filter over data every advisor can
+                    already read — never a permission boundary (see
+                    migration 031). "Unassigned" is here because an unowned
+                    client is the one thing a firm most wants to notice. */}
+                <div className="flex items-center gap-1 p-2 border-b border-[var(--color-line)] overflow-x-auto">
+                  {[
+                    { value: 'mine', label: 'My clients' },
+                    { value: 'all', label: 'Whole firm' },
+                    { value: 'unassigned', label: 'Unassigned' },
+                  ].map((t) => (
+                    <button
+                      key={t.value}
+                      onClick={() => setScope(t.value)}
+                      aria-pressed={scope === t.value}
+                      className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                        scope === t.value
+                          ? 'bg-[var(--color-teal-soft)] text-[var(--color-teal-ink)]'
+                          : 'text-[var(--color-ink-2)] hover:bg-[var(--color-surface-2)]'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 border-b border-[var(--color-line)]">
                   <div className="flex flex-wrap items-center gap-2.5">
                     <div className="relative">
@@ -242,56 +391,119 @@ export default function Dashboard() {
                     </label>
                   </div>
                   <span className="text-xs text-[var(--color-ink-3)] tabular-nums">
-                    {filtered.length} of {clients.length}
+                    {total === 0 ? '0' : `${(page - 1) * PER_PAGE + 1}–${Math.min(page * PER_PAGE, total)} of ${total}`}
                   </span>
                 </div>
 
                 <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-[var(--color-line)] text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
-                  <div className="col-span-6">Client</div>
-                  <div className="col-span-2 text-right">Goals</div>
-                  <div className="col-span-4 text-right">Tracked corpus</div>
+                  <div className="col-span-5">Client</div>
+                  <div className="col-span-3">Advisor</div>
+                  <div className="col-span-1 text-right">Goals</div>
+                  <div className="col-span-3 text-right">Tracked corpus</div>
                 </div>
 
                 <ul>
-                  {filtered.map((c) => (
-                    <li key={c.client_id}>
-                      <button
-                        onClick={() => navigate(`/clients/${c.client_id}`)}
-                        data-tour="dashboard-client-row"
-                        data-client-id={c.client_id}
-                        data-goal-count={c.goal_count}
-                        className="group w-full grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-left border-b border-[var(--color-line)] last:border-b-0 hover:bg-[var(--color-surface-2)] transition-colors"
-                      >
-                        <div className="col-span-12 md:col-span-6 flex items-center gap-3 min-w-0">
-                          <Avatar email={c.email} />
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-[var(--color-ink)]">{c.email}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5" data-tour-badges="true">
-                              <span className="text-xs text-[var(--color-ink-3)]">Client since {formatDate(c.client_since)}</span>
-                              <ClientHealthBadges client={c} />
-                            </div>
+                  {/* The row carries an interactive <select> (assign advisor)
+                      as well as being clickable itself, so it can't stay a
+                      single <button> — a form control nested in a button is
+                      invalid and swallows its own clicks. Instead the row is a
+                      grid whose first child is a stretched overlay Link; the
+                      read-only cells sit above it with pointer-events-none so
+                      clicks fall through to the link, while the select opts
+                      back in to receiving its own. */}
+                  {clients.map((c) => (
+                    <li
+                      key={c.client_id}
+                      data-tour="dashboard-client-row"
+                      data-client-id={c.client_id}
+                      data-goal-count={c.goal_count}
+                      className="group relative grid grid-cols-12 gap-4 px-4 py-3.5 items-center border-b border-[var(--color-line)] last:border-b-0 hover:bg-[var(--color-surface-2)] transition-colors"
+                    >
+                      <Link
+                        to={`/clients/${c.client_id}`}
+                        className="absolute inset-0"
+                        aria-label={`Open ${c.email}`}
+                      />
+                      <div className="pointer-events-none relative col-span-12 md:col-span-5 flex items-center gap-3 min-w-0">
+                        <Avatar email={c.email} />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-[var(--color-ink)]">{c.email}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5" data-tour-badges="true">
+                            <span className="text-xs text-[var(--color-ink-3)]">Client since {formatDate(c.client_since)}</span>
+                            <ClientHealthBadges client={c} />
                           </div>
                         </div>
-                        <div className="col-span-6 md:col-span-2 md:text-right">
-                          <span className="tnum text-sm text-[var(--color-ink)]">{c.goal_count}</span>
-                          <span className="md:hidden text-xs text-[var(--color-ink-3)]"> goals</span>
-                        </div>
-                        <div className="col-span-6 md:col-span-4 flex items-center justify-end gap-2">
-                          <span className="tnum text-sm text-[var(--color-ink)]">{formatCurrency(c.total_net_worth)}</span>
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-                               className="text-[var(--color-ink-3)] opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true">
-                            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </div>
-                      </button>
+                      </div>
+
+                      <div className="relative col-span-12 md:col-span-3">
+                        <select
+                          value={c.assigned_advisor_id ?? ''}
+                          disabled={assigningId === c.client_id}
+                          onChange={(e) => handleAssign(c.client_id, e.target.value === '' ? null : Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Advisor assigned to ${c.email}`}
+                          className={`field w-full py-1 text-xs ${c.assigned_advisor_id === null ? 'text-[var(--color-ink-3)]' : ''}`}
+                        >
+                          <option value="">Unassigned</option>
+                          {advisors.map((a) => (
+                            <option key={a.user_id} value={a.user_id}>{a.email}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="pointer-events-none relative col-span-6 md:col-span-1 md:text-right">
+                        <span className="tnum text-sm text-[var(--color-ink)]">{c.goal_count}</span>
+                        <span className="md:hidden text-xs text-[var(--color-ink-3)]"> goals</span>
+                      </div>
+                      <div className="pointer-events-none relative col-span-6 md:col-span-3 flex items-center justify-end gap-2">
+                        <span className="tnum text-sm text-[var(--color-ink)]">{formatCurrency(c.total_net_worth)}</span>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+                             className="text-[var(--color-ink-3)] opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true">
+                          <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
                     </li>
                   ))}
-                  {filtered.length === 0 && (
+                  {clients.length === 0 && (
                     <li className="px-4 py-10 text-center text-sm text-[var(--color-ink-3)]">
-                      No clients match "{query}".
+                      {query
+                        ? `No clients match "${query}".`
+                        : scope === 'mine'
+                          ? 'No clients are assigned to you yet — switch to "Whole firm" to pick some up.'
+                          : scope === 'unassigned'
+                            ? 'Every client has an advisor assigned.'
+                            : 'No clients match these filters.'}
                     </li>
                   )}
                 </ul>
+
+                {/* Pager. The roster used to render every client in the tenant
+                    in one unbounded list — fine at 40, a heavy payload and a
+                    multi-thousand-row DOM for a real book (docs/10 §4: tools
+                    that stop fitting "past a few hundred clients"). */}
+                {pageCount > 1 && (
+                  <div className="flex items-center justify-between gap-3 p-3 border-t border-[var(--color-line)]">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-[var(--color-ink-3)] tabular-nums">
+                      Page {page} of {pageCount}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= pageCount}
+                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
               </Card>
             )}
           </>
@@ -304,6 +516,56 @@ export default function Dashboard() {
         onCreated={() => { setAddOpen(false); load(); }}
       />
     </div>
+  );
+}
+
+// The firm's readiness spread as a single stacked bar. Buckets mirror
+// ReadinessScore.jsx's own bands (and clients_list.php's server-side copy) so
+// a segment labelled "at risk" is exactly the set badged "Needs attention" on
+// the rows below — one definition, three places, no third cutoff invented here.
+//
+// "Not scored" is shown rather than hidden: a client with no projectable
+// retirement goal is a real state a principal should see, not an absence to
+// round away. Segments below ~4% still render at 4% width so a small-but-
+// nonzero bucket can't visually vanish; the legend carries the true counts.
+function ReadinessDistributionBar({ distribution, total }) {
+  const segments = [
+    { key: 'strong', label: 'Strong', color: 'var(--color-teal)' },
+    { key: 'fair', label: 'Fair', color: 'var(--color-amber)' },
+    { key: 'at_risk', label: 'At risk', color: 'var(--color-alert)' },
+    { key: 'unscored', label: 'Not scored', color: 'var(--color-line-2)' },
+  ].filter((s) => (distribution[s.key] ?? 0) > 0);
+
+  if (total === 0 || segments.length === 0) return null;
+
+  return (
+    <Card className="p-4 mb-4">
+      <div className="flex items-baseline justify-between gap-3 mb-2.5">
+        <h2 className="text-sm font-semibold text-[var(--color-ink)]">Book health</h2>
+        <span className="text-xs text-[var(--color-ink-3)]">
+          Lowest readiness per client, across {total} {total === 1 ? 'client' : 'clients'}
+        </span>
+      </div>
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-line)]" role="img"
+           aria-label={segments.map((s) => `${distribution[s.key]} ${s.label}`).join(', ')}>
+        {segments.map((s) => (
+          <div
+            key={s.key}
+            style={{ width: `${Math.max(4, (distribution[s.key] / total) * 100)}%`, backgroundColor: s.color }}
+            title={`${s.label}: ${distribution[s.key]}`}
+          />
+        ))}
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+        {segments.map((s) => (
+          <span key={s.key} className="inline-flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} aria-hidden="true" />
+            {s.label}
+            <span className="tabular-nums font-semibold text-[var(--color-ink)]">{distribution[s.key]}</span>
+          </span>
+        ))}
+      </div>
+    </Card>
   );
 }
 

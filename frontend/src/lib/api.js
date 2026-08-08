@@ -181,8 +181,36 @@ export const api = {
   // Only works when demo_mode is 'on' (403 otherwise). Returns demo login credentials.
   resetDemoData: () => request('demo_reset.php', { method: 'POST' }),
 
-  // Advisor dashboard: all clients in the tenant + aggregate stats.
-  listClients: () => request('clients_list.php'),
+  // Advisor dashboard: a PAGE of the tenant's clients + firm-wide aggregate
+  // stats. Filtering/sorting/paging are server-side (see clients_list.php) —
+  // `stats` and `attention_count` always describe the whole book, never just
+  // the returned page. opts: { page, perPage, q, scope: 'all'|'mine'|'unassigned',
+  // attentionOnly, sort: 'recent'|'attention'|'readiness'|'corpus' }.
+  listClients: ({ page = 1, perPage = 25, q = '', scope = 'all', attentionOnly = false, sort = 'recent' } = {}) => {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+    if (q) params.set('q', q);
+    if (scope && scope !== 'all') params.set('scope', scope);
+    if (attentionOnly) params.set('attention_only', '1');
+    if (sort && sort !== 'recent') params.set('sort', sort);
+    return request(`clients_list.php?${params.toString()}`);
+  },
+
+  // Assign a client to an advisor, or pass null to unassign. Attribution only
+  // — it drives the "my clients" filter and firm analytics, and never changes
+  // who can read or edit a client (see client_assign_advisor.php).
+  assignClientAdvisor: (clientId, advisorId) =>
+    request('client_assign_advisor.php', {
+      method: 'POST',
+      body: JSON.stringify({
+        client_id: Number(clientId),
+        advisor_id: advisorId == null ? null : Number(advisorId),
+      }),
+    }),
+
+  // Firm practice analytics — per-advisor load, readiness/risk distribution,
+  // review pipeline and coverage gaps. sr_advisor/firm_admin only (server-
+  // enforced via requireFirmRole).
+  getFirmAnalytics: () => request('firm_analytics.php'),
 
   // Advisor onboards a new client into their tenant.
   createClient: (email, temporaryPassword) =>

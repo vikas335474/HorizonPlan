@@ -64,6 +64,41 @@ export default function GoalCard({ goal }) {
         {goal.target_date && <Figure label="Target date" value={formatDate(goal.target_date)} />}
       </div>
 
+      {/* Funding status for a target-based goal (education / home / other).
+          These goal types never get a Readiness Score — they carry no
+          withdrawal or drawdown rate to project from — so before this they
+          showed only static parameters and no progress signal at all.
+          `target_funding` comes from goals_list.php (PlanMath::targetGoalFunding)
+          and deliberately assumes NO growth: it's what the goal will cost in
+          target-date rupees against what's saved today, which is a floor, not
+          a forecast. The copy says so rather than letting the bar imply one. */}
+      {goal.target_funding && (
+        <div className="mt-3 pt-3 border-t border-[var(--color-line)]">
+          <div className="flex items-baseline justify-between mb-1.5">
+            <span className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">
+              Covered today
+            </span>
+            <span className="text-xs font-semibold tabular-nums text-[var(--color-ink)]">
+              {goal.target_funding.covered_pct}%
+            </span>
+          </div>
+          <div
+            className="h-1.5 w-full rounded-full bg-[var(--color-line)] overflow-hidden"
+            role="img"
+            aria-label={`${goal.target_funding.covered_pct}% of the inflation-adjusted target is covered by the current corpus`}
+          >
+            <div
+              className="h-full rounded-full bg-[var(--color-teal)]"
+              style={{ width: `${Math.max(2, goal.target_funding.covered_pct)}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] leading-snug text-[var(--color-ink-3)]">
+            Needs ~{formatCurrency(goal.target_funding.inflated_target)} by then at{' '}
+            {formatPercent(goal.inflation_rate)} inflation. Assumes no growth on what's saved.
+          </p>
+        </div>
+      )}
+
       <div className="mt-3 pt-3 border-t border-[var(--color-line)] flex items-center justify-between">
         <span className="text-xs text-[var(--color-ink-3)]">
           {goal.projection_horizon_years}-year horizon

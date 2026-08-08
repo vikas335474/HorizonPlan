@@ -83,8 +83,13 @@ export default function AppHeader() {
         </div>
       )}
       <header className="surface-glass sticky top-0 z-20 border-b border-[var(--color-line)]">
-      <div className="mx-auto max-w-6xl px-5 h-14 flex items-center justify-between">
-        <Link to={homePath} className="flex items-center gap-2.5 group min-w-0">
+      {/* gap-4 on the row, plus whitespace-nowrap on the nav below: at a plain
+          1440px laptop width a long firm name used to butt straight into the
+          first nav link and push multi-word labels ("Risk questionnaire",
+          "Take the tour") into wrapping mid-phrase across two lines. The brand
+          link is allowed to shrink and truncate; the nav is not. */}
+      <div className="mx-auto max-w-6xl px-5 h-14 flex items-center justify-between gap-4">
+        <Link to={homePath} className="flex min-w-0 shrink items-center gap-2.5 group">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-colors group-hover:bg-[var(--color-surface-2)]">
             {brandLogo ? (
               <img src={brandLogo} alt="" className="h-full w-full object-contain" />
@@ -104,7 +109,7 @@ export default function AppHeader() {
             hamburger menu (mobile audit: this row's 6+ inline items had no
             wrap and forced the whole page into horizontal scroll on a real
             phone width). */}
-        <div className="hidden sm:flex items-center gap-4">
+        <div className="hidden sm:flex shrink-0 items-center gap-4 whitespace-nowrap">
           {user?.role === 'super_admin' && (
             <Link
               to="/admin"

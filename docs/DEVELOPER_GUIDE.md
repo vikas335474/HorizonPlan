@@ -219,6 +219,22 @@ table. Rough grouping:
 - **Risk / portfolio / cash-flow / households / reviews:** `risk_profiles` (017),
   `client_portfolio` (018), `mf_nav_sync` (027), `households` (029),
   `cash_flow` (030), `plan_review` (026) + `plan_review_schedule` (028).
+- **Client→advisor assignment:** `users.assigned_advisor_id` (031).
+
+### Assignment is attribution, not access control
+
+`users.assigned_advisor_id` (migration 031) records which advisor a client
+belongs to. It exists for the "My clients" filter and the per-advisor practice
+analytics — **it is not a permission boundary**. Tenant isolation remains the
+only security boundary: every advisor in a firm can still read and write every
+client in their tenant, exactly as before the column existed. `scope=mine` on
+`clients_list.php` is a filter the caller opts into, and nothing anywhere
+restricts a read by assignment.
+
+If you are tempted to "tighten" this into a real ownership check, that is a
+product decision, not a cleanup — it would change the firm's access model, and
+`tests/test_client_assignment_db.php` asserts the current behaviour explicitly
+so the change can't happen by accident.
 
 ### FK / teardown-ordering landmine
 
@@ -253,7 +269,7 @@ deferred item on the security/quality ledger.
 |------|----------------|
 | `security_gatekeeper.php` | Auth, CSRF, MFA, sessions, rate limiting, firm-role gate, platform settings (§4). |
 | `TenantScopedDb.php` | Tenant-isolated data access (§3). |
-| `PlanMath.php` | **Pure** projection arithmetic — decumulation, accumulation, corpus composition (liquid-first), sequence-of-returns, historical replay, the 0–100 readiness score. No DB. |
+| `PlanMath.php` | **Pure** projection arithmetic — decumulation, accumulation, corpus composition (liquid-first), sequence-of-returns, historical replay, the 0–100 readiness score, and `targetGoalFunding()` (the funding signal for target-based goals, which deliberately assumes no growth). No DB. |
 | `GoalFieldValidation.php` | Per-field range/type validation shared by goal create + update so the two entry points can't drift. |
 | `RiskProfileScoring.php` | Pure scoring of questionnaire answers against a firm's rubric. |
 | `CashFlowSummary.php` | Normalises income/expense lines to monthly, sums surplus, and (advisor-only) compares surplus to total goal SIPs. |
