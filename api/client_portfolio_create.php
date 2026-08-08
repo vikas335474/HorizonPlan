@@ -100,6 +100,22 @@ if ($itemKind === 'asset') {
     $bucket = null;
 }
 
+// interest_rate is the mirror image of bucket: meaningful only for a liability
+// (docs/10 P1-4 — what the debt actually costs), meaningless for an asset, so
+// it is nulled out for one exactly as bucket is for the other. Optional
+// throughout: an unrated loan is reported as unrated by FinancialFoundations,
+// never assumed cheap.
+$interestRate = $input['interest_rate'] ?? null;
+if ($itemKind !== 'liability' || $interestRate === null || $interestRate === '') {
+    $interestRate = null;
+} elseif (!is_numeric($interestRate) || (float) $interestRate < 0 || (float) $interestRate > 100) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'interest_rate must be between 0 and 100.']);
+    exit();
+} else {
+    $interestRate = (float) $interestRate;
+}
+
 $clientMatches = $scopedDb->select('users', ['id' => $clientId, 'role' => 'client']);
 if (empty($clientMatches)) {
     http_response_code(404);
@@ -129,6 +145,7 @@ $id = $scopedDb->insert('client_portfolio_items', [
     'category'           => $category,
     'description'        => $description,
     'value'              => $resolvedValue,
+    'interest_rate'      => $interestRate,
     'amfi_scheme_code'   => $schemeCode,
     'units_held'         => $schemeCode !== null ? (float) $unitsHeld : null,
     'created_by_user_id' => $userId,
