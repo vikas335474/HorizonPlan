@@ -162,9 +162,26 @@ Each prompt is standalone and runnable in a fresh session. Follow the repo's
 
 ---
 
-### Prompt — E-3 · The sourced reference library ("shall I look this up for you?")
+### Prompt — E-3 · The sourced reference library ("shall I look this up for you?") — BUILT
 
 > **Adds a cron + a table. Do last — E-2's UI is its only consumer.**
+>
+> **Status: built**, ahead of E-2 (which is still not built as of this
+> session). `reference_costs` (sql/036), `api/lib/ReferenceCosts.php`,
+> `tools/reference_costs_sync.php`, and the read endpoint
+> `api/reference_costs_get.php` are all in place exactly as scoped below.
+> Since E-2's progressive-personalisation queue doesn't exist yet to be the
+> UI consumer, this session pulled forward one standalone slice of it: on an
+> **education-type goal's** edit form, an opt-in `EducationCostSuggestion`
+> card (`frontend/src/components/ReferenceCostUI.jsx`) shows the four cached
+> driver ranges (government/private × engineering/medical) and fills
+> `target_amount` with the range midpoint only when the user clicks a
+> suggestion — never silently. Healthcare and city-tier rows are cached and
+> readable via the same endpoint but have **no UI consumer yet** — they're
+> E-2's to wire up (medical cost has nowhere to live without E-2's storage
+> decision; city tier has no expense field to adjust without one). Verified
+> against a real MariaDB + `tests/run_all.sh` + a real Playwright run
+> against the personal demo's "Daughter's college" goal.
 >
 > Build `reference_costs`: a table of cited cost ranges (education by stage and
 > driver, healthcare, city expense multipliers), each row carrying `category`,
@@ -217,7 +234,17 @@ more personal; it should not be crossed without a deliberate decision on record.
 
 ## 6. Open items carried in from prior sessions
 
-- Migrations **033, 034, 035** are not yet applied on the production
-  deployment — run manually via hPanel (see `DEPLOY.md`).
+- Migrations **033, 034, 035, 036** are not yet applied on the production
+  deployment — run manually via hPanel (see `DEPLOY.md`), and run
+  `tools/reference_costs_sync.php` once after 036 lands (the opt-in prompt
+  renders nothing until the cache is populated).
 - The guided tour still renders advisor vocabulary to self-directed users
   ("the number a **client** can hold onto", "adjust per **client**").
+- **E-2 is still not built.** E-3 shipped first (see its status note above)
+  with one pulled-forward UI slice for education goals only. E-2 still needs
+  to: decide the storage shape for city tier / dependants' education stage /
+  medical cost (`client_protection` vs. a new `client_context` table vs.
+  on-the-goal, with the household sharing question docs/11 §4 raises), wire
+  up the healthcare and city-tier `reference_costs` rows this session already
+  cached but left unconsumed, and build the actual progressive
+  "make this more accurate" queue rather than a single always-visible card.

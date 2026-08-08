@@ -23,6 +23,7 @@ import SequenceRiskChart from '../components/SequenceRiskChart';
 import { GoalProgressCard } from '../components/ProgressUI';
 import { ChangeLogCard } from '../components/ChangeLogUI';
 import { GoalReviewCard, ReviewStatusBadge } from '../components/PlanReviewUI';
+import { EducationCostSuggestion } from '../components/ReferenceCostUI';
 import {
   formatCurrency,
   formatPercent,
@@ -511,6 +512,15 @@ export default function GoalDetail() {
                         onChange={(e) => setBasicsForm((f) => ({ ...f, target_amount: e.target.value }))}
                         className="field"
                       />
+                      {/* docs/11 Prompt E-3 — opt-in, sourced suggestion for the one goal
+                          type where the cost driver (government/private) is both knowable
+                          and honestly computable (docs/11 §3). Never fills the field on its
+                          own; only "Use this" does. */}
+                      {goal.goal_type === 'education' && (
+                        <EducationCostSuggestion
+                          onUseAmount={(amount) => setBasicsForm((f) => ({ ...f, target_amount: String(amount) }))}
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-[var(--color-ink-2)] mb-1">Target date (optional)</label>
