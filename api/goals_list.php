@@ -69,6 +69,21 @@ $result = array_map(static function (array $goal): array {
         );
     }
 
+    // Target-based goals (education / home_purchase / other) never get a
+    // readiness score — they have no withdrawal/drawdown rate to project
+    // from — and so had no progress signal at all. This is their equivalent:
+    // what the goal will cost in target-date rupees, and what today's corpus
+    // covers of it. Null for a goal with no target_amount/target_date (every
+    // retirement goal), so the two signals are mutually exclusive by
+    // construction, never both rendered. See PlanMath::targetGoalFunding()
+    // for why it deliberately assumes no growth.
+    $targetFunding = PlanMath::targetGoalFunding(
+        $goal['target_amount'] !== null ? (float) $goal['target_amount'] : null,
+        $goal['target_date'],
+        (float) $goal['initial_net_worth'],
+        (float) $goal['inflation_rate']
+    );
+
     return [
         'id'                       => (int) $goal['id'],
         'client_id'                => (int) $goal['client_id'],
@@ -82,6 +97,7 @@ $result = array_map(static function (array $goal): array {
         'drawdown_return_rate'     => $drawdownReturnRate,
         'projection_horizon_years' => (int) $goal['projection_horizon_years'],
         'readiness_score'          => $readinessScore,
+        'target_funding'           => $targetFunding,
         // Jr -> Sr Advisor Plan-Approval Workflow — same convention as
         // readiness_score above: always present, 'not_required' for a firm
         // that hasn't opted into review or a non-advice-bearing goal.
