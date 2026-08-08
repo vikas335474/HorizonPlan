@@ -160,6 +160,33 @@ Each prompt is standalone and runnable in a fresh session. Follow the repo's
 > `not_recorded` never renders as a pass. Follow `FinancialFoundations.php` —
 > it is the worked example for all of this.
 
+**Built.** Decisions taken (no interactive user was available in that session
+to confirm them live, so they're recorded here per the decide-then-build
+convention, all following FinancialFoundations' existing precedent):
+- **Storage:** a new `client_context` table (one row per client — city tier +
+  an optional multiplier override + monthly medical cost, mirroring
+  `client_protection`'s shape) plus a new `client_dependants` table (one row
+  **per child**, since `client_protection`'s single-row shape can't hold a
+  list). sql/036.
+- **City tier is HOUSEHOLD-shared** (falls back to a household partner's
+  answer, same precedent as reserve/debt); **medical cost stays PER-PERSON**
+  (same precedent as the existing cover fields). Dependants are
+  household-shared by the same read-time aggregation `foundations_read.php`
+  already uses for `cash_flow_items`.
+- **What the city tier actually adjusts:** the retirement-YEAR spend inside
+  `PlanMath::retirementTarget()` only (a genuine "I'll retire somewhere
+  cheaper/costlier" scenario) — never the real recorded cash-flow expenses
+  E-1 already prefers, and never the inflation rate.
+- **Education driver → goal link:** explicit, nullable `goal_id` on each
+  dependant row, chosen from the person's own education-type goals — never
+  auto-matched by title or date.
+- Reference ranges (city-tier multipliers derived from 7th CPC HRA rates;
+  education cost ranges by driver) live as sourced code constants in
+  `api/lib/PersonalisationReference.php`, the same seed-data role
+  `lib/strategyPresets.js` plays elsewhere — Prompt E-3's `reference_costs`
+  cron supersedes this file's constants as its seed/fallback, not a second
+  source of truth.
+
 ---
 
 ### Prompt — E-3 · The sourced reference library ("shall I look this up for you?")
