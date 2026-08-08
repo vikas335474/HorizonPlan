@@ -471,6 +471,34 @@ export const api = {
   saveFoundations: (fields) =>
     request('foundations_upsert.php', { method: 'POST', body: JSON.stringify(fields) }),
 
+  // --- Progressive personalisation (docs/11 Prompt E-2) ---
+  // City tier (+ optional multiplier override) and an ongoing monthly medical
+  // cost. Both feed goals_projection.php's retirement_target as opt-in
+  // refinements — a no-op until answered. City tier is household-shared
+  // (falls back to a partner's answer); medical cost stays per-person.
+  getPersonalisationContext: (clientId) =>
+    request(`personalisation_context_read.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // fields: { client_id?, city_tier?, expense_multiplier?, monthly_medical_cost? }
+  // Every field optional; passing null clears it back to "not recorded".
+  savePersonalisationContext: (fields) =>
+    request('personalisation_context_upsert.php', { method: 'POST', body: JSON.stringify(fields) }),
+
+  // Dependant children — current age + education cost driver, feeding an
+  // existing education-type goal's suggested target range. Household-shared:
+  // returns every member's rows, aggregated.
+  getDependants: (clientId) =>
+    request(`dependants_list.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // id present -> update; absent -> create. fields: { id?, client_id?, label?,
+  // current_age?, cost_driver?, goal_id? }. goal_id must be an existing
+  // education-type goal belonging to the acting client — never auto-matched.
+  saveDependant: (fields) =>
+    request('dependants_upsert.php', { method: 'POST', body: JSON.stringify(fields) }),
+
+  deleteDependant: (id) =>
+    request('dependants_delete.php', { method: 'POST', body: JSON.stringify({ id }) }),
+
   // --- Goal-progress tracking over time (docs/10 P1-1) ---
   // One goal's recorded snapshot history + its current drift from plan.
   // tracking_mode is 'drift' (projectable goal — expected_value per point),

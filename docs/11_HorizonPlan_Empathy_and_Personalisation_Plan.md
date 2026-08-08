@@ -160,28 +160,77 @@ Each prompt is standalone and runnable in a fresh session. Follow the repo's
 > `not_recorded` never renders as a pass. Follow `FinancialFoundations.php` —
 > it is the worked example for all of this.
 
+**Built.** Decisions taken (no interactive user was available in that session
+to confirm them live, so they're recorded here per the decide-then-build
+convention, all following FinancialFoundations' existing precedent):
+- **Storage:** a new `client_context` table (one row per client — city tier +
+  an optional multiplier override + monthly medical cost, mirroring
+  `client_protection`'s shape) plus a new `client_dependants` table (one row
+  **per child**, since `client_protection`'s single-row shape can't hold a
+  list). sql/036.
+- **City tier is HOUSEHOLD-shared** (falls back to a household partner's
+  answer, same precedent as reserve/debt); **medical cost stays PER-PERSON**
+  (same precedent as the existing cover fields). Dependants are
+  household-shared by the same read-time aggregation `foundations_read.php`
+  already uses for `cash_flow_items`.
+- **What the city tier actually adjusts:** the retirement-YEAR spend inside
+  `PlanMath::retirementTarget()` only (a genuine "I'll retire somewhere
+  cheaper/costlier" scenario) — never the real recorded cash-flow expenses
+  E-1 already prefers, and never the inflation rate.
+- **Education driver → goal link:** explicit, nullable `goal_id` on each
+  dependant row, chosen from the person's own education-type goals — never
+  auto-matched by title or date.
+- Reference ranges (city-tier multipliers derived from 7th CPC HRA rates;
+  education cost ranges by driver) live as sourced code constants in
+  `api/lib/PersonalisationReference.php`, the same seed-data role
+  `lib/strategyPresets.js` plays elsewhere — Prompt E-3's `reference_costs`
+  cron supersedes this file's constants as its seed/fallback, not a second
+  source of truth.
+
 ---
 
 ### Prompt — E-3 · The sourced reference library ("shall I look this up for you?") — BUILT
 
 > **Adds a cron + a table. Do last — E-2's UI is its only consumer.**
 >
-> **Status: built**, ahead of E-2 (which is still not built as of this
-> session). `reference_costs` (sql/036), `api/lib/ReferenceCosts.php`,
-> `tools/reference_costs_sync.php`, and the read endpoint
-> `api/reference_costs_get.php` are all in place exactly as scoped below.
-> Since E-2's progressive-personalisation queue doesn't exist yet to be the
-> UI consumer, this session pulled forward one standalone slice of it: on an
-> **education-type goal's** edit form, an opt-in `EducationCostSuggestion`
-> card (`frontend/src/components/ReferenceCostUI.jsx`) shows the four cached
-> driver ranges (government/private × engineering/medical) and fills
-> `target_amount` with the range midpoint only when the user clicks a
-> suggestion — never silently. Healthcare and city-tier rows are cached and
-> readable via the same endpoint but have **no UI consumer yet** — they're
-> E-2's to wire up (medical cost has nowhere to live without E-2's storage
-> decision; city tier has no expense field to adjust without one). Verified
-> against a real MariaDB + `tests/run_all.sh` + a real Playwright run
-> against the personal demo's "Daughter's college" goal.
+> **Status: built.** `reference_costs` (sql/037 — bumped from 036 on merge:
+> E-2's own session independently claimed 036 for `client_context` /
+> `client_dependants`, in a parallel run that finished first), plus
+> `api/lib/ReferenceCosts.php`, `tools/reference_costs_sync.php`, and the
+> read endpoint `api/reference_costs_get.php`, are all in place exactly as
+> scoped below.
+>
+> This session started before E-2 had shipped and initially pulled forward a
+> standalone UI slice (an opt-in suggestion card directly on an education
+> goal's target-amount field), reasoning E-2's queue didn't exist yet to be
+> the consumer. By the time this branch was ready to merge, E-2 *had* shipped
+> — with its own `DependantsCard` (per-child, driver-based, explicitly linked
+> to an education goal, sourced from `PersonalisationReference.php`'s
+> constants) already doing that exact job, better, from linked per-child
+> data rather than a bare goal-type check. Running both at once would have
+> shown two independently-sourced "typical cost" ranges for the same goal
+> that can silently disagree — so the pulled-forward UI slice was removed at
+> merge time in favour of E-2's. What remains from this session is the
+> backend E-3 actually scoped: the table, the cron, and the read endpoint,
+> verified against a real MariaDB + `tests/run_all.sh` + a real HTTP round
+> trip + a real Playwright run (pre-merge) confirming the now-removed card
+> rendered and wrote correctly.
+>
+> **Left open, deliberately not done silently:** `PersonalisationReference.php`'s
+> own header comment already anticipated this — "when E-3 ships, its cron
+> populates `reference_costs` and this file's constants become the seed
+> data/fallback, not a second source of truth." That supersession is **not**
+> done — `reference_costs`'s education rows are split by course
+> (`engineering_government`/`engineering_private`/`medical_government`/`medical_private`),
+> while `PersonalisationReference`'s driver buckets are generic
+> (`government`/`private`/`overseas`, per E-2's own scope, docs/11 §4). The
+> two granularities don't map 1:1, so merging them needs its own
+> decide-then-build pass (most likely: broaden `reference_costs`' education
+> subcategories to match the generic driver buckets E-2 already committed
+> to, then have `PersonalisationReference::educationRangeForDriver()` /
+> `cityTierMultiplier()` read the cache when populated and fall back to the
+> hand-authored constants when it isn't) — not something to force through in
+> a merge-conflict fixup.
 >
 > Build `reference_costs`: a table of cited cost ranges (education by stage and
 > driver, healthcare, city expense multipliers), each row carrying `category`,
@@ -234,17 +283,22 @@ more personal; it should not be crossed without a deliberate decision on record.
 
 ## 6. Open items carried in from prior sessions
 
-- Migrations **033, 034, 035, 036** are not yet applied on the production
+- Migrations **033, 034, 035, 036, 037** are not yet applied on the production
   deployment — run manually via hPanel (see `DEPLOY.md`), and run
-  `tools/reference_costs_sync.php` once after 036 lands (the opt-in prompt
-  renders nothing until the cache is populated).
+  `tools/reference_costs_sync.php` once after 037 lands (the "shall I look
+  this up for you?" affordances render nothing until the cache is populated).
 - The guided tour still renders advisor vocabulary to self-directed users
   ("the number a **client** can hold onto", "adjust per **client**").
-- **E-2 is still not built.** E-3 shipped first (see its status note above)
-  with one pulled-forward UI slice for education goals only. E-2 still needs
-  to: decide the storage shape for city tier / dependants' education stage /
-  medical cost (`client_protection` vs. a new `client_context` table vs.
-  on-the-goal, with the household sharing question docs/11 §4 raises), wire
-  up the healthcare and city-tier `reference_costs` rows this session already
-  cached but left unconsumed, and build the actual progressive
-  "make this more accurate" queue rather than a single always-visible card.
+- **E-2 and E-3 both built, but not fully reconciled with each other** — see
+  E-3's status note above for the full account. `reference_costs`'
+  education rows and `PersonalisationReference.php`'s driver buckets use two
+  different granularities (course-specific vs. generic government/private/
+  overseas) that don't map 1:1, so `PersonalisationReference` still serves
+  every figure `DependantsCard` shows from its own hand-authored constants,
+  not from the `reference_costs` cache. Healthcare and city-tier rows in
+  `reference_costs` are cached and readable via `reference_costs_get.php`
+  but have no UI consumer at all — `PersonalisationCard`'s city-tier/medical
+  questions use `PersonalisationReference`'s constants directly, not the
+  cache. Reconciling the two into one real source of truth is the next
+  decide-then-build item for this area, not something to force through
+  without confirming the driver-bucket question with the user first.

@@ -80,13 +80,34 @@ function leverLine(levers, plain) {
     : `${verb} takes ${ordered[0]}.`;
 }
 
+// docs/11 Prompt E-2 — state what actually moved the number, right next to
+// it, rather than leaving the reader to guess why this figure differs from
+// what a bare "spend × inflation" would produce. Renders nothing when
+// neither refinement is in play, so an unanswered goal's assumption line
+// (below) stays the whole story.
+function personalisationNote(personalisation) {
+  if (!personalisation) return null;
+  const parts = [];
+  if (personalisation.multiplier_applied) {
+    parts.push(
+      `×${personalisation.expense_multiplier} for ${personalisation.multiplier_is_override ? 'your own city-cost figure' : `a tier ${personalisation.city_tier} city`}`
+    );
+  }
+  if (personalisation.monthly_medical_cost) {
+    parts.push(`${formatCurrency(personalisation.monthly_medical_cost)}/month added for ongoing medical cost`);
+  }
+  if (parts.length === 0) return null;
+  return `Also applied: ${parts.join(', and ')}.`;
+}
+
 /**
  * @param target      projection.retirement_target (null when unavailable)
  * @param levers      projection.gap_closing_levers (null when target is met, or unavailable)
  * @param plain       consumer vocabulary (self-directed) vs advisor vocabulary
  * @param retirementAge  for the "by age N" phrasing
+ * @param personalisation projection.personalisation (docs/11 E-2) — what was applied, if anything
  */
-export default function RetirementTargetCard({ target, levers = null, plain = false, retirementAge }) {
+export default function RetirementTargetCard({ target, levers = null, plain = false, retirementAge, personalisation = null }) {
   // No expenses recorded. Rather than hiding the card entirely — which leaves
   // the person with no idea the number is obtainable — say what is missing and
   // what it would unlock.
@@ -165,6 +186,13 @@ export default function RetirementTargetCard({ target, levers = null, plain = fa
         this plan&rsquo;s withdrawal rate. If your spending in retirement would be different — a paid-off
         home, or higher medical costs — the target moves with it.
       </p>
+
+      {/* docs/11 Prompt E-2 — the refinements actually in play, if any. */}
+      {personalisationNote(personalisation) && (
+        <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-ink-3)]">
+          {personalisationNote(personalisation)}
+        </p>
+      )}
     </Card>
   );
 }

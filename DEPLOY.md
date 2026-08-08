@@ -215,7 +215,7 @@ itself stays server-side-only, run via cron or SSH).
 
 `tools/reference_costs_sync.php` pushes the curated, cited cost-range dataset
 (docs/11 Prompt E-3 — education by driver, healthcare, city-tier expense
-multipliers) into `reference_costs` (sql/036), the cache the self-serve
+multipliers) into `reference_costs` (sql/037), the cache the self-serve
 plan's "shall I look this up for you?" prompt reads from. Unlike the NAV
 sync, there is no single live API for AICTE/NMC/MOSPI/7th-CPC style figures —
 the dataset lives in `api/lib/ReferenceCosts.php`, curated and cited, and
@@ -238,7 +238,7 @@ already-verified row (see the ON DUPLICATE KEY UPDATE in
   back the whole batch (transaction owned by this script, not
   `syncReferenceCosts()` itself), leaving the existing cache untouched rather
   than half-written.
-- Must run once after `sql/036_reference_costs.sql` is applied — before that,
+- Must run once after `sql/037_reference_costs.sql` is applied — before that,
   the cache is empty and the opt-in prompt simply renders nothing (never a
   fabricated range).
 

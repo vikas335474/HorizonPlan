@@ -8,7 +8,7 @@ declare(strict_types=1);
  *      itself: cited cost ranges by DRIVER, not aspiration (docs/11 §3).
  *      Fully unit-testable with no fixture needed — it IS the fixture.
  *   2. syncReferenceCosts() — DB-touching, upserts the dataset into
- *      reference_costs (sql/036). Deliberately does NOT manage its own
+ *      reference_costs (sql/037). Deliberately does NOT manage its own
  *      transaction — same convention as MfNavSync.php's
  *      applyParsedNavToCache(), caller owns the transaction boundary:
  *      tools/reference_costs_sync.php wraps the call in one so a mid-run

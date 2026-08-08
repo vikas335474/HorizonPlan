@@ -17,6 +17,7 @@ for t in \
   tests/test_target_goal_funding.php \
   tests/test_goal_progress.php \
   tests/test_financial_foundations.php \
+  tests/test_personalisation_reference.php \
   tests/test_totp.php \
   tests/test_password_hashing.php \
   tests/test_inheritance_cascade.php \
@@ -43,6 +44,7 @@ for t in \
   tests/test_progress_snapshot_db.php \
   tests/test_self_service_db.php \
   tests/test_foundations_db.php \
+  tests/test_personalisation_db.php \
   tests/test_household_self_service_db.php \
   tests/test_mf_nav_sync.php \
   tests/test_reference_costs_db.php

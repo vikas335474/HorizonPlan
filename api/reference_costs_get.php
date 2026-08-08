@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // The sourced reference-cost library's read side (docs/11 Prompt E-3). GET,
 // any authenticated advisor OR client — this is read-only reference data,
-// not tenant-scoped (see sql/036_reference_costs.sql), same posture as
+// not tenant-scoped (see sql/037_reference_costs.sql), same posture as
 // market_history_years.php. Two modes:
 //   ?category=education                          -> list every row in that category
 //   ?category=education&subcategory=engineering_private -> exactly one row (or found:false)
