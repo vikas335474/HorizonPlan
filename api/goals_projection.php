@@ -21,6 +21,8 @@ require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/PlanMath.php';
 // For the retirement target's expense input — the person's own recorded spend.
 require_once __DIR__ . '/lib/CashFlowSummary.php';
+// docs/11 Prompt E-2 — the opt-in city-tier / medical-cost refinements.
+require_once __DIR__ . '/lib/PersonalisationReference.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -212,6 +214,51 @@ if ($currentAge !== null && $retirementAge !== null && $accumulationReturnRate !
         $scopedDb->select('cash_flow_items', ['client_id' => (int) $goal['client_id']])
     )['monthly_expense'];
 
+    // docs/11 Prompt E-2 — the opt-in refinement queue. Both are no-ops
+    // (multiplier 1.0, additional expense 0.0) until the person has actually
+    // answered the corresponding question, so an untouched goal projects
+    // byte-for-byte the same target it did before this prompt shipped.
+    //
+    // City tier is HOUSEHOLD-shared (docs/11 §4 decide-then-build note, same
+    // precedent as FinancialFoundations' reserve/debt): read this client's own
+    // row first, and only fall back to a household partner's tier when this
+    // client hasn't answered the question themselves. Medical cost stays
+    // PER-PERSON, like the existing cover fields in client_protection.
+    $ownContextRows = $scopedDb->select('client_context', ['client_id' => (int) $goal['client_id']]);
+    $ownContext = $ownContextRows[0] ?? null;
+
+    $cityTier = $ownContext['city_tier'] ?? null;
+    $expenseMultiplierOverride = ($ownContext !== null && $ownContext['expense_multiplier'] !== null)
+        ? (float) $ownContext['expense_multiplier']
+        : null;
+
+    if ($cityTier === null && $expenseMultiplierOverride === null) {
+        $clientRow = $scopedDb->select('users', ['id' => (int) $goal['client_id'], 'role' => 'client']);
+        $householdId = ($clientRow !== [] && $clientRow[0]['household_id'] !== null)
+            ? (int) $clientRow[0]['household_id']
+            : 0;
+        if ($householdId > 0) {
+            foreach ($scopedDb->select('users', ['household_id' => $householdId, 'role' => 'client']) as $member) {
+                if ((int) $member['id'] === (int) $goal['client_id']) {
+                    continue;
+                }
+                $partnerContext = $scopedDb->select('client_context', ['client_id' => (int) $member['id']]);
+                if ($partnerContext !== [] && ($partnerContext[0]['city_tier'] !== null || $partnerContext[0]['expense_multiplier'] !== null)) {
+                    $cityTier = $partnerContext[0]['city_tier'];
+                    $expenseMultiplierOverride = $partnerContext[0]['expense_multiplier'] !== null
+                        ? (float) $partnerContext[0]['expense_multiplier']
+                        : null;
+                    break;
+                }
+            }
+        }
+    }
+
+    $cityMultiplierInfo = PersonalisationReference::cityTierMultiplier($cityTier, $expenseMultiplierOverride);
+    $monthlyMedicalCost = ($ownContext !== null && $ownContext['monthly_medical_cost'] !== null)
+        ? (float) $ownContext['monthly_medical_cost']
+        : 0.0;
+
     // The projected corpus is read off the lifecycle series at the retirement
     // year — the same curve this response already returns, so the target and
     // the chart can never disagree.
@@ -222,7 +269,9 @@ if ($currentAge !== null && $retirementAge !== null && $accumulationReturnRate !
         $inflationRate,
         $withdrawalRate,
         $yearsToRetirement,
-        (float) $projectedAtRetirement
+        (float) $projectedAtRetirement,
+        $monthlyMedicalCost,
+        (float) $cityMultiplierInfo['multiplier']
     );
 
     // docs/11 Prompt E-1: "never pair a gap with silence" — name the smallest
@@ -238,9 +287,25 @@ if ($currentAge !== null && $retirementAge !== null && $accumulationReturnRate !
             $yearsToRetirement,
             $monthlyExpenses,
             $inflationRate,
-            $withdrawalRate
+            $withdrawalRate,
+            40,
+            $monthlyMedicalCost,
+            (float) $cityMultiplierInfo['multiplier']
         )
         : null;
+
+    // docs/11 Prompt E-2 — surface exactly what was applied, so the UI can
+    // state the assumption next to the number it moved rather than silently
+    // baking it in (design principle 2: distinguish OUR assumption from the
+    // person's own figure at a glance).
+    $response['personalisation'] = [
+        'city_tier'            => $cityMultiplierInfo['city_tier'],
+        'expense_multiplier'   => $cityMultiplierInfo['multiplier'],
+        'multiplier_applied'   => $cityMultiplierInfo['is_applied'],
+        'multiplier_is_override' => $cityMultiplierInfo['is_override'],
+        'multiplier_source'    => $cityMultiplierInfo['source_name'],
+        'monthly_medical_cost' => $monthlyMedicalCost > 0.0 ? $monthlyMedicalCost : null,
+    ];
     $response['accumulation_assumptions'] = [
         'accumulation_return_rate' => $accumulationReturnRate,
         'current_age'              => $currentAge,

@@ -588,7 +588,26 @@ final class PlanMath
      * no defensible way to invent someone's cost of living, and a guessed
      * target is worse than no target: it would anchor a real decision.
      *
+     * docs/11 Prompt E-2 adds two OPTIONAL, purely additive refinements — both
+     * default to a no-op so every existing caller (and every goal where the
+     * person hasn't answered these questions) sees byte-for-byte the same
+     * result as before:
+     *
+     *   $additionalMonthlyExpense — an ongoing medical cost not already in the
+     *   person's cash-flow statement (docs/11 §5: the financial CONSEQUENCE,
+     *   never a condition). Added to today's spend before inflating, exactly
+     *   like any other recorded monthly expense would be.
+     *
+     *   $cityTierMultiplier — scales the RETIREMENT-YEAR spend only, never
+     *   today's recorded figure and never the inflation rate (docs/11 §3's
+     *   non-obvious rule). Represents "I expect to be living somewhere
+     *   cheaper/costlier by then" — e.g. relocating to a smaller town in
+     *   retirement — which is a real and common scenario this app had no way
+     *   to reflect otherwise.
+     *
      * @param float $monthlyExpensesToday total recorded monthly spend, 0 if unknown
+     * @param float $additionalMonthlyExpense docs/11 E-2: recorded ongoing medical cost, added before inflating. 0.0 = no-op.
+     * @param float $cityTierMultiplier docs/11 E-2: scales the retirement-year spend only. 1.0 = no-op.
      * @return array{annual_spend_at_retirement:float,corpus_needed:float,projected_corpus:float,gap:float,covered_pct:float,years_to_retirement:int}|null
      */
     public static function retirementTarget(
@@ -596,17 +615,21 @@ final class PlanMath
         float $inflationRatePercent,
         ?float $withdrawalRatePercent,
         int $yearsToRetirement,
-        float $projectedCorpusAtRetirement
+        float $projectedCorpusAtRetirement,
+        float $additionalMonthlyExpense = 0.0,
+        float $cityTierMultiplier = 1.0
     ): ?array {
-        if ($monthlyExpensesToday <= 0.0 || $yearsToRetirement < 0) {
+        $effectiveMonthlyExpenses = $monthlyExpensesToday + max(0.0, $additionalMonthlyExpense);
+        if ($effectiveMonthlyExpenses <= 0.0 || $yearsToRetirement < 0) {
             return null;
         }
         if ($withdrawalRatePercent === null || $withdrawalRatePercent <= 0.0) {
             return null; // no sustainable-withdrawal assumption → no corpus to name
         }
 
+        $multiplier = $cityTierMultiplier > 0.0 ? $cityTierMultiplier : 1.0;
         $inflation = max(0.0, $inflationRatePercent) / 100.0;
-        $annualSpendAtRetirement = $monthlyExpensesToday * 12.0 * ((1.0 + $inflation) ** $yearsToRetirement);
+        $annualSpendAtRetirement = $effectiveMonthlyExpenses * 12.0 * ((1.0 + $inflation) ** $yearsToRetirement) * $multiplier;
         $corpusNeeded = $annualSpendAtRetirement / ($withdrawalRatePercent / 100.0);
 
         $projected = max(0.0, $projectedCorpusAtRetirement);
@@ -663,6 +686,11 @@ final class PlanMath
      *   nothing to close, and this returns null in that case rather than a
      *   zero-value lever that would read as an assumption a person hit their
      *   number exactly. Refuses to render a distinguished shape either way.
+     * @param float $additionalMonthlyExpense docs/11 E-2: forwarded unchanged into
+     *   every recomputed retirementTarget() so the deferral search closes
+     *   against the SAME effective target the caller is showing, not a
+     *   version that quietly drops the medical-cost/city-tier refinements.
+     * @param float $cityTierMultiplier docs/11 E-2: see $additionalMonthlyExpense.
      */
     public static function gapClosingLevers(
         array $target,
@@ -674,7 +702,9 @@ final class PlanMath
         float $monthlyExpensesToday,
         float $inflationRatePercent,
         float $withdrawalRatePercent,
-        int $maxDeferralYears = 40
+        int $maxDeferralYears = 40,
+        float $additionalMonthlyExpense = 0.0,
+        float $cityTierMultiplier = 1.0
     ): ?array {
         $gap = (float) ($target['gap'] ?? 0.0);
         if ($gap >= 0.0) {
@@ -707,7 +737,8 @@ final class PlanMath
             );
             $laterProjected = (float) end($laterAccumulation);
             $laterTarget = self::retirementTarget(
-                $monthlyExpensesToday, $inflationRatePercent, $withdrawalRatePercent, $laterYears, $laterProjected
+                $monthlyExpensesToday, $inflationRatePercent, $withdrawalRatePercent, $laterYears, $laterProjected,
+                $additionalMonthlyExpense, $cityTierMultiplier
             );
             if ($laterTarget !== null && $laterTarget['gap'] >= 0.0) {
                 $deferralYears = $d;
