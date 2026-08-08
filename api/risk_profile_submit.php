@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 // Risk profiler (docs/06 §B): score a completed questionnaire and store the
 // profile. POST, advisor-only (the advisor administers/records the
-// questionnaire). Tenant-scoped; the client must be in this tenant (404).
+// questionnaire; an individual may also record their own in a personal
+// tenant). Tenant-scoped; the client must be in this tenant (404).
 //
 // Scores the answers against the firm's own question set + rubric
 // (RiskProfileScoring) — HorizonPlan never authors these. The profile is stored
@@ -17,6 +18,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/SelfService.php';
 require_once __DIR__ . '/lib/RiskProfileScoring.php';
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -28,13 +30,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db = getPdo();
-$session = verifyAccess($db, 'advisor'); // an advisor administers/records the questionnaire, per docs/06 Section B
+// Self-serve individual tier (sql/033): advisor-only in a firm, and
+// additionally self-service for an individual writing their OWN data in a
+// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
+// client exactly as before — see api/lib/SelfService.php.
+$session = verifySelfServiceWrite($db);
 $tenantId = (int) $session['tenant_id'];
 $userId = (int) $session['user_id'];
 $scopedDb = new TenantScopedDb($db, $tenantId);
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $clientId = (int) ($input['client_id'] ?? 0);
+// A personal user always writes their own data; any client_id in the body
+// is ignored rather than trusted, same posture as the client-facing reads.
+$clientId = resolveSelfServiceClientId($session, $clientId);
 $answers = $input['answers'] ?? null;
 
 if ($clientId <= 0 || !is_array($answers) || empty($answers)) {

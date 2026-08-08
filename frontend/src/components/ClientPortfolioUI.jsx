@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { Card, Badge, Button, Spinner } from './ui';
 import { formatCurrency } from '../lib/format';
 import { parseCsv, parseAmount } from '../lib/csv';
@@ -64,6 +65,10 @@ function formatTimestamp(ts) {
 // — so a client session must never see those actions, not just have them
 // fail if clicked.
 export function ClientPortfolioCard({ clientId, readOnly = false }) {
+  const { tenant } = useAuth();
+  // Self-serve individual tier: a user with no adviser must not be told an
+  // adviser recorded or will capture anything. Copy only.
+  const isSelfDirected = tenant?.kind === 'personal';
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -138,7 +143,9 @@ export function ClientPortfolioCard({ clientId, readOnly = false }) {
       </div>
       <p className="text-xs text-[var(--color-ink-2)] mb-1">
         {readOnly
-          ? 'What you already own, as recorded by your advisor — a starting point, not a shared pool any one goal automatically draws from.'
+          ? (isSelfDirected
+              ? 'What you already own — a starting point, not a shared pool any one goal automatically draws from.'
+              : 'What you already own, as recorded by your advisor — a starting point, not a shared pool any one goal automatically draws from.')
           : 'What the client already owns — a starting point, not a shared pool any one goal automatically draws from.'}
       </p>
 

@@ -1,6 +1,7 @@
 // The compliance disclosure copy that must render on every client-facing plan
 // view (non-negotiable rule #3). Reads the tenant's advisory_mode from useAuth
-// (or an explicit `mode` prop) to pick distribution vs. advisory wording;
+// (or an explicit `mode` prop) to pick distribution / advisory / self-directed
+// wording;
 // `compact` tightens it for dense layouts. It only displays a mode set
 // server-side — it can never change it.
 
@@ -22,13 +23,29 @@ const DISTRIBUTION_MODE_COPY =
 const ADVISORY_MODE_COPY =
   'Prepared by your SEBI-registered investment adviser as part of your personalised financial plan.';
 
+// Self-serve individual tier (sql/033). The other two strings BOTH assert a
+// professional intermediary — distribution assumes an MFD, advisory names a
+// SEBI-registered adviser. For someone planning alone, either one would be a
+// FALSE statement about who produced the plan, which is a different and worse
+// failure than merely unhelpful wording. This says what is actually true: they
+// built it themselves, from figures they entered, as an illustration.
+const SELF_DIRECTED_MODE_COPY =
+  'You built this plan yourself from the figures you entered. It is an illustration to help you think, not investment advice, and no adviser has reviewed it.';
+
+const MODE_COPY = {
+  advisory: ADVISORY_MODE_COPY,
+  self_directed: SELF_DIRECTED_MODE_COPY,
+  distribution: DISTRIBUTION_MODE_COPY,
+};
+
 // `mode` can be passed explicitly (e.g. a print/share view that renders for a
 // specific tenant outside the live auth context); otherwise it comes from the
 // authenticated tenant, defaulting to the conservative distribution copy.
 export default function DisclosureBanner({ compact = false, mode }) {
   const { tenant } = useAuth();
   const effectiveMode = mode ?? tenant?.advisoryMode ?? 'distribution';
-  const copy = effectiveMode === 'advisory' ? ADVISORY_MODE_COPY : DISTRIBUTION_MODE_COPY;
+  // Unknown/absent mode falls back to the conservative distribution copy.
+  const copy = MODE_COPY[effectiveMode] ?? DISTRIBUTION_MODE_COPY;
 
   return (
     <div

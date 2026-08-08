@@ -119,4 +119,18 @@ assertClose($z['drift'], 50000.0, 'the rupee drift is still reported against a z
 $zn = PlanMath::progressStatus(-1000.0, 0.0);
 assertTrue($zn['status'] === 'behind', 'being under a zero expectation reads behind');
 
+// --- an empty goal has no readiness ----------------------------------------
+// Reachable now that initial_net_worth accepts 0. Withdrawing a percentage of
+// nothing depletes nothing, so the raw survival maths scores a zero-corpus
+// goal near the top — the single most misleading number this app could show
+// someone who has not started saving.
+assertTrue(
+    PlanMath::readinessScoreForGoal(0.0, 3.5, 6.0, 9.0, 30) === null,
+    'a zero-corpus goal returns NO readiness score, not a flattering one'
+);
+assertTrue(
+    PlanMath::readinessScoreForGoal(10000000.0, 3.5, 6.0, 9.0, 30) !== null,
+    'a funded goal still scores normally'
+);
+
 echo "\nAll goal-progress tests passed.\n";

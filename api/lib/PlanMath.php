@@ -406,6 +406,20 @@ final class PlanMath
         ?float $lockedCorpusAmount = null,
         ?float $lockedReturnRatePercent = null
     ): ?int {
+        // An empty goal has no readiness to report. Withdrawing a percentage
+        // of nothing is nothing, so a zero corpus "survives" every year
+        // untouched and scores near the top — telling someone who has not
+        // started saving that they are in excellent shape. That is the most
+        // misleading output this function could produce, so it is refused
+        // outright: null renders as "not scored yet", which is the truth.
+        //
+        // Reachable since initial_net_worth accepts 0 (a goal you have not
+        // started saving for is a real state — see
+        // GoalFieldValidation::validateNonNegativeAmount).
+        if ($initialNetWorth <= 0.0) {
+            return null;
+        }
+
         [$steady, $adverse] = self::decumulationSeriesForGoal(
             $initialNetWorth, $withdrawalRatePercent, $inflationRatePercent, $drawdownReturnRatePercent, $horizonYears,
             $liquidCorpusAmount, $lockedCorpusAmount, $lockedReturnRatePercent

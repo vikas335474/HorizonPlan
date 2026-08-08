@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 // Plans & scenarios: partial-update a goal's parameters. POST or PUT,
-// advisor-only (assumption edits are an advisor action). Tenant-scoped.
+// advisor-only in a firm (assumption edits are an advisor action), and
+// self-service for an individual editing their own plan in a personal tenant
+// (sql/033). Tenant-scoped — in a tenant of one, only that person's goals exist.
 //
 // Only fields actually sent are changed (no full-row replace). Per-field
 // validation is shared with goals_create.php (GoalFieldValidation.php); the
@@ -18,6 +20,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/SelfService.php';
 require_once __DIR__ . '/lib/GoalFieldValidation.php';
 require_once __DIR__ . '/lib/PlanReview.php';
 
@@ -30,7 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT
 }
 
 $db = getPdo();
-$session = verifyAccess($db, 'advisor'); // goal-level assumption edits are an advisor action
+// Self-serve individual tier (sql/033): advisor-only in a firm, and
+// additionally self-service for an individual writing their OWN data in a
+// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
+// client exactly as before — see api/lib/SelfService.php.
+$session = verifySelfServiceWrite($db);
 $tenantId = (int) $session['tenant_id'];
 $userId = (int) $session['user_id'];
 $scopedDb = new TenantScopedDb($db, $tenantId);

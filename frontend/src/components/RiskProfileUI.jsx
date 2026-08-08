@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import Modal from './Modal';
 import { Card, Badge, Button, Spinner } from './ui';
 import { formatPercent, formatDate } from '../lib/format';
@@ -95,6 +96,10 @@ export function RiskProfileSummary({ clientId }) {
 // the advisor runs the questionnaire with them. No clientId is passed, so
 // risk_profile_read.php forces it to the session's own id server-side.
 export function ClientRiskProfileCard() {
+  const { tenant } = useAuth();
+  // Self-serve individual tier: a user with no adviser must not be told an
+  // adviser recorded or will capture anything. Copy only.
+  const isSelfDirected = tenant?.kind === 'personal';
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
@@ -115,7 +120,9 @@ export function ClientRiskProfileCard() {
 
       {!loading && !profile && (
         <p className="text-xs text-[var(--color-ink-2)]">
-          Your adviser hasn't captured your risk profile yet — you'll do this together.
+          {isSelfDirected
+            ? 'You chose a comfort level during setup, and it\'s reflected in your plan\'s return assumption. You can change that on any goal.'
+            : 'Your adviser hasn\'t captured your risk profile yet — you\'ll do this together.'}
         </p>
       )}
 

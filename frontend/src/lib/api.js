@@ -87,6 +87,16 @@ export const api = {
       body: JSON.stringify({ company_name: companyName, email, password }),
     }),
 
+  // Self-serve signup for an INDIVIDUAL planning for themselves (sql/033) —
+  // creates a "tenant of one" (kind='personal', role='client',
+  // advisory_mode='self_directed') and issues a session immediately, same
+  // contract as signup(). Gated on the same platform signup_enabled toggle.
+  signupPersonal: (fullName, email, password) =>
+    request('signup_personal.php', {
+      method: 'POST',
+      body: JSON.stringify({ full_name: fullName, email, password }),
+    }),
+
   // Public "try a live demo" picker (Login.jsx) — no auth, no CSRF (GET).
   listDemoFirms: () => request('demo_firms_list.php'),
 
@@ -95,6 +105,11 @@ export const api = {
   // this resolves.
   demoLogin: (firmSlug) =>
     request('demo_login.php', { method: 'POST', body: JSON.stringify({ firm: firmSlug }) }),
+
+  // One-click login into the seeded INDIVIDUAL demo (sql/033) — the consumer
+  // experience, sign-up-free. Same contract as demoLogin().
+  demoLoginPersonal: () =>
+    request('demo_login.php', { method: 'POST', body: JSON.stringify({ personal: true }) }),
 
   // MFA enrollment (called from settings/profile, not login flow)
   mfaEnroll: () =>
