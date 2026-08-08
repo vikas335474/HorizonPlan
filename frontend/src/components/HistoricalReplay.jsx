@@ -4,6 +4,7 @@
 // everywhere they appear.
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 // Dropdown of available replay start years, sourced from
 // market_history_years.php (not hardcoded client-side) so it always matches
@@ -42,7 +43,14 @@ export function ReplayYearSelect({ value, onChange, className = '' }) {
 // year (sql/015 seeds every row as unverified until someone confirms it
 // against a real source — see that migration's header comment). Deliberately
 // loud, not a quiet badge: this is a data-accuracy caveat, not a cosmetic one.
+//
+// The caveat is the same for everyone; only who it warns differs. An advisor is
+// warned off quoting the numbers to a client; a self-serve individual has no
+// client, so they are warned off leaning on the numbers themselves. Gated on
+// tenant kind, matching api/lib/SelfService.php.
 export function UnverifiedHistoryNotice() {
+  const { tenant } = useAuth();
+  const isSelfDirected = tenant?.kind === 'personal';
   return (
     <p
       className="mt-2 flex items-start gap-1.5 text-xs rounded-[var(--radius-ctrl)] px-3 py-2"
@@ -51,8 +59,10 @@ export function UnverifiedHistoryNotice() {
       <span aria-hidden="true">⚠</span>
       <span>
         This historical replay uses <strong>unverified</strong> illustrative market data — it has not yet
-        been confirmed against an authoritative source. Don't rely on the specific numbers with a client
-        until this is reviewed.
+        been confirmed against an authoritative source.{' '}
+        {isSelfDirected
+          ? "Treat the shape as illustrative and don't lean on the specific numbers."
+          : "Don't rely on the specific numbers with a client until this is reviewed."}
       </span>
     </p>
   );

@@ -5,6 +5,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import LiveTimelineSlider from './LiveTimelineSlider';
 import ResetTriggerControl from './ResetTriggerControl';
 import SequenceRiskChart from './SequenceRiskChart';
@@ -25,6 +26,12 @@ const INFLATION_MAX = 12;
 
 export default function ScenarioPanel({ goal, subScenario, onChanged }) {
   const isRetirement = goal.goal_type === 'retirement';
+  // Self-serve individual tier: this panel is reachable by someone with no
+  // adviser, so advisor-desk vocabulary ("adjust per client") would be telling
+  // them to adjust the number on behalf of somebody who does not exist.
+  // Gated on tenant kind, matching api/lib/SelfService.php.
+  const { tenant } = useAuth();
+  const isSelfDirected = tenant?.kind === 'personal';
 
   const [inflation, setInflation] = useState(subScenario.custom_inflation ?? goal.inflation_rate);
   const [withdrawalRate, setWithdrawalRate] = useState(
@@ -106,7 +113,7 @@ export default function ScenarioPanel({ goal, subScenario, onChanged }) {
             max={WITHDRAWAL_RATE_MAX}
             step={0.1}
             onCommit={(v) => commitField('custom_withdrawal_rate', v, setWithdrawalRate)}
-            helpText={`≈ ${corpusMultiple(withdrawalRate)}× annual expenses — a starting point to adjust per client, not a fixed rule.`}
+            helpText={`≈ ${corpusMultiple(withdrawalRate)}× annual expenses — a starting point ${isSelfDirected ? 'to adjust for your own situation' : 'to adjust per client'}, not a fixed rule.`}
           />
         )}
       </div>

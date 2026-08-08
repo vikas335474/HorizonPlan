@@ -210,7 +210,11 @@ export default function PlanReport() {
                     ? 'The share of this goal\'s inflation-adjusted cost already covered, on each date it was recorded. Assumes no growth on what is saved.'
                     : 'What the corpus actually was on each date it was recorded, against what this plan expected on those dates.'}
                 </p>
-                <ProgressChart points={progress.points} mode={progress.tracking_mode} />
+                <ProgressChart
+                  points={progress.points}
+                  mode={progress.tracking_mode}
+                  manualLabel={tenant?.kind === 'personal' ? 'Recorded by you' : 'Recorded by your adviser'}
+                />
               </section>
             )}
 

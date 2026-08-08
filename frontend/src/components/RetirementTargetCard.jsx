@@ -79,7 +79,7 @@ export default function RetirementTargetCard({ target, plain = false, retirement
   const barPct = Math.max(0, Math.min(100, covered));
 
   return (
-    <Card className="p-4 mb-4">
+    <Card className="p-4 mb-4" data-tour="retirement-target-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold text-[var(--color-ink)]">
           {plain ? 'How much will you need?' : 'Retirement target'}

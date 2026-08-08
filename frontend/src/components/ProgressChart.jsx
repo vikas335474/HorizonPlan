@@ -12,7 +12,12 @@
 // record, and the chart shows it as one — connecting through an unobserved
 // month would be inventing a reading.
 //
-// Props: { points, mode }  (from api.getGoalProgress)
+// Props: { points, mode, manualLabel }  (points/mode from api.getGoalProgress)
+//
+// manualLabel is passed in rather than derived here because this file stays
+// presentational — it renders the text it is handed. Who took a manual reading
+// differs by tenant kind (an advisor in a firm, the person themselves in a
+// personal tenant), and that is the caller's knowledge, not the chart's.
 
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -54,7 +59,7 @@ function shortDate(iso) {
     : d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
 }
 
-export default function ProgressChart({ points, mode }) {
+export default function ProgressChart({ points, mode, manualLabel = 'Recorded by your adviser' }) {
   if (!points || points.length === 0) return null;
 
   const isCoverage = mode === 'coverage';
@@ -92,7 +97,7 @@ export default function ProgressChart({ points, mode }) {
             domain={isCoverage ? [0, 100] : ['auto', 'auto']}
             tickFormatter={(v) => (isCoverage ? `${v}%` : amountTick(v))}
           />
-          <Tooltip content={<ProgressTooltip isCoverage={isCoverage} />} />
+          <Tooltip content={<ProgressTooltip isCoverage={isCoverage} manualLabel={manualLabel} />} />
           <Legend
             wrapperStyle={{ fontSize: 11, color: 'var(--color-ink-2)' }}
             iconType="plainline"
@@ -139,7 +144,7 @@ export default function ProgressChart({ points, mode }) {
   );
 }
 
-function ProgressTooltip({ active, payload, label, isCoverage }) {
+function ProgressTooltip({ active, payload, label, isCoverage, manualLabel }) {
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0].payload;
 
@@ -175,7 +180,7 @@ function ProgressTooltip({ active, payload, label, isCoverage }) {
           but it's the difference between "we checked before your review" and
           "the system logged it". */}
       <div className="mt-1 text-[10px] text-[var(--color-ink-3)]">
-        {row.automatic ? 'Recorded automatically' : 'Recorded by your adviser'}
+        {row.automatic ? 'Recorded automatically' : manualLabel}
       </div>
     </div>
   );

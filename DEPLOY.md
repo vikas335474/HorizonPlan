@@ -57,6 +57,42 @@ After this, the flow is just: merge to `main` → Action builds → `deploy` upd
 SQL in `/sql` is **not** run automatically. After any deploy that adds a
 migration, run it manually via hPanel → Databases → phpMyAdmin.
 
+Nothing records which migrations a given database has already had applied, and
+they are **not idempotent** — there are no `IF NOT EXISTS` guards, so re-running
+an applied migration raises a duplicate column/table error instead of quietly
+doing nothing. The error is harmless, but don't discover the state that way.
+
+**To find out what a database is missing**, paste
+[`sql/check_applied_migrations.sql`](sql/check_applied_migrations.sql) into
+phpMyAdmin. It is read-only, and reports one row per schema marker:
+
+```
+migration                                                          state
+033_personal_tenants        (tenants.kind)                         applied
+034_financial_foundations   (client_protection table)              MISSING
+034_financial_foundations   (client_portfolio_items.interest_rate) MISSING
+035_household_self_service  (users.display_name)                   MISSING
+```
+
+Apply anything marked `MISSING` in ascending numeric order, one file at a time,
+checking each succeeds before starting the next. 034 carries two markers because
+it makes two structural changes and can fail between them — a `CREATE TABLE`
+that lands followed by an `ALTER` that doesn't would otherwise look complete.
+
+### Currently pending on production
+
+As of the self-serve individual and household work, **033, 034 and 035 have not
+been applied to the production database**. Until they are, the deployed app will
+error on any page touching a personal tenant, the financial-foundations cards,
+or partner invites — the frontend ships those features whether or not the schema
+is there. Run the check above, then apply what it reports missing:
+
+| Migration | Adds | Feature it gates |
+|---|---|---|
+| `033_personal_tenants.sql` | `tenants.kind` | Self-serve individual tier (a "tenant of one") |
+| `034_financial_foundations.sql` | `client_protection`, `client_portfolio_items.interest_rate` | Emergency reserve / cover / costly-debt checks |
+| `035_household_self_service.sql` | `users.display_name` | Couples planning together in one personal tenant |
+
 ## Staging environment setup
 
 Production and admin/dev/testing activity have shared one instance for a

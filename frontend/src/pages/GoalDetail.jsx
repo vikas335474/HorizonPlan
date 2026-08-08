@@ -604,9 +604,13 @@ export default function GoalDetail() {
                 what the plan expected. Sits directly under the headline
                 figure (readiness or funding) because "are we still on track"
                 is the natural next question after "where do we stand". */}
+            {/* canEdit, not isAdvisor: progress_capture.php is gated by
+                verifySelfServiceWrite(), so a self-serve individual may take
+                their own reading — and must be able to, since no advisor will
+                do it for them. Same lockout class as the edit gates above. */}
             <GoalProgressCard
               goalId={goal.id}
-              canCapture={isAdvisor}
+              canCapture={canEdit}
               clientId={goal.client_id}
             />
 
@@ -904,7 +908,8 @@ export default function GoalDetail() {
                 </div>
                 <p className="text-xs text-[var(--color-ink-2)] mb-3">
                   Spin up a ready-made withdrawal-rate scenario to compare on the chart. Each is a starting
-                  point to adjust per client — an illustration, not a recommendation.
+                  point to adjust {isSelfDirected ? 'for your own situation' : 'per client'} — an
+                  illustration, not a recommendation.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {presetsForGoalType(goal.goal_type).map((p) => (
@@ -925,7 +930,7 @@ export default function GoalDetail() {
             )}
 
             {/* Sub-scenarios */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3" data-tour="scenarios-section">
               <div>
                 <h2 className="text-base font-semibold text-[var(--color-ink)]">Scenarios</h2>
                 <p className="text-xs text-[var(--color-ink-2)] mt-0.5">

@@ -130,7 +130,8 @@ export function ClientRiskProfileCard() {
         <div className="flex items-center gap-3 flex-wrap">
           <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">{profile.band}</Badge>
           <span className="text-xs text-[var(--color-ink-2)] max-w-md">
-            How much investment ups-and-downs you're comfortable with, from the questionnaire you completed with your adviser.
+            How much investment ups-and-downs you&rsquo;re comfortable with, from the
+            {isSelfDirected ? ' comfort level you chose during setup.' : ' questionnaire you completed with your adviser.'}
           </span>
           {profile.created_at && (
             <span className="text-[11px] text-[var(--color-ink-3)] ml-auto">{formatDate(profile.created_at)}</span>

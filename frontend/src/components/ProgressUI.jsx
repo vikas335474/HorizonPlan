@@ -44,8 +44,11 @@ export function GoalProgressCard({ goalId, canCapture = false, clientId = null }
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [capturing, setCapturing] = useState(false);
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const isClient = user?.role === 'client';
+  // Who takes a manual reading depends on tenant kind, not role: in a personal
+  // tenant there is no adviser, so the person took it themselves.
+  const isSelfDirected = tenant?.kind === 'personal';
 
   const load = useCallback(() => {
     setLoading(true);
@@ -127,7 +130,11 @@ export function GoalProgressCard({ goalId, canCapture = false, clientId = null }
       ) : (
         <>
           <div className="mt-3">
-            <ProgressChart points={points} mode={data.tracking_mode} />
+            <ProgressChart
+              points={points}
+              mode={data.tracking_mode}
+              manualLabel={isSelfDirected ? 'Recorded by you' : 'Recorded by your adviser'}
+            />
           </div>
           {isCoverage ? (
             <p className="mt-2 text-xs text-[var(--color-ink-3)]">
