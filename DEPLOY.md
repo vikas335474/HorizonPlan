@@ -62,16 +62,15 @@ they are **not idempotent** — there are no `IF NOT EXISTS` guards, so re-runni
 an applied migration raises a duplicate column/table error instead of quietly
 doing nothing. The error is harmless, but don't discover the state that way.
 
-**To find out what a database is missing**, paste
+**To find out what a database is missing**, paste all of
 [`sql/check_applied_migrations.sql`](sql/check_applied_migrations.sql) into
-phpMyAdmin. It is read-only, and reports one row per schema marker:
+phpMyAdmin — including its two `SET` lines, which are part of the check. It is
+read-only, and reports one row per schema marker:
 
 ```
-migration                                                          state
-033_personal_tenants        (tenants.kind)                         applied
-034_financial_foundations   (client_protection table)              MISSING
-034_financial_foundations   (client_portfolio_items.interest_rate) MISSING
-035_household_self_service  (users.display_name)                   MISSING
+schema_checked      migration                                              state
+u123456_horizon     033_personal_tenants       (tenants.kind)              applied
+u123456_horizon     034_financial_foundations  (client_protection table)   MISSING
 ```
 
 Apply anything marked `MISSING` in ascending numeric order, one file at a time,
@@ -79,19 +78,25 @@ checking each succeeds before starting the next. 034 carries two markers because
 it makes two structural changes and can fail between them — a `CREATE TABLE`
 that lands followed by an `ALTER` that doesn't would otherwise look complete.
 
-### Currently pending on production
+> [!IMPORTANT]
+> **`UNKNOWN` in the `state` column means no database was selected**, not that
+> anything is missing. `DATABASE()` is NULL at phpMyAdmin's server level, so the
+> check has nothing to inspect. Select your database in the left sidebar and
+> re-run, or set `@override` to its name at the top of the file. Read the
+> `schema_checked` column on every run — it names what was actually inspected.
 
-As of the self-serve individual and household work, **033, 034 and 035 have not
-been applied to the production database**. Until they are, the deployed app will
-error on any page touching a personal tenant, the financial-foundations cards,
-or partner invites — the frontend ships those features whether or not the schema
-is there. Run the check above, then apply what it reports missing:
+### Migration inventory (033 onward)
 
 | Migration | Adds | Feature it gates |
 |---|---|---|
 | `033_personal_tenants.sql` | `tenants.kind` | Self-serve individual tier (a "tenant of one") |
 | `034_financial_foundations.sql` | `client_protection`, `client_portfolio_items.interest_rate` | Emergency reserve / cover / costly-debt checks |
 | `035_household_self_service.sql` | `users.display_name` | Couples planning together in one personal tenant |
+
+The frontend ships these features whether or not the schema is there, so a
+deploy that runs ahead of its migrations will error on any page touching a
+personal tenant, the foundations cards, or partner invites. Run the check after
+each deploy that includes a migration.
 
 ## Staging environment setup
 
