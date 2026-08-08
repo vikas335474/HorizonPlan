@@ -153,6 +153,21 @@ function makeGoal(PDO $db, int $tenantId, int $clientId, array $fields): int
 {
     $fields['tenant_id'] = $tenantId;
     $fields['client_id'] = $clientId;
+
+    // Backdate the plan so the demo has plan HISTORY, not just a plan.
+    // base_plans.created_at is the anchor progress tracking measures elapsed
+    // time from (see ProgressSnapshot.php's "plan anchor" note); left at
+    // CURRENT_TIMESTAMP every demo goal would be zero years old, every
+    // expected value would equal its starting corpus, and the whole
+    // progress-over-time feature would render as a flat line in the demo
+    // an evaluator is looking at.
+    //
+    // Deterministic, not random, so re-seeding reproduces the same demo:
+    // 6–41 months old, spread by client id.
+    if (!array_key_exists('created_at', $fields)) {
+        $monthsOld = 6 + ($clientId % 36);
+        $fields['created_at'] = date('Y-m-d H:i:s', strtotime("-{$monthsOld} months"));
+    }
     $columns = array_keys($fields);
     $placeholders = array_map(fn($c) => ":$c", $columns);
     $stmt = $db->prepare(
