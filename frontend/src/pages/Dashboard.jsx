@@ -23,6 +23,7 @@ import AppHeader from '../components/AppHeader';
 import Modal from '../components/Modal';
 import { Card, Button, Badge } from '../components/ui';
 import { ReadinessScoreBadge } from '../components/ReadinessScore';
+import { ProgressStatusBadge } from '../components/ProgressUI';
 import OnboardingChecklist, { isOnboardingDismissed, dismissOnboarding } from '../components/OnboardingChecklist';
 import OnboardingSpotlight from '../components/OnboardingSpotlight';
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/format';
@@ -581,6 +582,15 @@ function ClientHealthBadges({ client }) {
   return (
     <>
       {client.min_readiness_score !== null && <ReadinessScoreBadge score={client.min_readiness_score} />}
+      {/* P1-1 · Worst drift from plan across this client's goals. Rendered
+          only when something has actually been snapshotted — an untracked
+          client gets no badge at all rather than a reassuring "on track"
+          nobody measured. Deliberately shown only for 'behind': ahead and
+          on-track are the expected states and would add noise to every row,
+          while "behind" is the one worth a click. */}
+      {client.progress_status === 'behind' && (
+        <ProgressStatusBadge status={client.progress_status} />
+      )}
       {client.risk_band !== null ? (
         <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">{client.risk_band}</Badge>
       ) : (

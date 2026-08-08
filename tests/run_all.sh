@@ -15,6 +15,7 @@ for t in \
   tests/test_risk_profile_scoring.php \
   tests/test_corpus_composition.php \
   tests/test_target_goal_funding.php \
+  tests/test_goal_progress.php \
   tests/test_totp.php \
   tests/test_password_hashing.php \
   tests/test_inheritance_cascade.php \
@@ -38,6 +39,7 @@ for t in \
   tests/test_household_projection_db.php \
   tests/test_cash_flow_summary_db.php \
   tests/test_client_assignment_db.php \
+  tests/test_progress_snapshot_db.php \
   tests/test_mf_nav_sync.php
 do
   echo "──────────────────────────────────────────────"

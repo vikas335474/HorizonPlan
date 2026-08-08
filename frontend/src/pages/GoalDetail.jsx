@@ -18,6 +18,7 @@ import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
 import LifecycleChart from '../components/LifecycleChart';
 import SequenceRiskChart from '../components/SequenceRiskChart';
+import { GoalProgressCard } from '../components/ProgressUI';
 import { ChangeLogCard } from '../components/ChangeLogUI';
 import { GoalReviewCard, ReviewStatusBadge } from '../components/PlanReviewUI';
 import {
@@ -557,6 +558,16 @@ export default function GoalDetail() {
                 <ReadinessScoreCard score={baselineProjection.readiness_score} />
               </div>
             )}
+
+            {/* P1-1 · Progress over time — the goal's recorded history against
+                what the plan expected. Sits directly under the headline
+                figure (readiness or funding) because "are we still on track"
+                is the natural next question after "where do we stand". */}
+            <GoalProgressCard
+              goalId={goal.id}
+              canCapture={isAdvisor}
+              clientId={goal.client_id}
+            />
 
             {/* Funding status — the target-based goal's counterpart to the
                 Readiness Score above. Retirement goals get a score; education

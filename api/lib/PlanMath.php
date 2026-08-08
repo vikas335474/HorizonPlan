@@ -23,6 +23,151 @@ final class PlanMath
     }
 
     /**
+     * P1-1 · What the plan expects a goal's corpus to be after $yearsElapsed
+     * years — the "expected" line a progress snapshot is measured against.
+     *
+     * This is not new arithmetic: it picks the series the goal already
+     * projects with and reads the point off it.
+     *
+     *   * A goal with accumulation set (ages + an accumulation return) is
+     *     still saving, so its expected path is lifecycleSeries() — the
+     *     accumulation run-up flowing into drawdown, the same continuous
+     *     curve goals_projection.php returns.
+     *   * A decumulation-only goal is already spending down, so its expected
+     *     path is the steady decumulation series.
+     *   * Anything that cannot be projected at all (a target-based goal,
+     *     which carries no return assumption) returns null — those measure
+     *     progress by funding coverage instead, never by an invented curve.
+     *
+     * Fractional years are linearly interpolated between the two surrounding
+     * annual points. The underlying series are annual, so a mid-year snapshot
+     * has no exact point of its own; a straight line between neighbours is
+     * the honest reading of an annual model rather than a pretence of
+     * monthly precision.
+     *
+     * @return float|null expected corpus, or null when the goal can't be projected
+     */
+    public static function expectedCorpusAfter(
+        float $yearsElapsed,
+        float $initialNetWorth,
+        ?float $withdrawalRatePercent,
+        float $inflationPercent,
+        ?float $drawdownReturnPercent,
+        int $horizonYears,
+        ?int $currentAge = null,
+        ?int $retirementAge = null,
+        ?float $accumulationReturnPercent = null,
+        ?float $monthlySipAmount = null,
+        ?float $sipStepUpPercent = null
+    ): ?float {
+        if ($withdrawalRatePercent === null || $drawdownReturnPercent === null) {
+            return null; // not projectable — see the docblock above
+        }
+        if ($yearsElapsed < 0.0) {
+            return null;
+        }
+
+        $isAccumulating = $currentAge !== null
+            && $retirementAge !== null
+            && $accumulationReturnPercent !== null
+            && $retirementAge > $currentAge;
+
+        if ($isAccumulating) {
+            $series = self::lifecycleSeries(
+                $initialNetWorth,
+                $accumulationReturnPercent,
+                $monthlySipAmount ?? 0.0,
+                $sipStepUpPercent ?? 0.0,
+                $retirementAge - $currentAge,
+                $withdrawalRatePercent,
+                $inflationPercent,
+                $drawdownReturnPercent,
+                $horizonYears
+            );
+        } else {
+            $series = self::steadyReturnSeries(
+                $initialNetWorth,
+                $withdrawalRatePercent,
+                $inflationPercent,
+                $drawdownReturnPercent,
+                $horizonYears
+            );
+        }
+
+        if ($series === []) {
+            return null;
+        }
+
+        $lastIndex = count($series) - 1;
+        // Past the end of the modelled horizon there is no expectation left to
+        // compare against — clamp to the final modelled point rather than
+        // extrapolating a curve the plan never described.
+        if ($yearsElapsed >= $lastIndex) {
+            return (float) $series[$lastIndex];
+        }
+
+        $lower = (int) floor($yearsElapsed);
+        $upper = $lower + 1;
+        $fraction = $yearsElapsed - $lower;
+
+        return (float) $series[$lower] + (((float) $series[$upper] - (float) $series[$lower]) * $fraction);
+    }
+
+    /**
+     * P1-1 · Classify actual-vs-expected into a status an advisor can scan.
+     *
+     * The ±$tolerancePercent band (default 5%) is a deliberate DEAD ZONE, not
+     * a precision claim: the underlying model is annual and assumption-driven,
+     * so calling a goal "behind" because it is 0.4% under the curve would be
+     * noise dressed as signal. Only a drift big enough to be worth a
+     * conversation changes the label.
+     *
+     * Returns null when there is nothing to compare against (no expected
+     * value), so callers render "not tracked" rather than a false "on track".
+     *
+     * @return array{status: string, drift: float, drift_pct: float}|null
+     *         status is one of 'ahead' | 'on_track' | 'behind'
+     */
+    public static function progressStatus(
+        float $actual,
+        ?float $expected,
+        float $tolerancePercent = 5.0
+    ): ?array {
+        if ($expected === null) {
+            return null;
+        }
+
+        $drift = $actual - $expected;
+
+        // A zero/negative expectation (a plan modelled to be fully drawn down
+        // by now) has no meaningful percentage to divide by — report the
+        // rupee drift and treat anything at or above the line as on track.
+        if ($expected <= 0.0) {
+            return [
+                'status'    => $drift >= 0.0 ? 'on_track' : 'behind',
+                'drift'     => round($drift, 2),
+                'drift_pct' => 0.0,
+            ];
+        }
+
+        $driftPct = ($drift / $expected) * 100.0;
+
+        if ($driftPct > $tolerancePercent) {
+            $status = 'ahead';
+        } elseif ($driftPct < -$tolerancePercent) {
+            $status = 'behind';
+        } else {
+            $status = 'on_track';
+        }
+
+        return [
+            'status'    => $status,
+            'drift'     => round($drift, 2),
+            'drift_pct' => round($driftPct, 1),
+        ];
+    }
+
+    /**
      * Funding status for a TARGET-BASED goal (education / home_purchase /
      * other) — the goal types that carry a target_amount + target_date but,
      * by schema design, never carry a return rate or a SIP (goals_create.php
