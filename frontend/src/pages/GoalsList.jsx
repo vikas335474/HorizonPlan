@@ -12,6 +12,7 @@ import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { ClientCashFlowCard, CashFlowCard } from '../components/CashFlowUI';
 import { ClientFoundationsCard } from '../components/FoundationsUI';
+import { PersonalisationCard, DependantsCard } from '../components/PersonalisationUI';
 import PartnerHouseholdCard from '../components/PartnerHouseholdUI';
 import { ClientRiskProfileCard } from '../components/RiskProfileUI';
 import { Card, EmptyState, Spinner } from '../components/ui';
@@ -85,6 +86,16 @@ export default function GoalsList() {
             self-serve individual (there is nobody else to record it);
             read-only for a firm-managed client, whose adviser owns it. */}
         <ClientFoundationsCard />
+
+        {/* docs/11 Prompt E-2 — opt-in refinement queue. Self-serve only: this
+            is scoped to "the self-serve plan" (docs/11 §4), same gate as the
+            cards above. Renders nothing outside a personal tenant. */}
+        {isSelfDirected && (
+          <>
+            <PersonalisationCard />
+            <DependantsCard />
+          </>
+        )}
 
         {/* sql/035 — a couple planning together. Renders nothing outside a
             personal tenant, and shows the invite affordance until a partner

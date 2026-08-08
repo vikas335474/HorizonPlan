@@ -233,4 +233,51 @@ assertTrue($todayLevers['extra_monthly_sip'] === null, 'no years left to retirem
 assertTrue($todayLevers['deferral_years'] > 0, 'deferral is still solvable even when the SIP lever is not');
 assertTrue($todayLevers['smaller_lever'] === 'deferral', 'with the SIP lever unsolvable, deferral is the only one left to pick');
 
+// --- docs/11 Prompt E-2: the two personalisation refinements on retirementTarget ---
+
+// Both new params default to a no-op, so every call above (none of which
+// passed them) is unaffected — checked directly here.
+$plainT = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0);
+$explicitNoOpT = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0, 0.0, 1.0);
+assertClose($plainT['corpus_needed'], $explicitNoOpT['corpus_needed'], 'explicit no-op params reproduce the same result as omitting them');
+
+// Additional monthly expense (an ongoing medical cost) is added to today's
+// spend BEFORE inflating — so 60k + 10k = 70k/month is what actually compounds.
+$withMedical = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0, 10000.0);
+$equivalent = PlanMath::retirementTarget(70000.0, 6.0, 3.5, 20, 50000000.0);
+assertClose($withMedical['annual_spend_at_retirement'], $equivalent['annual_spend_at_retirement'], 'an additional monthly expense is simply added to recorded spend before inflating');
+
+// A recorded medical cost alone (zero other expenses) still produces a target
+// — the effective monthly figure, not the raw recorded one, gates the null.
+$medicalOnly = PlanMath::retirementTarget(0.0, 6.0, 3.5, 20, 50000000.0, 15000.0);
+assertTrue($medicalOnly !== null, 'a medical cost alone is enough to produce a target, even with zero recorded cash-flow expenses');
+
+// City-tier multiplier scales ONLY the retirement-year figure, never today's
+// recorded spend and never the inflation rate — checked by comparing against
+// hand-scaling the no-multiplier result's inflated spend.
+$noTier = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0);
+$smallerTier = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0, 0.0, 0.85);
+assertClose($smallerTier['annual_spend_at_retirement'], $noTier['annual_spend_at_retirement'] * 0.85, 'the city-tier multiplier scales the retirement-year spend by exactly the given factor');
+assertClose($smallerTier['corpus_needed'], $noTier['corpus_needed'] * 0.85, 'and therefore the corpus needed scales by the same factor');
+
+// A non-positive multiplier is treated as 1.0 (never a divide-by-zero or a
+// negative "need") — a defensive floor, not a real input this app ever sends.
+$zeroTier = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 50000000.0, 0.0, 0.0);
+assertClose($zeroTier['annual_spend_at_retirement'], $noTier['annual_spend_at_retirement'], 'a zero/invalid multiplier falls back to no adjustment rather than zeroing the target');
+
+// gapClosingLevers threads BOTH new params into its own recompute loop, so the
+// deferral search closes against the SAME effective target it was handed —
+// not a version that silently drops the refinements.
+$refinedTarget = PlanMath::retirementTarget(20000.0, 6.0, 4.0, 20, $leverBase, 5000.0, 1.1);
+assertTrue($refinedTarget['gap'] < 0.0, 'the refined scenario (medical cost + a costlier city tier) is still set up as a real shortfall');
+$refinedLevers = PlanMath::gapClosingLevers(
+    $refinedTarget, 100000.0, 8.0, 5000.0, 10.0, 20, 20000.0, 6.0, 4.0, 40, 5000.0, 1.1
+);
+assertTrue($refinedLevers !== null, 'a refined shortfall still produces levers');
+$refinedLaterAcc = PlanMath::accumulationSeries(100000.0, 8.0, 5000.0, 10.0, 20 + $refinedLevers['deferral_years']);
+$refinedLaterTarget = PlanMath::retirementTarget(
+    20000.0, 6.0, 4.0, 20 + $refinedLevers['deferral_years'], (float) end($refinedLaterAcc), 5000.0, 1.1
+);
+assertTrue($refinedLaterTarget['gap'] >= 0.0, 'the deferral lever closes the gap when recomputed with the SAME refinements it was solved under');
+
 echo "\nAll goal-progress tests passed.\n";

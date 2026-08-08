@@ -586,6 +586,7 @@ export default function GoalDetail() {
                 levers={baselineProjection.gap_closing_levers}
                 plain={isSelfDirected}
                 retirementAge={goal.retirement_age}
+                personalisation={baselineProjection.personalisation}
               />
             )}
 
