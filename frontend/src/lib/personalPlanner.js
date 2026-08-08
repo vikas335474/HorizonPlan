@@ -77,6 +77,24 @@ export const PLANNER_QUESTIONS = [
       { value: 'many', label: 'Yes, more than one' },
     ],
   },
+  // docs/10 P1-4. Unlike every other question here, this one IS stored — it is
+  // the only fact that decides whether life cover is a gap or simply not
+  // needed, and getting that wrong in either direction is worse than asking.
+  // "Children" is not the same question: a spouse or a parent can depend on
+  // someone's income while a grown child does not, so this asks what it
+  // actually means rather than inferring it from the education answer.
+  {
+    id: 'dependants',
+    question: 'Does anyone depend on your income?',
+    help: 'A partner, children, parents — anyone who would feel it financially if your income stopped. This one is saved, so the plan can tell whether life cover matters for you.',
+    type: 'choice',
+    options: [
+      { value: '0', label: 'No, just me' },
+      { value: '1', label: 'Yes, one person' },
+      { value: '2', label: 'Yes, two people' },
+      { value: '3', label: 'Yes, three or more' },
+    ],
+  },
   {
     id: 'home',
     question: 'Are you planning to buy a home?',

@@ -60,6 +60,21 @@ if (array_key_exists('bucket', $input) && $existing['item_kind'] === 'asset') {
     }
     $updateData['bucket'] = $input['bucket'];
 }
+// docs/10 P1-4 — what a liability costs. Gated on item_kind the same way
+// bucket is above, and explicitly clearable back to NULL ("not recorded"),
+// which FinancialFoundations reports as unrated rather than cheap.
+if (array_key_exists('interest_rate', $input) && $existing['item_kind'] === 'liability') {
+    $rate = $input['interest_rate'];
+    if ($rate === null || $rate === '') {
+        $updateData['interest_rate'] = null;
+    } elseif (!is_numeric($rate) || (float) $rate < 0 || (float) $rate > 100) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'interest_rate must be between 0 and 100.']);
+        exit();
+    } else {
+        $updateData['interest_rate'] = (float) $rate;
+    }
+}
 if (array_key_exists('category', $input)) {
     $category = trim((string) $input['category']);
     if ($category === '') {

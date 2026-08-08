@@ -443,6 +443,24 @@ export const api = {
   getHouseholdCashFlow: (householdId) =>
     request(`household_cash_flow.php?household_id=${encodeURIComponent(householdId)}`),
 
+  // --- Financial foundations (docs/10 P1-4) ---
+  // Emergency reserve, income-replacement cover, medical cover, and debt
+  // costing more than the plan assumes to earn. Mostly computed from figures
+  // that already live in cash_flow_items / client_portfolio_items; only the
+  // cover amounts and dependants count are stored by this module. clientId is
+  // ignored for a client session (forced server-side to their own).
+  // Every check carries its own status — 'ok' | 'partial' | 'short' |
+  // 'not_recorded' | 'not_applicable'. 'not_recorded' is an open question and
+  // must never render as a passed check.
+  getFoundations: (clientId) =>
+    request(`foundations_read.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
+  // Record protection facts. Every field optional; passing null clears one back
+  // to "not recorded", which is a different state from 0.
+  // fields: { client_id?, dependants_count?, term_life_cover?, health_cover? }
+  saveFoundations: (fields) =>
+    request('foundations_upsert.php', { method: 'POST', body: JSON.stringify(fields) }),
+
   // --- Goal-progress tracking over time (docs/10 P1-1) ---
   // One goal's recorded snapshot history + its current drift from plan.
   // tracking_mode is 'drift' (projectable goal — expected_value per point),

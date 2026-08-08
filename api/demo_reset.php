@@ -120,7 +120,11 @@ try {
     // family per firm); users.household_id FKs to it ON DELETE SET NULL, so
     // clearing it here before the users/tenants delete un-groups the members
     // and lets the tenant delete proceed without an FK block.
+    // client_protection (migration 034) FKs to users on client_id AND on
+    // created_by_user_id, so like cash_flow_items it must be cleared before
+    // the users delete below or the reset blocks on an FK.
     foreach ([
+        'client_protection',
         'cash_flow_items', 'client_portfolio_items', 'risk_profiles', 'sub_scenarios',
         'template_audit_log', 'base_plans',
         'risk_question_sets', 'template_customizations', 'template_strategies',

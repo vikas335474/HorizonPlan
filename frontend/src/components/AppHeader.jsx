@@ -15,6 +15,15 @@ const ROLE_LABELS = {
   client: 'Client',
 };
 
+// A self-serve individual (sql/033) carries role='client' so that every
+// existing read path works unchanged — but "Client" is the wrong word to show
+// them, because they are nobody's client. The role is an internal mechanism;
+// the label is what the person actually reads.
+function roleLabel(user, tenant) {
+  if (user?.role === 'client' && tenant?.kind === 'personal') return 'Personal plan';
+  return ROLE_LABELS[user?.role] || user?.role;
+}
+
 // docs/09 Piece 2 — only meaningful for role === 'advisor'; shown next to the
 // role label so a logged-in advisor knows their own permission level (e.g.
 // whether they can approve templates/risk questionnaires).
@@ -172,7 +181,7 @@ export default function AppHeader() {
           )}
           {user && (
             <span className="text-xs font-medium text-[var(--color-ink-3)]">
-              {ROLE_LABELS[user.role] || user.role}
+              {roleLabel(user, tenant)}
               {user.role === 'advisor' && user.firmRole && FIRM_ROLE_LABELS[user.firmRole] && (
                 <> · {FIRM_ROLE_LABELS[user.firmRole]}</>
               )}
@@ -288,7 +297,7 @@ export default function AppHeader() {
           )}
           {user && (
             <div className="pt-1 mt-1 border-t border-[var(--color-line)] text-xs font-medium text-[var(--color-ink-3)]">
-              {ROLE_LABELS[user.role] || user.role}
+              {roleLabel(user, tenant)}
               {user.role === 'advisor' && user.firmRole && FIRM_ROLE_LABELS[user.firmRole] && (
                 <> · {FIRM_ROLE_LABELS[user.firmRole]}</>
               )}

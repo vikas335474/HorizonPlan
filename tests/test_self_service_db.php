@@ -37,7 +37,7 @@ $db->beginTransaction();
 
 foreach ([
     'goal_snapshots', 'client_net_worth_snapshots',
-    'cash_flow_items', 'plan_review_schedules', 'client_portfolio_items', 'mf_nav_cache', 'risk_profiles',
+    'client_protection', 'cash_flow_items', 'plan_review_schedules', 'client_portfolio_items', 'mf_nav_cache', 'risk_profiles',
     'risk_question_sets', 'template_audit_log', 'change_log', 'sub_scenarios', 'base_plans',
     'template_customizations', 'template_strategies', 'active_sessions', 'login_attempts',
     'users', 'households', 'tenants',

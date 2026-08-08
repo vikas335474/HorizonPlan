@@ -16,6 +16,7 @@ import ScenarioPanel from '../components/ScenarioPanel';
 import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard } from '../components/ReadinessScore';
+import { FoundationsCaveat } from '../components/FoundationsUI';
 import LifecycleChart from '../components/LifecycleChart';
 import SequenceRiskChart from '../components/SequenceRiskChart';
 import { GoalProgressCard } from '../components/ProgressUI';
@@ -34,7 +35,15 @@ import { presetsForGoalType } from '../lib/strategyPresets';
 export default function GoalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  // Self-serve individual (sql/033, tenants.kind='personal'). Two affordances
+  // on this page are advisor-shaped and make no sense for someone planning
+  // alone: "Client report" offers a *client* report to a person who is nobody's
+  // client, and Meeting Mode is a full-screen tool for an advisor to present
+  // to someone across a desk. The report itself is still useful (it's their
+  // own plan, printable) so it's relabelled rather than removed; Meeting Mode
+  // is hidden outright, since there is no meeting.
+  const isSelfDirected = tenant?.kind === 'personal';
   // goals_update.php / goals_apply_template.php are advisor-only server-side
   // (verifyAccess($db, 'advisor')) — this page is shared by both roles per
   // App.jsx's own routing comment, but nothing here previously checked role,
@@ -393,8 +402,9 @@ export default function GoalDetail() {
                     <path d="M4 2.5h5l2.5 2.5v7.5h-7.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
                     <path d="M5.5 7.5h4M5.5 9.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   </svg>
-                  Client report
+                  {isSelfDirected ? 'My plan summary' : 'Client report'}
                 </Button>
+                {!isSelfDirected && (
                 <Button variant="teal" data-tour="meeting-mode-button" onClick={() => navigate(`/goals/${goal.id}/meeting`)}>
                   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true" className="mr-1.5">
                     <rect x="2" y="3" width="11" height="7.5" rx="1" stroke="currentColor" strokeWidth="1.2" />
@@ -402,6 +412,7 @@ export default function GoalDetail() {
                   </svg>
                   Meeting Mode
                 </Button>
+                )}
               </div>
             </div>
 
@@ -556,6 +567,12 @@ export default function GoalDetail() {
             {isRetirement && baselineProjection?.readiness_score != null && (
               <div className="mb-4" data-tour="readiness-score-card">
                 <ReadinessScoreCard score={baselineProjection.readiness_score} />
+                {/* docs/10 P1-4 — the score answers "does the money last" and
+                    nothing else. Uncaptioned next to a high number that
+                    silence reads as endorsement, so any foundation gap or
+                    unanswered question is named here. Renders nothing when
+                    there is nothing to say. */}
+                <FoundationsCaveat clientId={isAdvisor ? goal.client_id : null} />
               </div>
             )}
 

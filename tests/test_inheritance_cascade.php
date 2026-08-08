@@ -42,6 +42,7 @@ $db->exec("DELETE FROM template_strategies");
 // added those FKs.
 $db->exec("DELETE FROM risk_profiles");
 $db->exec("DELETE FROM risk_question_sets");
+$db->exec("DELETE FROM client_protection"); // migration 034 also FKs to users
 $db->exec("DELETE FROM cash_flow_items"); // migration 030 also FKs to users
 $db->exec("DELETE FROM client_portfolio_items");
 $db->exec("DELETE FROM active_sessions");

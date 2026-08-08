@@ -376,7 +376,11 @@ export function ClientCashFlowCard() {
       {loading && <Spinner label="Loading…" />}
 
       {!loading && !summary && (
-        <p className="text-xs text-[var(--color-ink-2)]">Your adviser hasn't recorded your cash flow yet.</p>
+        <p className="text-xs text-[var(--color-ink-2)]">
+          {isSelfDirected
+            ? "You haven't added your income and expenses yet."
+            : "Your adviser hasn't recorded your cash flow yet."}
+        </p>
       )}
 
       {!loading && summary && (
