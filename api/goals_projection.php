@@ -224,6 +224,23 @@ if ($currentAge !== null && $retirementAge !== null && $accumulationReturnRate !
         $yearsToRetirement,
         (float) $projectedAtRetirement
     );
+
+    // docs/11 Prompt E-1: "never pair a gap with silence" — name the smallest
+    // lever that closes it whenever the target shows a real shortfall.
+    // Absent (null) when there's no target, or the target is already met.
+    $response['gap_closing_levers'] = $response['retirement_target'] !== null
+        ? PlanMath::gapClosingLevers(
+            $response['retirement_target'],
+            $initialNetWorth,
+            $accumulationReturnRate,
+            $sipAmount,
+            $sipStepUp,
+            $yearsToRetirement,
+            $monthlyExpenses,
+            $inflationRate,
+            $withdrawalRate
+        )
+        : null;
     $response['accumulation_assumptions'] = [
         'accumulation_return_rate' => $accumulationReturnRate,
         'current_age'              => $currentAge,
