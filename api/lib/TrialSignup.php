@@ -99,6 +99,11 @@ function createPersonalTenant(PDO $db, string $displayName, string $email, strin
         $scopedDb = new TenantScopedDb($db, $tenantId);
         $userId = $scopedDb->insert('users', [
             'email'         => $email,
+            // sql/035: the name they gave at signup belongs on the PERSON, not
+            // only on tenants.company_name. It was always slightly odd to
+            // store a human name as a company name, and it matters once a
+            // tenant can hold a couple and a household view has to name both.
+            'display_name'  => $displayName !== '' ? $displayName : null,
             'password_hash' => $passwordHash,
             'role'          => 'client',
         ]);

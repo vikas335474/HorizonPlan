@@ -511,6 +511,22 @@ export const api = {
   getHouseholdProjection: (householdId) =>
     request(`household_projection.php?household_id=${encodeURIComponent(householdId)}`),
 
+  // --- Self-serve household: a couple planning together (sql/035) ---
+  // Invite a partner into this personal tenant. Personal tenants only; an
+  // advisor uses createHousehold + assignHousehold instead. Returns the
+  // magic-link invite so the inviter can pass it on directly.
+  invitePartner: (email, displayName) =>
+    request('household_invite_partner.php', {
+      method: 'POST',
+      body: JSON.stringify({ email, display_name: displayName || '' }),
+    }),
+
+  // household_projection.php / household_cash_flow.php accept a personal
+  // client too, and force the household to their OWN — so no id is passed.
+  // Both 404 with "You are not part of a household yet" until a partner joins.
+  getMyHouseholdProjection: () => request('household_projection.php'),
+  getMyHouseholdCashFlow: () => request('household_cash_flow.php'),
+
   getClientHousehold: (clientId) =>
     request(`household_read.php?client_id=${encodeURIComponent(clientId)}`),
 

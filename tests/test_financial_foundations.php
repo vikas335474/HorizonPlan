@@ -123,13 +123,13 @@ assertTrue($noAssumption['status'] === 'not_recorded', 'no return assumption →
 assertTrue($noAssumption['costly'] === [], 'and nothing is called costly without something to call it costly against');
 
 // --- summary counts ---------------------------------------------------------
-// A completely blank statement. Three checks are open; the debt check is not.
-// That asymmetry is deliberate and worth stating: cover distinguishes "not
-// recorded" (NULL) from "none" (0), because there is a field to answer. Debt
-// has no such field — an absent liability row IS the representation of having
-// no loan, so an empty list is a genuine "no debt" rather than an unanswered
-// question. Treating it as open would make the check unclearable by anyone who
-// simply has no debt.
+// A completely blank statement — nothing passes. The pair of cases below draws
+// the distinction that makes this work: cover separates "not recorded" (NULL)
+// from "none" (0) because there is a field to answer, while debt has no such
+// field, so an EMPTY LEDGER is the unanswered state and a RECORDED ledger with
+// no loans is a genuine pass. Without that split, a person who simply has no
+// debt could never clear the check — and a brand-new account would clear it
+// for free.
 $blank = FinancialFoundations::summary(0.0, 0.0, 0.0, null, null, null, [], null, false);
 assertTrue($blank['open'] === 4, 'a brand-new account leaves ALL FOUR checks open — nothing is passed by default');
 assertTrue($blank['unmet'] === 0, 'and reports NO shortfalls — an unanswered question is not a failure');
@@ -154,5 +154,31 @@ $exposed = FinancialFoundations::summary(
 );
 assertTrue($exposed['unmet'] === 4, 'thin reserve + no life cover + no health cover + costly debt = 4 shortfalls');
 assertTrue($exposed['ok'] === 0, 'and nothing passing');
+
+// --- scope: household reserve vs per-person cover ---------------------------
+// The couple case. Shared expenses land on whoever entered them, so the reserve
+// must be computed across the household or BOTH partners read wrong.
+$hh = FinancialFoundations::summary(
+    80000.0,      // combined household expenses
+    600000.0,     // combined liquid savings
+    1200000.0,    // THIS person's own annual income, not the couple's
+    2, 15000000.0, 1000000.0,
+    [], 11.0, true, 'household'
+);
+$byId = [];
+foreach ($hh['checks'] as $c) { $byId[$c['id']] = $c; }
+assertTrue($byId['emergency_reserve']['scope'] === 'household', 'the reserve reports household scope so the UI cannot mislabel it');
+assertTrue($byId['costly_debt']['scope'] === 'household', 'debt is scoped with it — shared borrowing is a household fact');
+assertClose($byId['emergency_reserve']['months'], 7.5, 'the reserve divides combined savings by combined expenses');
+// Cover carries no scope key at all: it is per-person by construction, and an
+// absent key is a stronger guarantee than a key set to 'person'.
+assertTrue(!array_key_exists('scope', $byId['life_cover']), 'life cover has no scope — it is per-person by construction');
+assertClose($byId['life_cover']['multiple'], 12.5, "cover is sized against this person's OWN income, not the household's");
+
+// Default scope stays per-person, so nothing about a solo user changes.
+$solo = FinancialFoundations::summary(80000.0, 600000.0, 1200000.0, 2, 15000000.0, 1000000.0, [], 11.0, true);
+$soloById = [];
+foreach ($solo['checks'] as $c) { $soloById[$c['id']] = $c; }
+assertTrue($soloById['emergency_reserve']['scope'] === 'person', 'scope defaults to person — a solo plan is unaffected');
 
 echo "\nAll financial-foundations tests passed.\n";

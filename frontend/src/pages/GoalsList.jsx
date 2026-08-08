@@ -12,6 +12,7 @@ import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { ClientCashFlowCard } from '../components/CashFlowUI';
 import { ClientFoundationsCard } from '../components/FoundationsUI';
+import PartnerHouseholdCard from '../components/PartnerHouseholdUI';
 import { ClientRiskProfileCard } from '../components/RiskProfileUI';
 import { Card, EmptyState, Spinner } from '../components/ui';
 
@@ -75,6 +76,11 @@ export default function GoalsList() {
             self-serve individual (there is nobody else to record it);
             read-only for a firm-managed client, whose adviser owns it. */}
         <ClientFoundationsCard />
+
+        {/* sql/035 — a couple planning together. Renders nothing outside a
+            personal tenant, and shows the invite affordance until a partner
+            joins. The combined figures are the SUM of two plans, never a pool. */}
+        <PartnerHouseholdCard />
 
         {/* docs/10 P0-4 — the client's own risk band, read-only, mirroring the
             portfolio card above. Advisor-only affordances (capture, suggested

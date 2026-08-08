@@ -84,7 +84,7 @@ function goalBaseDecumulationSeries(array $goal): ?array
  *
  * @return array{
  *   household: array{id:int, name:string},
- *   members: list<array{client_id:int, email:string, goals:list<array{goal_id:int, goal_label:string, initial_net_worth:float, readiness_score:?int}>}>,
+ *   members: list<array{client_id:int, email:string, display_name:?string, goals:list<array{goal_id:int, goal_label:string, initial_net_worth:float, readiness_score:?int}>}>,
  *   total_starting_corpus: float,
  *   household_steady_series: list<float>,
  *   household_adverse_series: list<float>,
@@ -136,6 +136,9 @@ function computeHouseholdAggregate(TenantScopedDb $scopedDb, int $householdId): 
         $memberOut[] = [
             'client_id' => (int) $member['id'],
             'email'     => $member['email'],
+            // sql/035: optional human name, NULL for every user predating it.
+            // Callers fall back to email, which is what they showed before.
+            'display_name' => $member['display_name'] ?? null,
             'goals'     => $goalOut,
         ];
     }

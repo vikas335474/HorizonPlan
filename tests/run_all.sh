@@ -43,6 +43,7 @@ for t in \
   tests/test_progress_snapshot_db.php \
   tests/test_self_service_db.php \
   tests/test_foundations_db.php \
+  tests/test_household_self_service_db.php \
   tests/test_mf_nav_sync.php
 do
   echo "──────────────────────────────────────────────"
