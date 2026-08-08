@@ -372,6 +372,16 @@ export const api = {
   // (docs/07 Bet 2 — sql/015 seeds these as unverified until reviewed).
   listMarketHistoryYears: () => request('market_history_years.php'),
 
+  // reference_costs_get.php (docs/11 Prompt E-3): the sourced reference-cost
+  // library's read side — cited ranges (education by driver, healthcare,
+  // city-expense multipliers), never a point estimate. Pass subcategory to
+  // fetch exactly one row (or found:false), omit it to list a whole category.
+  getReferenceCosts: (category, subcategory) => {
+    const params = new URLSearchParams({ category });
+    if (subcategory) params.set('subcategory', subcategory);
+    return request(`reference_costs_get.php?${params.toString()}`);
+  },
+
   // --- Risk profiler (docs/06 Section B) ---
   // Returns { question_set: null } if the firm hasn't set one up yet.
   getRiskQuestionSet: () => request('risk_question_set_read.php'),
