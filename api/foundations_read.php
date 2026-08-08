@@ -55,9 +55,47 @@ if (!$isClient && $scopedDb->select('users', ['id' => $clientId, 'role' => 'clie
     exit();
 }
 
+// --- scope: whose expenses and debts count? ---------------------------------
+// Reserve and debt are household facts when this client is in a household
+// (sql/029 for an advisor's family, sql/035 for a self-serve couple): shared
+// expenses get recorded by whichever member entered them, so a per-person
+// reserve would report one partner as badly under-reserved and the other as
+// fine, with neither figure true. Cover stays per-person throughout — see
+// FinancialFoundations::summary().
+$clientRows = $scopedDb->select('users', ['id' => $clientId, 'role' => 'client']);
+$householdId = ($clientRows !== [] && $clientRows[0]['household_id'] !== null)
+    ? (int) $clientRows[0]['household_id']
+    : 0;
+
+$sharedClientIds = [$clientId];
+$sharedScope = 'person';
+if ($householdId > 0) {
+    $members = $scopedDb->select('users', ['household_id' => $householdId, 'role' => 'client']);
+    $ids = array_map(static fn(array $m): int => (int) $m['id'], $members);
+    // A household of one is not a household for labelling purposes: reporting
+    // "across your household" to someone whose partner has not joined yet
+    // would be true but confusing.
+    if (count($ids) > 1) {
+        $sharedClientIds = $ids;
+        $sharedScope = 'household';
+    }
+}
+
 // --- the figures this module does not own ----------------------------------
-$cashFlow = summarizeCashFlowItems($scopedDb->select('cash_flow_items', ['client_id' => $clientId]));
-$portfolio = $scopedDb->select('client_portfolio_items', ['client_id' => $clientId]);
+// Income stays the individual's own (it sizes their cover); expenses follow the
+// shared scope.
+$ownCashFlow = summarizeCashFlowItems($scopedDb->select('cash_flow_items', ['client_id' => $clientId]));
+
+$sharedExpenses = 0.0;
+$portfolio = [];
+foreach ($sharedClientIds as $sharedId) {
+    $sharedExpenses += (float) summarizeCashFlowItems(
+        $scopedDb->select('cash_flow_items', ['client_id' => $sharedId])
+    )['monthly_expense'];
+    foreach ($scopedDb->select('client_portfolio_items', ['client_id' => $sharedId]) as $row) {
+        $portfolio[] = $row;
+    }
+}
 
 $liquidAssets = 0.0;
 $liabilities = [];
@@ -83,11 +121,15 @@ foreach ($portfolio as $row) {
 // the FEWEST loans, so a loan called costly here exceeds even the most
 // optimistic thing the plan assumes anywhere. NULL when no goal carries a rate,
 // in which case the debt comparison reports as unavailable rather than passed.
+// Read across the same scope as the debts it is compared against, so a
+// household's loans are priced against the household's own assumptions.
 $assumedReturn = null;
-foreach ($scopedDb->select('base_plans', ['client_id' => $clientId]) as $plan) {
-    $rate = $plan['accumulation_return_rate'] ?? null;
-    if ($rate !== null && is_numeric($rate)) {
-        $assumedReturn = $assumedReturn === null ? (float) $rate : max($assumedReturn, (float) $rate);
+foreach ($sharedClientIds as $sharedId) {
+    foreach ($scopedDb->select('base_plans', ['client_id' => $sharedId]) as $plan) {
+        $rate = $plan['accumulation_return_rate'] ?? null;
+        if ($rate !== null && is_numeric($rate)) {
+            $assumedReturn = $assumedReturn === null ? (float) $rate : max($assumedReturn, (float) $rate);
+        }
     }
 }
 
@@ -106,16 +148,20 @@ $healthCover = ($protection && $protection['health_cover'] !== null)
     : null;
 
 $foundations = FinancialFoundations::summary(
-    (float) $cashFlow['monthly_expense'],
+    // Expenses follow the shared scope; income does NOT — it sizes this
+    // person's own cover, and averaging two earners' incomes would
+    // under-insure one and over-insure the other.
+    $sharedExpenses,
     $liquidAssets,
-    (float) $cashFlow['monthly_income'] * 12.0,
+    (float) $ownCashFlow['monthly_income'] * 12.0,
     $dependants,
     $termCover,
     $healthCover,
     $liabilities,
     $assumedReturn,
     // An untouched portfolio ledger is an unanswered question, not "no debt".
-    $portfolio !== []
+    $portfolio !== [],
+    $sharedScope
 );
 
 echo json_encode([
@@ -126,5 +172,7 @@ echo json_encode([
         'health_cover'     => $healthCover,
         'recorded'         => $protection !== null,
     ],
-    'foundations' => $foundations,
+    'scope'        => $sharedScope,
+    'member_count' => count($sharedClientIds),
+    'foundations'  => $foundations,
 ]);

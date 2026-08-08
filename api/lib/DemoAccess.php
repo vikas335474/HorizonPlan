@@ -45,6 +45,23 @@ function isDemoAccountEmail(string $email): bool
 }
 
 /**
+ * Has this deployment been seeded with demo data at all?
+ *
+ * Used to bound demo_login.php's self-heal for the individual demo: creating a
+ * missing demo account on an installation that already runs demos is
+ * housekeeping, but doing it on a deployment that has never wanted demo data
+ * would be conjuring synthetic accounts into a live database. Any existing
+ * *.demo.horizonplan.in account is sufficient proof, since nothing else on the
+ * platform can produce that suffix.
+ */
+function demoDataExists(PDO $db): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM users WHERE email LIKE :suffix LIMIT 1");
+    $stmt->execute([':suffix' => '%' . DEMO_ACCOUNT_EMAIL_SUFFIX]);
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
  * The FIRMS blueprint (name/slug/advisory_mode/color) lives in
  * api/lib/DemoSeeder.php — read from there rather than duplicated here, same
  * reasoning api/demo_reset.php already uses: one source of truth that can't

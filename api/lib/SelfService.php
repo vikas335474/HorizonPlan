@@ -17,17 +17,23 @@ declare(strict_types=1);
  *   * and the advisory relationship itself.
  *
  * So the gate is on the TENANT KIND, not the role. A client may author their
- * own data only inside a 'personal' tenant — a tenant of one, which by
- * construction contains nobody else's data and no advisor whose work could be
- * overwritten.
+ * own data only inside a 'personal' tenant — one containing no advisor whose
+ * work could be overwritten.
  *
  * THE TWO CHECKS, both required:
  *   1. the acting session's tenant is kind='personal', and
  *   2. the client_id being written is the session's OWN user id.
  *
- * (2) matters even though (1) implies a tenant of one: it is defence in depth,
- * costs one integer comparison, and means a bug that somehow put two users in
- * a personal tenant still cannot let one edit the other.
+ * CHECK (2) IS LOAD-BEARING, and it is worth being precise about why, because
+ * the reason changed. This gate was written for a "tenant of one", and (2) was
+ * then merely defence in depth: a personal tenant held exactly one person, so
+ * there was nobody else's data to write. Since sql/035 a personal tenant can
+ * hold a COUPLE planning together, so that premise no longer holds and (2) is
+ * now the only thing stopping one partner from editing the other's plan.
+ *
+ * No code changed when that happened — the check was already correct, for a
+ * reason that has since become the actual reason. Do not "simplify" it away on
+ * the grounds that a personal tenant is a tenant of one. It is not, any more.
  *
  * Advisors are unaffected throughout. An advisor session in a firm tenant
  * continues to pass the existing verifyAccess('advisor') check exactly as
@@ -129,4 +135,68 @@ function resolveSelfServiceClientId(array $session, int $suppliedClientId): int
     return $session['role'] === 'client'
         ? (int) $session['user_id']
         : $suppliedClientId;
+}
+
+/**
+ * Authorise a HOUSEHOLD read (sql/035) — the combined view a couple planning
+ * together needs.
+ *
+ * Same tenant-kind-not-role shape as verifySelfServiceWrite(), and for the same
+ * reason: households are advisor-only in a firm (docs/10 P0-1 — "clients never
+ * see households", because a firm's household groups an advisor's clients and
+ * one client has no business enumerating the others). In a personal tenant the
+ * household IS the two people who deliberately joined it, so there is nothing
+ * to leak that they did not opt into.
+ *
+ * A personal client is additionally pinned to their OWN household. Without
+ * that they could pass any household_id and, in a tenant that happened to hold
+ * more than one, read a household they are not in — so the id is not trusted
+ * from the request, it is verified against their own row.
+ *
+ * @return array{session:array,household_id:?int,is_client:bool} household_id is
+ *   the caller's own household for a personal client (null when they have not
+ *   set one up), and null for an advisor, who supplies it per request and is
+ *   scoped by tenant as before.
+ */
+function verifyHouseholdAccess(PDO $db): array
+{
+    $session = verifyAccessAny($db, ['advisor', 'client']);
+
+    if ($session['role'] !== 'client') {
+        return ['session' => $session, 'household_id' => null, 'is_client' => false];
+    }
+
+    if (!tenantIsPersonal($db, (int) $session['tenant_id'])) {
+        // An advisor-managed client. Identical response to the 'advisor'-only
+        // gate these endpoints carried before, so a firm client probing them
+        // cannot tell this tier exists.
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'Privilege escalation blocked.']);
+        exit();
+    }
+
+    $stmt = $db->prepare('SELECT household_id FROM users WHERE id = :id AND tenant_id = :t LIMIT 1');
+    $stmt->execute([':id' => (int) $session['user_id'], ':t' => (int) $session['tenant_id']]);
+    $own = $stmt->fetchColumn();
+
+    return [
+        'session'      => $session,
+        'household_id' => ($own === false || $own === null) ? null : (int) $own,
+        'is_client'    => true,
+    ];
+}
+
+/**
+ * The household id a read applies to, mirroring resolveSelfServiceClientId().
+ *
+ * An advisor gets what they asked for (tenant-scoped downstream as always); a
+ * personal client always gets their own, and a supplied id is ignored rather
+ * than trusted.
+ */
+function resolveHouseholdId(array $access, int $suppliedHouseholdId): int
+{
+    if (!$access['is_client']) {
+        return $suppliedHouseholdId;
+    }
+    return $access['household_id'] ?? 0;
 }

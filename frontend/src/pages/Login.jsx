@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../lib/api';
+import AudienceTracks from '../components/AudienceTracks';
 
 // Login is a two-step flow when the user has MFA enrolled:
 //   Step 1: email + password → server returns 202 mfa_required
@@ -319,56 +320,13 @@ function TryDemoSection() {
   }
 
   return (
-    <div className="mt-5">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
-        <span className="text-xs text-[var(--color-ink-3)]">or explore a live demo</span>
-        <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {firms.map((firm) => (
-          <button
-            key={firm.slug}
-            type="button"
-            onClick={() => tryFirm(firm.slug)}
-            disabled={busySlug !== ''}
-            className="rounded-[var(--radius-ctrl)] border px-3 py-2 text-left transition-colors disabled:opacity-60"
-            style={{ borderColor: 'var(--color-line-2)', backgroundColor: 'var(--color-surface-2)' }}
-          >
-            <div className="text-xs font-medium truncate text-[var(--color-ink)]">
-              {busySlug === firm.slug ? 'Opening…' : firm.name}
-            </div>
-            <div className="text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
-              {firm.advisory_mode === 'advisory' ? 'Advisory mode' : 'Distribution mode'}
-            </div>
-          </button>
-        ))}
-      </div>
-      {/* Self-serve individual demo (sql/033). Deliberately separated from the
-          firm demos above and labelled for a different person: those show an
-          advisor's book, this shows one person's own plan. */}
-      <button
-        type="button"
-        onClick={tryPersonal}
-        disabled={busySlug !== ''}
-        className="mt-2 w-full rounded-[var(--radius-ctrl)] border px-3 py-2.5 text-left transition-colors disabled:opacity-60"
-        style={{ borderColor: 'var(--color-teal)', backgroundColor: 'var(--color-teal-soft)' }}
-      >
-        <div className="text-xs font-medium text-[var(--color-teal-ink)]">
-          {busySlug === '__personal' ? 'Opening…' : 'Planning for yourself? See a personal plan'}
-        </div>
-        <div className="text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
-          One person · no adviser
-        </div>
-      </button>
-
-      {error && (
-        <p className="mt-3 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5 text-center"
-           style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>
-          {error}
-        </p>
-      )}
-    </div>
+    <AudienceTracks
+      firms={firms}
+      busySlug={busySlug}
+      onFirm={tryFirm}
+      onPersonal={tryPersonal}
+      error={error}
+    />
   );
 }
 
@@ -497,24 +455,48 @@ function BrandPanel() {
           <circle cx="312" cy="12" r="5" fill="var(--color-amber)" style={{ animation: 'floatY 4s ease-in-out 2s infinite' }} />
         </svg>
 
-        <h2 className="text-[28px] leading-tight font-semibold tracking-tight text-white">
-          Retirement plans your clients can actually feel.
+        {/* Dual-audience headline. The previous one — "Retirement plans YOUR
+            CLIENTS can actually feel" — addressed advisors only, so an
+            individual arriving from a consumer link read a hero about somebody
+            else's job before reaching anything for them. The question below is
+            the one BOTH audiences actually have; the split lists underneath are
+            where they diverge. Larger type than before (34px vs 28px) because
+            the old page had no real typographic hierarchy — 28px hero down to
+            10px captions with nothing in between reads as uniformly dense. */}
+        <h2 className="text-[34px] leading-[1.12] font-semibold tracking-[-0.02em] text-white">
+          Will the money last?
         </h2>
-        <p className="mt-4 text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.68)' }}>
-          Model corpus, inflation, and withdrawal rates built for Indian markets — and
-          show clients the sequence-of-returns risk that spreadsheets hide.
+        <p className="mt-4 text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>
+          Retirement planning built for Indian markets — inflation, withdrawal rates,
+          and the sequence-of-returns risk spreadsheets hide. For advisers planning
+          with clients, and for people planning on their own.
         </p>
 
-        {/* First thing a prospect sees before deciding whether to try the demo
-            or sign up — a short, honest list of what's actually built, not
-            marketing filler. Kept to 5 so it reads at a glance. */}
-        <ul className="mt-6 space-y-2.5">
-          <FeatureBullet>Retirement Readiness Score — one number a client can hold onto</FeatureBullet>
-          <FeatureBullet>Real historical sequence replay — what a bad early decade actually does</FeatureBullet>
-          <FeatureBullet>Meeting Mode — a guided, presentation-ready walkthrough for the room</FeatureBullet>
-          <FeatureBullet>Your own risk questionnaire &amp; strategy templates, approval-gated</FeatureBullet>
-          <FeatureBullet>Clients log in anytime to see their own goals, portfolio, and reports</FeatureBullet>
-        </ul>
+        {/* Two short lists rather than one of five. An honest list of what is
+            actually built, split by who it is for, so neither audience has to
+            read past the other's features to find its own. */}
+        <div className="mt-7 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+          <div>
+            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: '#3FD6BD' }}>
+              Planning for yourself
+            </p>
+            <ul className="space-y-2">
+              <FeatureBullet>See the year you could stop working — and a countdown to it</FeatureBullet>
+              <FeatureBullet>One readiness score, in plain language</FeatureBullet>
+              <FeatureBullet>Plan together with your partner, each keeping your own plan</FeatureBullet>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: '#3FD6BD' }}>
+              Advisers &amp; firms
+            </p>
+            <ul className="space-y-2">
+              <FeatureBullet>Meeting Mode — presentation-ready, for the room</FeatureBullet>
+              <FeatureBullet>Real historical replay of a bad early decade</FeatureBullet>
+              <FeatureBullet>Your own templates &amp; risk questionnaire, approval-gated</FeatureBullet>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <div className="relative flex items-center gap-6 text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>
