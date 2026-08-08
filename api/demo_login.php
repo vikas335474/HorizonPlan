@@ -17,6 +17,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/DemoAccess.php';
+// For seedDemoPersonalIfMissing() — the self-heal below. DemoSeeder is already
+// the single source of truth for the demo blueprint (see DemoAccess.php's note
+// on why demo_reset.php reads from it rather than duplicating it).
+require_once __DIR__ . '/lib/DemoSeeder.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -40,6 +44,33 @@ $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
 if ($wantsPersonal) {
     $demoUser = resolveDemoPersonalUser($db);
+
+    // SELF-HEAL. The individual demo (sql/033) shipped after the demo data on
+    // an already-running deployment had been seeded, and seedDemoData() only
+    // runs on an explicit demo reset — so this button dead-ended with "not
+    // available right now" for every visitor until an admin happened to reset
+    // the demo. Create the missing piece on demand instead.
+    //
+    // Safe despite being reachable unauthenticated, for the same reason the
+    // rest of this endpoint is: seedDemoPersonalIfMissing() is idempotent and
+    // can only ever create the ONE fixed *.demo.horizonplan.in identity that
+    // resolveDemoPersonalUser() is hard-coded to look up. It holds no real
+    // data, and after the first call every later request finds it and creates
+    // nothing. The guard below additionally refuses to run on a deployment
+    // that has no demo data at all, so this can never seed a live production
+    // database that simply never wanted demos.
+    if ($demoUser === null && demoDataExists($db)) {
+        $db->beginTransaction();
+        try {
+            seedDemoPersonalIfMissing($db);
+            $db->commit();
+        } catch (Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+        $demoUser = resolveDemoPersonalUser($db);
+    }
+
     if ($demoUser === null) {
         http_response_code(404);
         echo json_encode(['status' => 'error', 'message' => 'The individual demo is not available right now.']);

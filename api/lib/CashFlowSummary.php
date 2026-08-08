@@ -165,6 +165,9 @@ function computeHouseholdCashFlow(TenantScopedDb $scopedDb, int $householdId): ?
         $memberOut[] = [
             'client_id'         => $clientId,
             'email'             => $member['email'],
+            // sql/035: optional, NULL for anyone predating it — callers fall
+            // back to email, exactly what they rendered before.
+            'display_name'      => $member['display_name'] ?? null,
             'monthly_income'    => $summary['monthly_income'],
             'monthly_expense'   => $summary['monthly_expense'],
             'monthly_surplus'   => $summary['monthly_surplus'],

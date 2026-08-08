@@ -683,12 +683,49 @@ function seedDemoDataFull(PDO $db): array
     }
 
     // --- the self-serve individual demo (sql/033) -------------------------
-    // One seeded "tenant of one" so a visitor can try the consumer experience
-    // — sign-up-free — exactly as a real individual would see it. Skipped if
-    // it already exists, same idempotency posture as the firms above.
+    seedDemoPersonalIfMissing($db);
+
+        $db->commit();
+
+        return [
+            'platform_admin_email' => PLATFORM_ADMIN_EMAIL,
+            'created_firms'        => $createdFirms,
+            'skipped_firms'        => $skippedFirms,
+            'total_clients'        => $totalClients,
+            'total_goals'          => $totalGoals,
+        ];
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Create the seeded self-serve individual (sql/033) if it does not exist yet.
+ *
+ * SPLIT OUT OF seedDemoData() ON PURPOSE. The personal tier shipped after the
+ * demo data on a running deployment had already been seeded, and seedDemoData()
+ * only runs on an explicit demo reset — so every such deployment served a
+ * "Planning for yourself? See a personal plan" button that resolved to nothing
+ * and returned "The individual demo is not available right now." to every
+ * visitor. Anything added to the demo AFTER a deployment is first seeded has
+ * this problem; making the piece independently creatable is the general fix.
+ *
+ * Idempotent, and creates only the one fixed *.demo.horizonplan.in identity —
+ * the same account resolveDemoPersonalUser() is hard-coded to look up, holding
+ * no real data. Callers own the transaction.
+ *
+ * @return int|null the new user's id, or null when it already existed
+ */
+function seedDemoPersonalIfMissing(PDO $db): ?int
+{
     $personalExists = $db->prepare("SELECT id FROM users WHERE email = :e LIMIT 1");
     $personalExists->execute([':e' => DEMO_PERSONAL_EMAIL]);
-    if (!$personalExists->fetch()) {
+    if ($personalExists->fetch()) {
+        return null;
+    }
+
+    {
         $db->prepare(
             "INSERT INTO tenants (company_name, kind, advisory_mode, signup_source)
              VALUES ('Meera (personal plan)', 'personal', 'self_directed', 'personal_signup')"
@@ -733,19 +770,7 @@ function seedDemoDataFull(PDO $db): array
         makeCashFlowItem($db, $personalTenantId, $personalUserId, $personalUserId, 'income', 'Salary', 145000, 'monthly', 'salary');
         makeCashFlowItem($db, $personalTenantId, $personalUserId, $personalUserId, 'expense', 'Household expenses', 62000, 'monthly', 'food_groceries');
         makeCashFlowItem($db, $personalTenantId, $personalUserId, $personalUserId, 'expense', 'Home loan EMI', 38000, 'monthly', 'emi');
-    }
 
-        $db->commit();
-
-        return [
-            'platform_admin_email' => PLATFORM_ADMIN_EMAIL,
-            'created_firms'        => $createdFirms,
-            'skipped_firms'        => $skippedFirms,
-            'total_clients'        => $totalClients,
-            'total_goals'          => $totalGoals,
-        ];
-    } catch (Throwable $e) {
-        $db->rollBack();
-        throw $e;
+        return $personalUserId;
     }
 }

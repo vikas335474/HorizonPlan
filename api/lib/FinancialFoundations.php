@@ -67,10 +67,15 @@ final class FinancialFoundations
      *
      * @return array{id:string,status:string,months:?float,liquid:float,monthly_expenses:float,floor:float,comfortable:float}
      */
-    public static function emergencyReserve(float $monthlyExpenses, float $liquidAssets): array
+    public static function emergencyReserve(float $monthlyExpenses, float $liquidAssets, string $scope = 'person'): array
     {
         $base = [
             'id'               => 'emergency_reserve',
+            // 'person' or 'household' — see the class note on why this check is
+            // aggregated for a couple while cover is not. Reported so the UI
+            // can say WHOSE figures these are; a reserve silently computed at a
+            // different scope than the label implies is worse than either.
+            'scope'            => $scope,
             'liquid'           => max(0.0, $liquidAssets),
             'monthly_expenses' => max(0.0, $monthlyExpenses),
             'floor'            => self::EMERGENCY_MONTHS_FLOOR,
@@ -192,8 +197,12 @@ final class FinancialFoundations
      * @param array<int,array{label?:string,value:mixed,interest_rate:mixed}> $liabilities
      * @return array{id:string,status:string,costly:array<int,array{label:string,value:float,interest_rate:float,gap:float}>,unrated:int,assumed_return:?float,total_costly:float}
      */
-    public static function costlyDebt(array $liabilities, ?float $assumedReturnRate, bool $ledgerHasRows = true): array
-    {
+    public static function costlyDebt(
+        array $liabilities,
+        ?float $assumedReturnRate,
+        bool $ledgerHasRows = true,
+        string $scope = 'person'
+    ): array {
         $costly = [];
         $unrated = 0;
         $totalCostly = 0.0;
@@ -238,6 +247,7 @@ final class FinancialFoundations
 
         return [
             'id'             => 'costly_debt',
+            'scope'          => $scope,
             'status'         => $status,
             'costly'         => $costly,
             'unrated'        => $unrated,
@@ -267,13 +277,28 @@ final class FinancialFoundations
         ?float $healthCover,
         array $liabilities,
         ?float $assumedReturnRate,
-        bool $ledgerHasRows = true
+        bool $ledgerHasRows = true,
+        string $sharedScope = 'person'
     ): array {
+        // WHY THE SCOPE SPLITS, and it follows the arithmetic of each check
+        // rather than a preference:
+        //
+        //   * Reserve and debt are HOUSEHOLD facts for a couple. Rent,
+        //     groceries and EMIs are recorded by whoever entered them, so a
+        //     per-person reserve makes that partner look badly under-reserved
+        //     and the other look fine — and NEITHER number is true. The joint
+        //     savings cover the joint outgoings.
+        //   * Cover is a PER-PERSON fact and must stay one. Life cover
+        //     replaces a specific person's income; replacing a ₹40L earner and
+        //     a ₹12L earner are different problems, and averaging them would
+        //     under-insure one and over-insure the other. Medical cover is
+        //     per-person for the same reason (and dependants are recorded
+        //     per-person too).
         $checks = [
-            self::emergencyReserve($monthlyExpenses, $liquidAssets),
+            self::emergencyReserve($monthlyExpenses, $liquidAssets, $sharedScope),
             self::lifeCover($dependants, $termCover, $annualIncome),
             self::healthCover($healthCover),
-            self::costlyDebt($liabilities, $assumedReturnRate, $ledgerHasRows),
+            self::costlyDebt($liabilities, $assumedReturnRate, $ledgerHasRows, $sharedScope),
         ];
 
         $unmet = 0;
