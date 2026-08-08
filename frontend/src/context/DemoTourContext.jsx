@@ -19,20 +19,25 @@ import Spotlight from '../components/Spotlight';
 // reusable tour framework for other pages — see CLAUDE.md for why.
 const DemoTourContext = createContext(null);
 
-const STORAGE_KEY = 'hp_demo_tour_v1';
+// TWO TRACKS, and the storage key carries which one, because the public demo
+// picker lets one visitor try the firm demo and then the individual demo in the
+// same tab. Sharing a key would restore a step index from the other track's
+// array — a silently wrong step, or none at all.
+const STORAGE_KEY_BASE = 'hp_demo_tour_v1';
+const storageKeyFor = (track) => `${STORAGE_KEY_BASE}:${track}`;
 
-function loadState() {
+function loadState(track) {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(storageKeyFor(track));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function saveState(state) {
+function saveState(track, state) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    sessionStorage.setItem(storageKeyFor(track), JSON.stringify(state));
   } catch {
     // Private-browsing storage quirks aren't worth failing the tour over —
     // it just won't survive a reload in that case.
@@ -42,6 +47,7 @@ function saveState(state) {
 const CLIENT_RE = /^\/clients\/[^/]+$/;
 const GOAL_DETAIL_RE = /^\/goals\/[^/]+$/;
 const MEETING_RE = /^\/goals\/[^/]+\/meeting$/;
+const GOALS_HOME_RE = /^\/goals$/;
 
 // Each step targets one real, already-shipped element (via the data-tour
 // attributes added to Dashboard.jsx/ClientGoals.jsx/GoalCard.jsx/
@@ -62,7 +68,7 @@ function pickBestClientRow(root) {
   ), rows[0]);
 }
 
-const STEPS = [
+const FIRM_STEPS = [
   {
     key: 'dashboard-health',
     match: (p) => p === '/',
@@ -144,10 +150,76 @@ const STEPS = [
   },
 ];
 
+// The individual demo's own track (sql/033). It is NOT a re-worded copy of the
+// firm tour: none of those steps are even reachable here. A personal user has
+// no dashboard, no client roster and no Meeting Mode, so every FIRM_STEPS
+// selector would poll for six seconds and then silently give up — which is
+// exactly what a visitor to the individual demo used to get, right up until
+// `goal-readiness` matched and greeted them with "the number a CLIENT can hold
+// onto".
+//
+// The order answers the three questions someone planning alone actually opens
+// the app with, in the order they ask them: what do I spend, how much will I
+// need, and will it last.
+const PERSONAL_STEPS = [
+  {
+    key: 'personal-cash-flow',
+    match: (p) => GOALS_HOME_RE.test(p),
+    selector: '[data-tour="cash-flow-card"]',
+    title: 'Start with what you actually spend',
+    body: 'Your monthly spending is what turns a plan into a number — the target below is built from it. Change a line here and every figure moves with it.',
+  },
+  {
+    key: 'personal-goal-card',
+    match: (p) => GOALS_HOME_RE.test(p),
+    resolveElement: (root) => {
+      const cards = Array.from(root.querySelectorAll('[data-tour="goal-card"]'));
+      return cards.find((c) => c.dataset.hasReadiness === 'true') || cards[0] || null;
+    },
+    title: 'Your plan',
+    body: 'Each plan you build gets its own page — the projection, the target, and every assumption behind them. Open this one, or hit Next.',
+    onAdvance: (el, navigate) => {
+      const id = el?.dataset.goalId;
+      if (id) navigate(`/goals/${id}`);
+    },
+  },
+  {
+    key: 'personal-target',
+    match: (p) => GOAL_DETAIL_RE.test(p),
+    selector: '[data-tour="retirement-target-card"]',
+    title: 'How much you’ll need, and how close you are',
+    body: 'The amount you’d need saved by the year you retire, what this plan actually reaches, and the gap between them. Every number here comes from figures you can edit.',
+  },
+  {
+    key: 'personal-readiness',
+    match: (p) => GOAL_DETAIL_RE.test(p),
+    selector: '[data-tour="readiness-score-card"]',
+    // Naming the distinction rather than hoping nobody notices it. The score
+    // and the target above genuinely answer different questions and can point
+    // different ways — see docs/11 1.
+    title: 'A different question: will it last?',
+    body: 'This score asks only whether the money survives being drawn down — not whether it covers the life you described. That is the target above. Read them together, not instead of each other.',
+  },
+  {
+    key: 'personal-scenarios',
+    match: (p) => GOAL_DETAIL_RE.test(p),
+    selector: '[data-tour="scenarios-section"]',
+    title: 'Change anything, see what happens',
+    body: 'Retire two years later, save a little more, assume worse markets — build a scenario and compare it on the same chart. Nothing here is fixed, and none of it touches your base plan.',
+    isLast: true,
+  },
+];
+
 export function DemoTourProvider({ children }) {
-  const { user, loading } = useAuth();
+  const { user, tenant, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Which track. Gated on tenant KIND, not role, matching api/lib/SelfService.php
+  // — a personal tenant's sole user has role='client', and so does a firm's
+  // client, but only the first one is touring a plan that is their own.
+  const track = tenant?.kind === 'personal' ? 'personal' : 'firm';
+  const STEPS = track === 'personal' ? PERSONAL_STEPS : FIRM_STEPS;
 
   const [stepIndex, setStepIndex] = useState(0);
   const [tourActive, setTourActive] = useState(false);
@@ -162,10 +234,17 @@ export function DemoTourProvider({ children }) {
   // effect never re-evaluates once login succeeds and user.isDemo flips
   // true a few renders later. So the guard is only set once user.isDemo is
   // actually true — not on every loading===false render.
+  //
+  // `tenant` is part of that same condition, and for the same reason one step
+  // further on: demoLogin()/demoLoginPersonal() call setUser() and only THEN
+  // await refreshSession(), which is what carries the tenant block. So there is
+  // a real window where user.isDemo is true and tenant is still null — and
+  // consuming the guard inside it would pin an individual-demo visitor to the
+  // firm track, which is the exact bug this two-track split exists to fix.
   useEffect(() => {
-    if (loading || !user?.isDemo || initializedRef.current) return;
+    if (loading || !user?.isDemo || !tenant || initializedRef.current) return;
     initializedRef.current = true;
-    const saved = loadState();
+    const saved = loadState(track);
     if (saved?.dismissed) {
       setDismissed(true);
     } else if (saved?.active) {
@@ -176,12 +255,12 @@ export function DemoTourProvider({ children }) {
       setTourActive(true);
       setStepIndex(0);
     }
-  }, [loading, user?.isDemo]);
+  }, [loading, user?.isDemo, tenant, track]);
 
   useEffect(() => {
-    if (!user?.isDemo) return;
-    saveState({ active: tourActive, dismissed, stepIndex });
-  }, [tourActive, dismissed, stepIndex, user?.isDemo]);
+    if (!user?.isDemo || !tenant) return;
+    saveState(track, { active: tourActive, dismissed, stepIndex });
+  }, [tourActive, dismissed, stepIndex, user?.isDemo, tenant, track]);
 
   // Keep the step index in sync with real navigation — including a visitor
   // clicking the actual highlighted element instead of "Next" (the overlay
@@ -197,7 +276,7 @@ export function DemoTourProvider({ children }) {
       targetElRef.current = null;
       setRect(null);
     }
-  }, [location.pathname, tourActive, stepIndex]);
+  }, [location.pathname, tourActive, stepIndex, STEPS]);
 
   // Locate + track the current step's target element. Polls briefly after a
   // navigation since the destination page's own data fetch (goals,
@@ -250,7 +329,7 @@ export function DemoTourProvider({ children }) {
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [tourActive, stepIndex, location.pathname]);
+  }, [tourActive, stepIndex, location.pathname, STEPS]);
 
   const finish = useCallback(() => {
     setTourActive(false);
@@ -266,7 +345,7 @@ export function DemoTourProvider({ children }) {
     }
     step.onAdvance?.(targetElRef.current, navigate, location);
     setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
-  }, [stepIndex, navigate, location, finish]);
+  }, [stepIndex, navigate, location, finish, STEPS]);
 
   const goBack = useCallback(() => {
     setStepIndex((i) => Math.max(i - 1, 0));

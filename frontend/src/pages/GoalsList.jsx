@@ -10,7 +10,7 @@ import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
-import { ClientCashFlowCard } from '../components/CashFlowUI';
+import { ClientCashFlowCard, CashFlowCard } from '../components/CashFlowUI';
 import { ClientFoundationsCard } from '../components/FoundationsUI';
 import PartnerHouseholdCard from '../components/PartnerHouseholdUI';
 import { ClientRiskProfileCard } from '../components/RiskProfileUI';
@@ -21,7 +21,7 @@ import { Card, EmptyState, Spinner } from '../components/ui';
 export default function GoalsList() {
   // Self-serve individual tier: someone with no adviser must not be told an
   // adviser did something. Copy only — the data and layout are identical.
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
   const isSelfDirected = tenant?.kind === 'personal';
   const [goals, setGoals] = useState(null);
   const [error, setError] = useState('');
@@ -62,15 +62,24 @@ export default function GoalsList() {
           <DisclosureBanner />
         </div>
 
-        {/* Read-only — client_portfolio_list.php already permits a client
-            session to read their own rows, but this is the first place a
-            client could actually see them; no clientId passed, the server
-            forces it to the session's own id regardless. */}
-        <ClientPortfolioCard readOnly />
+        {/* A FIRM-managed client reads these; a self-serve individual must be
+            able to WRITE them, because there is nobody else to enter their
+            data. Passing readOnly unconditionally was a real lockout: the
+            wizard created a plan and the person could then never add a single
+            asset or expense to it. The server already allowed both writes
+            (verifySelfServiceWrite), so only this UI stood in the way.
+            Gated on tenant kind, matching api/lib/SelfService.php — a firm's
+            client gains nothing. */}
+        <ClientPortfolioCard readOnly={!isSelfDirected} />
 
-        {/* docs/10 cash-flow module — the client's own income/expense/surplus,
-            read-only. The advisor-only surplus-vs-SIP framing is not exposed. */}
-        <ClientCashFlowCard />
+        {isSelfDirected ? (
+          // The editable card. cash_flow_list.php withholds sip_comparison from
+          // any client session, so the advisor-only "does the surplus cover the
+          // SIPs?" framing simply never renders here.
+          <CashFlowCard clientId={user?.userId} />
+        ) : (
+          <ClientCashFlowCard />
+        )}
 
         {/* docs/10 P1-4 — reserve, protection and debt. Editable for a
             self-serve individual (there is nobody else to record it);
@@ -98,8 +107,9 @@ export default function GoalsList() {
         {goals && goals.length === 0 && (
           <Card>
             <EmptyState title="No goals yet">
-              Your advisor hasn't set up any goals for you yet. Once they do, you'll be able to explore
-              different scenarios here.
+              {isSelfDirected
+                ? "You haven't set up a plan yet. Answer a few questions and we'll build one you can change any time."
+                : "Your advisor hasn't set up any goals for you yet. Once they do, you'll be able to explore different scenarios here."}
             </EmptyState>
           </Card>
         )}

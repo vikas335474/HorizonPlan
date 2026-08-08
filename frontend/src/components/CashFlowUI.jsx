@@ -56,6 +56,13 @@ function monthlyOf(item) {
 // plus the surplus-vs-SIP comparison. The client's own read-only view is
 // ClientCashFlowCard below (deliberately without the SIP framing).
 export function CashFlowCard({ clientId }) {
+  // This card is no longer advisor-only: GoalsList.jsx hands it to a self-serve
+  // individual, who must be able to enter their own figures. The SIP-comparison
+  // block below stays advisor-shaped safely, because cash_flow_list.php
+  // withholds sip_comparison from any client session — but the prose above it
+  // is rendered unconditionally, so it has to know who is reading.
+  const { tenant } = useAuth();
+  const isSelfDirected = tenant?.kind === 'personal';
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -98,7 +105,8 @@ export function CashFlowCard({ clientId }) {
         )}
       </div>
       <p className="text-xs text-[var(--color-ink-2)] mb-3">
-        Monthly income minus expenses — the surplus available to fund this client's plan. Enter each
+        Monthly income minus expenses — the surplus available to fund
+        {isSelfDirected ? ' your plan' : " this client's plan"}. Enter each
         line at its natural cadence; annual items are spread evenly across the year.
       </p>
 

@@ -142,11 +142,17 @@ export function ClientPortfolioCard({ clientId, readOnly = false }) {
         )}
       </div>
       <p className="text-xs text-[var(--color-ink-2)] mb-1">
-        {readOnly
-          ? (isSelfDirected
-              ? 'What you already own — a starting point, not a shared pool any one goal automatically draws from.'
-              : 'What you already own, as recorded by your advisor — a starting point, not a shared pool any one goal automatically draws from.')
-          : 'What the client already owns — a starting point, not a shared pool any one goal automatically draws from.'}
+        {/* isSelfDirected is tested FIRST, and the order is load-bearing. This
+            used to branch on readOnly first, which was correct only while a
+            self-serve individual's portfolio was read-only. It no longer is —
+            they have no adviser to enter it for them — so a readOnly-first
+            ternary dropped them into the advisor branch and told a person
+            looking at their own assets "what THE CLIENT already owns". */}
+        {isSelfDirected
+          ? 'What you already own — a starting point, not a shared pool any one goal automatically draws from.'
+          : readOnly
+            ? 'What you already own, as recorded by your advisor — a starting point, not a shared pool any one goal automatically draws from.'
+            : 'What the client already owns — a starting point, not a shared pool any one goal automatically draws from.'}
       </p>
 
       {/* Freshness is always shown once there's at least one NAV-tracked
