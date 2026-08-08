@@ -50,12 +50,43 @@ function Figure({ label, value, tone = 'ink', sub }) {
   );
 }
 
+// docs/11 Prompt E-1: "never pair a gap with silence" — a shortfall on its own
+// is anxiety with no next step. This turns PlanMath::gapClosingLevers()'s two
+// solved amounts into one line naming whichever asks for the smaller relative
+// change, with the other named alongside it. Renders nothing for a lever that
+// couldn't be solved (e.g. no years left to add SIP into) rather than a
+// confusing "N/A".
+function leverLine(levers, plain) {
+  if (!levers) return null;
+  const { extra_monthly_sip: extraSip, deferral_years: deferralYears, smaller_lever: smaller } = levers;
+  if (extraSip == null && deferralYears == null) return null;
+
+  const sipPhrase = extraSip != null
+    ? `${formatCurrency(extraSip)} more per month`
+    : null;
+  const deferralPhrase = deferralYears != null
+    ? `retiring ${deferralYears} year${deferralYears === 1 ? '' : 's'} later`
+    : null;
+
+  const parts = smaller === 'deferral'
+    ? [deferralPhrase, sipPhrase]
+    : [sipPhrase, deferralPhrase];
+  const ordered = parts.filter(Boolean);
+  if (ordered.length === 0) return null;
+
+  const verb = plain ? 'Closing this' : 'Closing the gap';
+  return ordered.length === 2
+    ? `${verb} takes ${ordered[0]} — or ${ordered[1]}.`
+    : `${verb} takes ${ordered[0]}.`;
+}
+
 /**
  * @param target      projection.retirement_target (null when unavailable)
+ * @param levers      projection.gap_closing_levers (null when target is met, or unavailable)
  * @param plain       consumer vocabulary (self-directed) vs advisor vocabulary
  * @param retirementAge  for the "by age N" phrasing
  */
-export default function RetirementTargetCard({ target, plain = false, retirementAge }) {
+export default function RetirementTargetCard({ target, levers = null, plain = false, retirementAge }) {
   // No expenses recorded. Rather than hiding the card entirely — which leaves
   // the person with no idea the number is obtainable — say what is missing and
   // what it would unlock.
@@ -77,6 +108,9 @@ export default function RetirementTargetCard({ target, plain = false, retirement
   // Clamped only for the BAR's width. The percentage itself is reported
   // unclamped below, so somebody comfortably ahead sees that they are.
   const barPct = Math.max(0, Math.min(100, covered));
+  // Never null when onTrack — PlanMath::gapClosingLevers() only computes a
+  // lever for a real shortfall, so there's nothing to solve for once ahead.
+  const lever = onTrack ? null : leverLine(levers, plain);
 
   return (
     <Card className="p-4 mb-4" data-tour="retirement-target-card">
@@ -117,6 +151,13 @@ export default function RetirementTargetCard({ target, plain = false, retirement
           }}
         />
       </div>
+
+      {/* docs/11 Prompt E-1 — a gap is never shown without a next step. */}
+      {lever && (
+        <p className="mt-2.5 text-[13px] font-medium leading-relaxed" style={{ color: 'var(--color-amber)' }}>
+          {lever}
+        </p>
+      )}
 
       {/* The assumption, stated plainly and always — see the file header. */}
       <p className="mt-2.5 text-[11px] leading-relaxed text-[var(--color-ink-3)]">

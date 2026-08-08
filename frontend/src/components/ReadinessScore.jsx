@@ -13,6 +13,24 @@ export function bandFor(score) {
   return { color: 'var(--color-alert)', bg: 'var(--color-alert-soft)', label: 'Needs attention' };
 }
 
+// docs/11 Prompt E-1: the Readiness Score asks one question — does the corpus
+// survive its own withdrawal rate — and the Retirement Target asks a
+// different one — does it cover what this person actually spends. They can
+// disagree sharply: the personal demo showed 89/100 next to "44% of target"
+// on one screen, which reads as the app contradicting itself.
+//
+// Per the docs/11 decision (suppress rather than blend or leave as-is): the
+// score is hidden ONLY when a target exists AND it would otherwise say
+// something the target directly contradicts — the score reads "on track" or
+// better while the target shows a real, meaningful shortfall. When the score
+// already agrees (it's in "Needs attention"), or there's no target to compare
+// against, the score renders exactly as it always has — this never touches
+// the advisor-facing meaning of the score on its own.
+export function scoreContradictsTarget(score, target) {
+  if (score === null || score === undefined || !target) return false;
+  return score >= 40 && target.covered_pct < 100;
+}
+
 // Small inline pill — for contexts already dense with other numbers
 // (e.g. inside a per-scenario panel next to the sequence-risk chart).
 export function ReadinessScoreBadge({ score }) {

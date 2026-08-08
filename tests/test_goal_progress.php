@@ -172,4 +172,65 @@ $funded = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 90000000.0);
 assertTrue($funded['gap'] > 0, 'a plan ahead of its target reports the surplus, not a capped 100%');
 assertTrue($funded['covered_pct'] > 100.0, 'and coverage above 100% is reported honestly');
 
+// --- gapClosingLevers: docs/11 E-1 "never pair a gap with silence" ---------
+
+// A gap that's already closed (or ahead) gets no lever at all — there's
+// nothing to close, and a zero-value lever would misread as "hit it exactly".
+assertTrue(
+    PlanMath::gapClosingLevers($funded, 100000.0, 8.0, 5000.0, 10.0, 20, 60000.0, 6.0, 3.5) === null,
+    'a funded target (gap >= 0) gets no lever — nothing to close'
+);
+
+// A self-consistent shortfall scenario: the SAME accumulation params
+// (100,000 start, 8% return, 5,000/month SIP, 10% step-up, 20 years) both
+// produce the projected corpus fed into the target AND get passed to
+// gapClosingLevers(), so the levers are checked against the plan they claim
+// to describe rather than an arbitrary hardcoded corpus.
+$leverAcc = PlanMath::accumulationSeries(100000.0, 8.0, 5000.0, 10.0, 20);
+$leverBase = (float) end($leverAcc);
+$leverTarget = PlanMath::retirementTarget(20000.0, 6.0, 4.0, 20, $leverBase);
+assertTrue($leverTarget['gap'] < 0, 'the scenario is set up to have a real shortfall');
+
+$levers = PlanMath::gapClosingLevers($leverTarget, 100000.0, 8.0, 5000.0, 10.0, 20, 20000.0, 6.0, 4.0);
+assertTrue($levers !== null, 'a real shortfall always produces a levers array, not null');
+assertTrue($levers['extra_monthly_sip'] > 0, 'extra_monthly_sip is a positive rupee amount');
+
+// extra_monthly_sip is solved as a FLAT ordinary annuity (deliberately not
+// re-stepped, see PlanMath::gapClosingLevers docblock), so its future value at
+// the plan's own accumulation return over the remaining years must land
+// exactly on the shortfall it was solved to close — checked with the same
+// annuity formula, independent of accumulationSeries() (which would
+// incorrectly re-apply the step-up to it).
+$r = 0.08;
+$n = 20;
+$annuityFactor = ((1 + $r) ** $n - 1) / $r;
+$extraFv = ($levers['extra_monthly_sip'] * 12.0) * $annuityFactor;
+assertClose($extraFv, -$leverTarget['gap'], 'extra_monthly_sip\'s future value closes exactly the shortfall it was solved from', 50.0);
+
+assertTrue($levers['deferral_years'] !== null && $levers['deferral_years'] > 0, 'this shortfall is closeable by deferral within the cap');
+$laterAcc = PlanMath::accumulationSeries(100000.0, 8.0, 5000.0, 10.0, 20 + $levers['deferral_years']);
+$laterTarget = PlanMath::retirementTarget(20000.0, 6.0, 4.0, 20 + $levers['deferral_years'], (float) end($laterAcc));
+assertTrue($laterTarget['gap'] >= 0.0, 'deferral_years actually closes the shortfall when the goal runs that many years longer');
+if ($levers['deferral_years'] > 1) {
+    $oneLessAcc = PlanMath::accumulationSeries(100000.0, 8.0, 5000.0, 10.0, 20 + $levers['deferral_years'] - 1);
+    $oneLessTarget = PlanMath::retirementTarget(20000.0, 6.0, 4.0, 20 + $levers['deferral_years'] - 1, (float) end($oneLessAcc));
+    assertTrue($oneLessTarget['gap'] < 0.0, 'deferral_years is the SMALLEST year count that closes it, not just any that does');
+}
+assertTrue(
+    in_array($levers['smaller_lever'], ['sip', 'deferral'], true),
+    'smaller_lever names one of the two solvable levers'
+);
+
+// Zero years to retirement (retiring today), WITH a real shortfall — the SIP
+// lever has no years left to invest into, so it must come back null rather
+// than a divide-by-zero or nonsensical amount. Deferral is still solvable
+// independently, since it recomputes accumulationSeries() at a later horizon
+// regardless of how many years the goal currently has left.
+$todayTarget = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 0, 10000000.0);
+assertTrue($todayTarget['gap'] < 0.0, 'retiring today with an under-funded corpus is a real shortfall');
+$todayLevers = PlanMath::gapClosingLevers($todayTarget, 10000000.0, 8.0, 5000.0, 10.0, 0, 60000.0, 6.0, 3.5);
+assertTrue($todayLevers['extra_monthly_sip'] === null, 'no years left to retirement -> extra_monthly_sip is unsolvable, not a garbage number');
+assertTrue($todayLevers['deferral_years'] > 0, 'deferral is still solvable even when the SIP lever is not');
+assertTrue($todayLevers['smaller_lever'] === 'deferral', 'with the SIP lever unsolvable, deferral is the only one left to pick');
+
 echo "\nAll goal-progress tests passed.\n";
