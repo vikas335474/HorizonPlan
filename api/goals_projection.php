@@ -19,6 +19,8 @@ require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/PlanMath.php';
+// For the retirement target's expense input — the person's own recorded spend.
+require_once __DIR__ . '/lib/CashFlowSummary.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -197,6 +199,31 @@ if ($currentAge !== null && $retirementAge !== null && $accumulationReturnRate !
 
     $response['accumulation_series'] = $accumulationSeries;
     $response['lifecycle_series'] = $lifecycleSeries;
+
+    // "How much will I need, and am I on track for it?" — see
+    // PlanMath::retirementTarget(). The advisor product never needed this
+    // (an advisor arrives with a target and models a corpus toward it), but
+    // someone planning alone only knows what they spend today.
+    //
+    // Expenses come from cash_flow_items, the figure the person already
+    // recorded — nothing here invents a cost of living, and the target is
+    // simply absent when no expenses are on file.
+    $monthlyExpenses = (float) summarizeCashFlowItems(
+        $scopedDb->select('cash_flow_items', ['client_id' => (int) $goal['client_id']])
+    )['monthly_expense'];
+
+    // The projected corpus is read off the lifecycle series at the retirement
+    // year — the same curve this response already returns, so the target and
+    // the chart can never disagree.
+    $projectedAtRetirement = $lifecycleSeries[$yearsToRetirement] ?? end($lifecycleSeries);
+
+    $response['retirement_target'] = PlanMath::retirementTarget(
+        $monthlyExpenses,
+        $inflationRate,
+        $withdrawalRate,
+        $yearsToRetirement,
+        (float) $projectedAtRetirement
+    );
     $response['accumulation_assumptions'] = [
         'accumulation_return_rate' => $accumulationReturnRate,
         'current_age'              => $currentAge,

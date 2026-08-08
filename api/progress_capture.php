@@ -2,10 +2,12 @@
 declare(strict_types=1);
 
 // P1-1 · Goal-progress tracking — capture a snapshot for ONE client, now.
-// POST, advisor-only (verifyAccess 'advisor'; super_admin also passes),
-// tenant-scoped. This is the manual "Record now" an advisor uses before a
-// review meeting; the monthly cron (tools/progress_snapshot.php) writes the
-// same rows unattended.
+// POST, tenant-scoped, gated by verifySelfServiceWrite(): advisor-only inside a
+// firm tenant (super_admin also passes), and additionally the individual
+// themselves inside a personal tenant (sql/033), who has no advisor to take the
+// reading for them. This is the manual "Record now" used before a review
+// meeting; the monthly cron (tools/progress_snapshot.php) writes the same rows
+// unattended.
 //
 // Snapshots every goal the client has, plus the client's portfolio net worth,
 // dated today. Idempotent per day — a second call on the same date updates
