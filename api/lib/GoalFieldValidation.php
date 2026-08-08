@@ -31,7 +31,9 @@ function validateGoalField(string $field, mixed $value): ?string
 {
     switch ($field) {
         case 'initial_net_worth':
-            return validatePositiveAmount($value, $field, 10_000_000_000);
+            // 0 is valid — see validateNonNegativeAmount(). A goal you haven't
+            // started saving for yet is a goal, not a validation error.
+            return validateNonNegativeAmount($value, $field, 10_000_000_000);
 
         case 'target_amount':
             if ($value === null) {
@@ -88,6 +90,29 @@ function validateGoalField(string $field, mixed $value): ?string
         default:
             return null; // no range rule for this field (e.g. goal_label, monthly_sip_amount, sip_step_up_rate)
     }
+}
+
+/**
+ * Like validatePositiveAmount(), but 0 is allowed.
+ *
+ * Used for initial_net_worth, where "nothing saved for this yet" is a real and
+ * common starting state — a brand-new education or home goal usually begins at
+ * zero, and so does a young person's first retirement plan funded purely by a
+ * monthly SIP. Requiring a positive amount forced callers to either invent a
+ * figure or not create the goal at all. Negatives are still rejected: a goal
+ * cannot start with less than nothing.
+ *
+ * @return string|null first failure message, or null when valid
+ */
+function validateNonNegativeAmount(mixed $value, string $field, float $ceiling): ?string
+{
+    if (!is_numeric($value) || (float) $value < 0) {
+        return "$field cannot be negative.";
+    }
+    if ((float) $value > $ceiling) {
+        return "$field must not exceed $ceiling.";
+    }
+    return null;
 }
 
 /**

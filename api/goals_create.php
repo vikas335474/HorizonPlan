@@ -19,6 +19,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/SelfService.php';
 require_once __DIR__ . '/lib/GoalFieldValidation.php';
 require_once __DIR__ . '/lib/PlanReview.php';
 
@@ -31,13 +32,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db = getPdo();
-$session = verifyAccess($db, 'advisor'); // super_admin also passes, per verifyAccess()
+// Self-serve individual tier (sql/033): advisor-only in a firm, and
+// additionally self-service for an individual writing their OWN data in a
+// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
+// client exactly as before — see api/lib/SelfService.php.
+$session = verifySelfServiceWrite($db);
 $tenantId = (int) $session['tenant_id'];
 $scopedDb = new TenantScopedDb($db, $tenantId);
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 
 $clientId = (int) ($input['client_id'] ?? 0);
+// A personal user always writes their own data; any client_id in the body
+// is ignored rather than trusted, same posture as the client-facing reads.
+$clientId = resolveSelfServiceClientId($session, $clientId);
 $goalType = (string) ($input['goal_type'] ?? '');
 $goalLabel = trim((string) ($input['goal_label'] ?? ''));
 $initialNetWorth = $input['initial_net_worth'] ?? null;

@@ -40,6 +40,7 @@ for t in \
   tests/test_cash_flow_summary_db.php \
   tests/test_client_assignment_db.php \
   tests/test_progress_snapshot_db.php \
+  tests/test_self_service_db.php \
   tests/test_mf_nav_sync.php
 do
   echo "──────────────────────────────────────────────"

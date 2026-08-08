@@ -12,6 +12,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/SelfService.php';
 require_once __DIR__ . '/lib/MfNavSync.php';
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -27,11 +28,18 @@ $db = getPdo();
 // client's own holdings. This never calls AMFI; it only recomputes from
 // whatever the daily cron already cached (api/lib/MfNavSync.php's own
 // docblock: "using the cached data locally" per the user's own instruction).
-$session = verifyAccess($db, 'advisor');
+// Self-serve individual tier (sql/033): advisor-only in a firm, and
+// additionally self-service for an individual writing their OWN data in a
+// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
+// client exactly as before — see api/lib/SelfService.php.
+$session = verifySelfServiceWrite($db);
 $scopedDb = new TenantScopedDb($db, (int) $session['tenant_id']);
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $clientId = (int) ($input['client_id'] ?? 0);
+// A personal user always writes their own data; any client_id in the body
+// is ignored rather than trusted, same posture as the client-facing reads.
+$clientId = resolveSelfServiceClientId($session, $clientId);
 if ($clientId <= 0) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'client_id is required.']);

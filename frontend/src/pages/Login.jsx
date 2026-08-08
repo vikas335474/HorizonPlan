@@ -276,7 +276,7 @@ export default function Login() {
 // no configured Client ID) and logs straight into whichever one is picked via
 // demo_login.php — no credentials involved anywhere in this flow.
 function TryDemoSection() {
-  const { demoLogin } = useAuth();
+  const { demoLogin, demoLoginPersonal } = useAuth();
   const navigate = useNavigate();
   const [firms, setFirms] = useState([]);
   const [busySlug, setBusySlug] = useState('');
@@ -290,7 +290,7 @@ function TryDemoSection() {
     return () => { cancelled = true; };
   }, []);
 
-  if (firms.length === 0) return null;
+
 
   async function tryFirm(slug) {
     setError('');
@@ -300,6 +300,19 @@ function TryDemoSection() {
       navigate(user?.role === 'client' ? '/goals' : '/', { replace: true });
     } catch (err) {
       setError(err.message || 'Could not open that demo. Try again.');
+    } finally {
+      setBusySlug('');
+    }
+  }
+
+  async function tryPersonal() {
+    setError('');
+    setBusySlug('__personal');
+    try {
+      await demoLoginPersonal();
+      navigate('/goals');
+    } catch (err) {
+      setError(err.message || 'Could not open the personal demo. Try again.');
     } finally {
       setBusySlug('');
     }
@@ -331,6 +344,24 @@ function TryDemoSection() {
           </button>
         ))}
       </div>
+      {/* Self-serve individual demo (sql/033). Deliberately separated from the
+          firm demos above and labelled for a different person: those show an
+          advisor's book, this shows one person's own plan. */}
+      <button
+        type="button"
+        onClick={tryPersonal}
+        disabled={busySlug !== ''}
+        className="mt-2 w-full rounded-[var(--radius-ctrl)] border px-3 py-2.5 text-left transition-colors disabled:opacity-60"
+        style={{ borderColor: 'var(--color-teal)', backgroundColor: 'var(--color-teal-soft)' }}
+      >
+        <div className="text-xs font-medium text-[var(--color-teal-ink)]">
+          {busySlug === '__personal' ? 'Opening…' : 'Planning for yourself? See a personal plan'}
+        </div>
+        <div className="text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
+          One person · no adviser
+        </div>
+      </button>
+
       {error && (
         <p className="mt-3 text-sm rounded-[var(--radius-ctrl)] px-3 py-2.5 text-center"
            style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>

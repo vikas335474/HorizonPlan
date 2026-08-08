@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
@@ -16,6 +17,10 @@ import { Card, EmptyState, Spinner } from '../components/ui';
 // A client's own goals view. Clients never pass a client_id — the server uses
 // their session identity (goals_list.php enforces this).
 export default function GoalsList() {
+  // Self-serve individual tier: someone with no adviser must not be told an
+  // adviser did something. Copy only — the data and layout are identical.
+  const { tenant } = useAuth();
+  const isSelfDirected = tenant?.kind === 'personal';
   const [goals, setGoals] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -45,7 +50,9 @@ export default function GoalsList() {
         <div className="mb-5">
           <h1 className="text-xl font-semibold tracking-tight text-[var(--color-ink)]">Your goals</h1>
           <p className="mt-0.5 text-sm text-[var(--color-ink-2)]">
-            Retirement and savings plans your advisor has set up with you.
+            {isSelfDirected
+              ? 'The plans you\'ve built for yourself. Open one to change any number and see what happens.'
+              : 'Retirement and savings plans your advisor has set up with you.'}
           </p>
         </div>
 

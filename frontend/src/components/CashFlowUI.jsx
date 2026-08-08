@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { Card, Badge, Button, Spinner } from './ui';
 import { formatCurrency } from '../lib/format';
 
@@ -342,6 +343,10 @@ function CashFlowItemForm({ clientId, existing, onSaved, onCancel }) {
 // sees their income/expense/surplus statement, but not the planning framing.
 // No clientId is passed; the server forces it to the session's own id.
 export function ClientCashFlowCard() {
+  const { tenant } = useAuth();
+  // Self-serve individual tier: a user with no adviser must not be told an
+  // adviser recorded or will capture anything. Copy only.
+  const isSelfDirected = tenant?.kind === 'personal';
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -364,7 +369,7 @@ export function ClientCashFlowCard() {
     <Card className="p-4 mb-4">
       <h2 className="text-base font-semibold text-[var(--color-ink)] mb-1">Your cash flow</h2>
       <p className="text-xs text-[var(--color-ink-2)] mb-3">
-        Your monthly income and expenses, as recorded by your adviser — the surplus is what's available
+        Your monthly income and expenses{isSelfDirected ? '' : ', as recorded by your adviser'} — the surplus is what's available
         each month to put towards your goals.
       </p>
 

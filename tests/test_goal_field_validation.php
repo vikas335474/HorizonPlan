@@ -35,8 +35,20 @@ function skip(string $why): void
 
 // --- pure boundary-value matrix ---------------------------------------------
 
-// initial_net_worth: > 0, <= 10,000,000,000
-assertTrue(validateGoalField('initial_net_worth', 0) !== null, 'initial_net_worth = 0 is rejected');
+// initial_net_worth: >= 0, <= 10,000,000,000
+//
+// 0 was rejected until the self-serve individual tier (sql/033) made the
+// "nothing saved for this yet" case ordinary: a brand-new education or home
+// goal usually starts at zero, and so does a young person's first retirement
+// plan funded entirely by a monthly SIP. Rejecting it forced callers to invent
+// a figure or skip the goal. Negatives are still rejected — a goal cannot
+// start with less than nothing.
+//
+// The safety consequence is handled in PlanMath::readinessScoreForGoal(),
+// which returns null rather than a score for a zero corpus: withdrawing a
+// percentage of nothing survives every year and would otherwise score ~89/100,
+// telling someone who has not started saving that they are in great shape.
+assertTrue(validateGoalField('initial_net_worth', 0) === null, 'initial_net_worth = 0 is ACCEPTED — a goal you have not started saving for is a real state');
 assertTrue(validateGoalField('initial_net_worth', -1) !== null, 'initial_net_worth < 0 is rejected');
 assertTrue(validateGoalField('initial_net_worth', 0.01) === null, 'initial_net_worth just above 0 passes');
 assertTrue(validateGoalField('initial_net_worth', 10_000_000_000) === null, 'initial_net_worth at the ceiling passes');

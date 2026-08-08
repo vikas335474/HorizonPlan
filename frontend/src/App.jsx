@@ -11,6 +11,8 @@ import { DemoTourProvider } from './context/DemoTourContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import PersonalSignup from './pages/PersonalSignup';
+import PersonalOnboarding from './pages/PersonalOnboarding';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
@@ -46,6 +48,11 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          {/* Self-serve individual tier (sql/033). /start-free is the consumer
+              signup (creates a "tenant of one"); /start is the guided setup it
+              lands on, which is itself protected and personal-tenant-only. */}
+          <Route path="/start-free" element={<PersonalSignup />} />
+          <Route path="/start" element={<ProtectedRoute><PersonalOnboarding /></ProtectedRoute>} />
           {/* Unauthenticated recovery flow — must stay outside ProtectedRoute,
               the whole point is reaching it while locked out of a session. */}
           <Route path="/forgot-password" element={<ForgotPassword />} />

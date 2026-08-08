@@ -60,7 +60,16 @@ function normalizeTenant(raw) {
   if (!raw) return null;
   return {
     companyName: raw.company_name ?? null,
-    advisoryMode: raw.advisory_mode === 'advisory' ? 'advisory' : 'distribution',
+    // Three modes now (sql/033). The old two-way check collapsed anything
+    // that wasn't 'advisory' into 'distribution', which would have shown a
+    // self-serve individual a disclosure claiming an adviser prepared their
+    // plan — a false statement, not just wrong styling. Unknown values still
+    // fall back to the conservative 'distribution'.
+    advisoryMode: ['advisory', 'self_directed'].includes(raw.advisory_mode)
+      ? raw.advisory_mode
+      : 'distribution',
+    // 'firm' (advisor-managed) | 'personal' (a tenant of one).
+    kind: raw.kind === 'personal' ? 'personal' : 'firm',
     whiteLabel: raw.white_label ?? null,
     // Jr -> Sr Advisor Plan-Approval Workflow — opt-in per tenant, default off.
     requiresPlanReview: !!raw.requires_plan_review,
@@ -195,6 +204,19 @@ export function AuthProvider({ children }) {
     return normalized;
   }, [refreshSession]);
 
+  // signupPersonal() creates a self-serve INDIVIDUAL account (sql/033) — a
+  // "tenant of one" with role='client' and advisory_mode='self_directed'.
+  // Same contract as signup(): the server has already issued the session by
+  // the time this resolves, so refreshSession() only pulls in the tenant block
+  // (kind, disclosure mode) that login/signup responses don't carry.
+  const signupPersonal = useCallback(async (fullName, email, password) => {
+    const res = await api.signupPersonal(fullName, email, password);
+    const normalized = normalizeUser(res.user);
+    setUser(normalized);
+    await refreshSession();
+    return normalized;
+  }, [refreshSession]);
+
   // demoLogin() is called from Login.jsx's "try a live demo" picker. Same
   // contract as loginWithGoogle(): the server has already fully authenticated
   // (the target demo account has a real TOTP secret — see DemoAccess.php) by
@@ -204,6 +226,16 @@ export function AuthProvider({ children }) {
     const normalized = normalizeUser(res.user);
     setUser(normalized);
     await refreshSession(); // must resolve before navigation — see login()'s comment
+    return normalized;
+  }, [refreshSession]);
+
+  // The individual demo — same contract as demoLogin(), different seeded
+  // account (a "tenant of one" rather than a firm).
+  const demoLoginPersonal = useCallback(async () => {
+    const res = await api.demoLoginPersonal();
+    const normalized = normalizeUser(res.user);
+    setUser(normalized);
+    await refreshSession();
     return normalized;
   }, [refreshSession]);
 
@@ -217,7 +249,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, loginWithGoogle, signup, demoLogin, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, tenant, platform, loading, login, mfaVerify, loginWithGoogle, signup, signupPersonal, demoLogin, demoLoginPersonal, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -28,6 +28,10 @@ declare(strict_types=1);
 
 const DEMO_ACCOUNT_EMAIL_SUFFIX = '.demo.horizonplan.in';
 
+// The one seeded self-serve individual (sql/033). Fixed address, under the same
+// demo suffix, so resolveDemoPersonalUser() can never wander onto a real one.
+const DEMO_PERSONAL_EMAIL = 'you.personal' . DEMO_ACCOUNT_EMAIL_SUFFIX;
+
 /**
  * Pure check, no DB — whether an email is under the fixed demo-account
  * domain. Extracted so it's directly unit-testable on its own (no need to
@@ -130,4 +134,47 @@ function listAvailableDemoFirms(PDO $db): array
         }
     }
     return $available;
+}
+
+/**
+ * Self-serve individual tier — the demo INDIVIDUAL (sql/033).
+ *
+ * The firm demos above resolve a firm_admin advisor; this resolves the single
+ * seeded person who planned for themselves, so a visitor can try the consumer
+ * experience without signing up or typing anything.
+ *
+ * Same safety boundary as every other resolver here, and two extra conditions
+ * that make it impossible to reach a real account: the user must be a
+ * role='client' inside a tenant whose kind is 'personal'. A real individual's
+ * tenant is also kind='personal', so the *.demo.horizonplan.in email suffix
+ * remains the thing that actually separates demo from real — it is checked
+ * here exactly as it is for the firm demos.
+ *
+ * @return array{id:int, tenant_id:int, role:string, email:string, company_name:string}|null
+ */
+function resolveDemoPersonalUser(PDO $db): ?array
+{
+    $stmt = $db->prepare(
+        "SELECT u.id, u.tenant_id, u.role, u.email, t.company_name
+           FROM users u
+           JOIN tenants t ON t.id = u.tenant_id
+          WHERE u.email = :email
+            AND u.role = 'client'
+            AND t.kind = 'personal'
+          LIMIT 1"
+    );
+    $stmt->execute([':email' => DEMO_PERSONAL_EMAIL]);
+    $row = $stmt->fetch();
+
+    if (!$row || !isDemoAccountEmail((string) $row['email'])) {
+        return null;
+    }
+
+    return [
+        'id'           => (int) $row['id'],
+        'tenant_id'    => (int) $row['tenant_id'],
+        'role'         => $row['role'],
+        'email'        => $row['email'],
+        'company_name' => $row['company_name'],
+    ];
 }

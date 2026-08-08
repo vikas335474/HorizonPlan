@@ -63,6 +63,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/PlanMath.php';
 require_once __DIR__ . '/Totp.php';
+// For DEMO_PERSONAL_EMAIL — the seeded self-serve individual's fixed address.
+// DemoAccess only pulls this file back in lazily inside a function body, so
+// requiring it here at top level is safe (require_once handles the cycle).
+require_once __DIR__ . '/DemoAccess.php';
 
 const DEMO_PASSWORD = 'DemoPass@2026';
 const PLATFORM_ADMIN_EMAIL = 'platform.admin@demo.horizonplan.in';
@@ -676,6 +680,59 @@ function seedDemoDataFull(PDO $db): array
         }
 
         $createdFirms[] = $firmDef['name'];
+    }
+
+    // --- the self-serve individual demo (sql/033) -------------------------
+    // One seeded "tenant of one" so a visitor can try the consumer experience
+    // — sign-up-free — exactly as a real individual would see it. Skipped if
+    // it already exists, same idempotency posture as the firms above.
+    $personalExists = $db->prepare("SELECT id FROM users WHERE email = :e LIMIT 1");
+    $personalExists->execute([':e' => DEMO_PERSONAL_EMAIL]);
+    if (!$personalExists->fetch()) {
+        $db->prepare(
+            "INSERT INTO tenants (company_name, kind, advisory_mode, signup_source)
+             VALUES ('Meera (personal plan)', 'personal', 'self_directed', 'personal_signup')"
+        )->execute();
+        $personalTenantId = (int) $db->lastInsertId();
+
+        // MFA-satisfied so the demo never dead-ends on an enrollment prompt,
+        // same as the demo firm admins.
+        $personalUserId = makeUser(
+            $db, $personalTenantId, DEMO_PERSONAL_EMAIL, 'client', null, Totp::generateSecret()
+        );
+
+        // A plan mid-journey rather than a blank one: 12 years in, saving
+        // monthly, so readiness, the countdown and the progress chart all have
+        // something real to show the moment the visitor lands.
+        makeGoal($db, $personalTenantId, $personalUserId, [
+            'goal_type'                => 'retirement',
+            'goal_label'               => 'Retiring at 60',
+            'initial_net_worth'        => 4200000,
+            'inflation_rate'           => 6,
+            'withdrawal_rate'          => 3.5,
+            'drawdown_return_rate'     => 9,
+            'accumulation_return_rate' => 9,
+            'current_age'              => 41,
+            'retirement_age'           => 60,
+            'monthly_sip_amount'       => 30000,
+            'sip_step_up_rate'         => 5,
+            'projection_horizon_years' => 30,
+        ]);
+        makeGoal($db, $personalTenantId, $personalUserId, [
+            'goal_type'                => 'education',
+            'goal_label'               => "Daughter's college",
+            'initial_net_worth'        => 350000,
+            'inflation_rate'           => 7,
+            'target_amount'            => 2500000,
+            'target_date'              => date('Y-m-d', strtotime('+9 years')),
+            'projection_horizon_years' => 9,
+        ]);
+
+        makePortfolioItem($db, $personalTenantId, $personalUserId, $personalUserId, 'asset', 'liquid', 'mutual_fund', 'Equity mutual funds', 2600000);
+        makePortfolioItem($db, $personalTenantId, $personalUserId, $personalUserId, 'asset', 'locked', 'epf', 'EPF balance', 1600000);
+        makeCashFlowItem($db, $personalTenantId, $personalUserId, $personalUserId, 'income', 'Salary', 145000, 'monthly', 'salary');
+        makeCashFlowItem($db, $personalTenantId, $personalUserId, $personalUserId, 'expense', 'Household expenses', 62000, 'monthly', 'food_groceries');
+        makeCashFlowItem($db, $personalTenantId, $personalUserId, $personalUserId, 'expense', 'Home loan EMI', 38000, 'monthly', 'emi');
     }
 
         $db->commit();

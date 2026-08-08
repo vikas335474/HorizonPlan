@@ -60,3 +60,62 @@ function createTrialTenant(PDO $db, string $companyName, string $email, string $
 
     return ['tenant_id' => $tenantId, 'user_id' => (int) $userId];
 }
+
+/**
+ * Self-serve INDIVIDUAL signup — the "tenant of one" (sql/033).
+ *
+ * Same shape as createTrialTenant() above, three deliberate differences:
+ *
+ *   * kind = 'personal', which is what unlocks self-service writes for this
+ *     user and nobody else (see api/lib/SelfService.php).
+ *   * role = 'client', not 'advisor'. An individual is the subject of the
+ *     plan, not a practitioner, so they get exactly the client surface that
+ *     already exists — goals, projections, what-ifs, portfolio, cash flow,
+ *     progress — with authoring added on top.
+ *   * advisory_mode = 'self_directed'. There is no adviser behind this plan,
+ *     and the disclosure must say something true (CLAUDE.md rule #3).
+ *
+ * advisory_mode and kind are hardcoded, never taken from input, for the same
+ * reason createTrialTenant() hardcodes 'distribution': this function must not
+ * be usable to mint an advisory-mode tenant, or to flip an individual's
+ * account into a firm, no matter what a caller passes.
+ *
+ * `company_name` carries the person's own display name — the column is the
+ * tenant's label everywhere in the UI (AppHeader brand, report letterhead),
+ * and for an individual that label is simply them.
+ *
+ * @return array{tenant_id:int, user_id:int}
+ */
+function createPersonalTenant(PDO $db, string $displayName, string $email, string $passwordHash): array
+{
+    $db->beginTransaction();
+    try {
+        $db->prepare(
+            "INSERT INTO tenants (company_name, kind, advisory_mode, signup_source)
+             VALUES (:name, 'personal', 'self_directed', 'personal_signup')"
+        )->execute([':name' => $displayName]);
+        $tenantId = (int) $db->lastInsertId();
+
+        $scopedDb = new TenantScopedDb($db, $tenantId);
+        $userId = $scopedDb->insert('users', [
+            'email'         => $email,
+            'password_hash' => $passwordHash,
+            'role'          => 'client',
+        ]);
+        $scopedDb->logChange(
+            'user',
+            $userId,
+            'created',
+            null,
+            json_encode(['email' => $email, 'role' => 'client', 'signup_source' => 'personal_signup']),
+            $userId
+        );
+
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
+
+    return ['tenant_id' => $tenantId, 'user_id' => (int) $userId];
+}
