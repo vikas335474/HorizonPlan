@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/SelfService.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -18,7 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db = getPdo();
-$session = verifyAccess($db, 'advisor');
+// Self-serve individual tier (sql/033): advisor-only in a firm, and
+// additionally self-service for an individual writing their OWN data in a
+// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
+// client exactly as before — see api/lib/SelfService.php.
+$session = verifySelfServiceWrite($db);
 $scopedDb = new TenantScopedDb($db, (int) $session['tenant_id']);
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];

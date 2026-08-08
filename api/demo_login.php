@@ -30,7 +30,38 @@ $db = getPdo();
 
 $input     = json_decode(file_get_contents('php://input'), true) ?? [];
 $slug      = trim((string) ($input['firm'] ?? ''));
+// Self-serve individual tier (sql/033): `{"personal": true}` instead of a firm
+// slug logs the visitor into the one seeded individual's plan, so the consumer
+// experience can be tried without signing up. Same safety boundary as the firm
+// demos — resolveDemoPersonalUser() only ever resolves the fixed
+// *.demo.horizonplan.in address.
+$wantsPersonal = !empty($input['personal']);
 $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+if ($wantsPersonal) {
+    $demoUser = resolveDemoPersonalUser($db);
+    if ($demoUser === null) {
+        http_response_code(404);
+        echo json_encode(['status' => 'error', 'message' => 'The individual demo is not available right now.']);
+        exit();
+    }
+    issueSession($db, $demoUser['id'], $demoUser['tenant_id'], $demoUser['role']);
+    echo json_encode([
+        'status' => 'success',
+        'user'   => [
+            'id'                => $demoUser['id'],
+            'tenant_id'         => $demoUser['tenant_id'],
+            'role'              => $demoUser['role'],
+            // Same "true by construction" reasoning as the firm branch below:
+            // the seeded demo individual is created MFA-satisfied so the demo
+            // never dead-ends on an enrollment prompt.
+            'mfa_enrolled'      => true,
+            'mfa_totp_enrolled' => true,
+            'google_linked'     => false,
+        ],
+    ]);
+    exit();
+}
 
 if ($slug === '') {
     http_response_code(400);

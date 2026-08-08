@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 // Client portfolio ledger (docs/05 item 3 / docs/10 P0): add ONE asset or
 // liability row to a client's balance sheet. POST, advisor-only (verifyAccess
-// 'advisor'; super_admin also passes) — the advisor records the client's
+// 'advisor'; super_admin also passes, and an individual may record their own
+// holdings in a personal tenant) — the advisor records the client's
 // holdings. Tenant-scoped via TenantScopedDb; the target client must be a
 // 'client' in the acting advisor's tenant (404 otherwise).
 //
@@ -19,6 +20,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
+require_once __DIR__ . '/lib/SelfService.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -29,13 +31,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db = getPdo();
-$session = verifyAccess($db, 'advisor'); // advisor records the client's portfolio, same pattern as goals_create.php
+// Self-serve individual tier (sql/033): advisor-only in a firm, and
+// additionally self-service for an individual writing their OWN data in a
+// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
+// client exactly as before — see api/lib/SelfService.php.
+$session = verifySelfServiceWrite($db);
 $tenantId = (int) $session['tenant_id'];
 $userId = (int) $session['user_id'];
 $scopedDb = new TenantScopedDb($db, $tenantId);
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $clientId = (int) ($input['client_id'] ?? 0);
+// A personal user always writes their own data; any client_id in the body
+// is ignored rather than trusted, same posture as the client-facing reads.
+$clientId = resolveSelfServiceClientId($session, $clientId);
 $itemKind = (string) ($input['item_kind'] ?? '');
 $bucket = $input['bucket'] ?? null;
 $category = trim((string) ($input['category'] ?? ''));
