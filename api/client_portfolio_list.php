@@ -61,6 +61,12 @@ $items = array_map(static function (array $r): array {
         'category'         => $r['category'],
         'description'      => $r['description'],
         'value'            => (float) $r['value'],
+        // docs/12 Prompt D-1: which rows a CAS reconcile is even allowed to
+        // touch (source) and its stable match key across re-imports
+        // (folio_number) — surfaced read-only here so the UI can badge a
+        // holding as "from your CAS import" vs. hand-entered.
+        'source'           => $r['source'],
+        'folio_number'     => $r['folio_number'],
         // Liabilities only (docs/10 P1-4); NULL on assets and on any loan
         // whose rate has not been recorded.
         'interest_rate'    => $r['interest_rate'] !== null ? (float) $r['interest_rate'] : null,
