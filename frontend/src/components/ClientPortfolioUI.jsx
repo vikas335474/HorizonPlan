@@ -166,6 +166,10 @@ export function ClientPortfolioCard({ clientId, readOnly = false }) {
   const items = data?.items ?? [];
   const totals = data?.totals;
   const navTrackedCount = items.filter((it) => it.amfi_scheme_code).length;
+  // docs/12 Prompt D-2 — which item's tax-context panel is expanded, at
+  // most one at a time (per-row toggle, same collapsed-by-default posture
+  // as the CAS export guide).
+  const [expandedTaxId, setExpandedTaxId] = useState(null);
 
   return (
     <Card className="p-4 mb-4">
@@ -237,41 +241,59 @@ export function ClientPortfolioCard({ clientId, readOnly = false }) {
                 onCancel={() => setEditingId(null)}
               />
             ) : (
-              <div key={item.id} className="flex items-center justify-between gap-3 rounded-[var(--radius-ctrl)] border border-[var(--color-line)] px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-[var(--color-ink)]">{categoryLabel(item.item_kind, item.category)}</span>
-                    {item.item_kind === 'asset' ? (
-                      <Badge fg={item.bucket === 'liquid' ? 'var(--color-teal-ink)' : 'var(--color-amber)'} bg={item.bucket === 'liquid' ? 'var(--color-teal-soft)' : 'var(--color-amber-soft)'}>
-                        {item.bucket}
-                      </Badge>
-                    ) : (
-                      <Badge fg="var(--color-alert)" bg="var(--color-alert-soft)">liability</Badge>
-                    )}
-                    {/* docs/12 D-1: which rows a CAS re-import is even allowed to
-                        touch — surfaced so it's never a mystery why one holding
-                        moved on its own after an import and another didn't. */}
-                    {item.source === 'cas_import' && (
-                      <span className="text-[10px] text-[var(--color-ink-3)]" title="Last set by a CAS/MFCentral import — a re-import can update this">
-                        from CAS import
-                      </span>
+              <div key={item.id} className="rounded-[var(--radius-ctrl)] border border-[var(--color-line)] px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-[var(--color-ink)]">{categoryLabel(item.item_kind, item.category)}</span>
+                      {item.item_kind === 'asset' ? (
+                        <Badge fg={item.bucket === 'liquid' ? 'var(--color-teal-ink)' : 'var(--color-amber)'} bg={item.bucket === 'liquid' ? 'var(--color-teal-soft)' : 'var(--color-amber-soft)'}>
+                          {item.bucket}
+                        </Badge>
+                      ) : (
+                        <Badge fg="var(--color-alert)" bg="var(--color-alert-soft)">liability</Badge>
+                      )}
+                      {/* docs/12 D-1: which rows a CAS re-import is even allowed to
+                          touch — surfaced so it's never a mystery why one holding
+                          moved on its own after an import and another didn't. */}
+                      {item.source === 'cas_import' && (
+                        <span className="text-[10px] text-[var(--color-ink-3)]" title="Last set by a CAS/MFCentral import — a re-import can update this">
+                          from CAS import
+                        </span>
+                      )}
+                    </div>
+                    {item.description && <div className="text-[11px] text-[var(--color-ink-3)]">{item.description}</div>}
+                    {item.amfi_scheme_code && (
+                      <div className="text-[11px] text-[var(--color-ink-3)]">
+                        {item.units_held} units · scheme {item.amfi_scheme_code}
+                        {item.nav_value != null
+                          ? ` · NAV ₹${item.nav_value} (${formatTimestamp(item.nav_fetched_at)})`
+                          : ' · price pending'}
+                      </div>
                     )}
                   </div>
-                  {item.description && <div className="text-[11px] text-[var(--color-ink-3)]">{item.description}</div>}
-                  {item.amfi_scheme_code && (
-                    <div className="text-[11px] text-[var(--color-ink-3)]">
-                      {item.units_held} units · scheme {item.amfi_scheme_code}
-                      {item.nav_value != null
-                        ? ` · NAV ₹${item.nav_value} (${formatTimestamp(item.nav_fetched_at)})`
-                        : ' · price pending'}
+                  <span className="tnum text-sm text-[var(--color-ink)]">{formatCurrency(item.value)}</span>
+                  {!readOnly && (
+                    <div className="flex gap-1 shrink-0">
+                      <button type="button" onClick={() => setEditingId(item.id)} className="text-xs text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:underline">Edit</button>
+                      <button type="button" onClick={() => handleDelete(item.id)} className="text-xs text-[var(--color-ink-3)] hover:text-[var(--color-alert)] hover:underline">Remove</button>
                     </div>
                   )}
                 </div>
-                <span className="tnum text-sm text-[var(--color-ink)]">{formatCurrency(item.value)}</span>
-                {!readOnly && (
-                  <div className="flex gap-1 shrink-0">
-                    <button type="button" onClick={() => setEditingId(item.id)} className="text-xs text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:underline">Edit</button>
-                    <button type="button" onClick={() => handleDelete(item.id)} className="text-xs text-[var(--color-ink-3)] hover:text-[var(--color-alert)] hover:underline">Remove</button>
+
+                {/* docs/12 Prompt D-2 — facts only, collapsed by default so it
+                    doesn't crowd the roster. Only offered when this category
+                    is actually covered by the tax-reference cache. */}
+                {item.tax_context?.applicable && (
+                  <div className="mt-1.5 pt-1.5 border-t border-[var(--color-line)]">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedTaxId((cur) => (cur === item.id ? null : item.id))}
+                      className="text-[11px] text-[var(--color-teal-ink)] hover:underline"
+                    >
+                      {expandedTaxId === item.id ? 'Hide tax context' : 'Tax context'}
+                    </button>
+                    {expandedTaxId === item.id && <PortfolioTaxContextPanel context={item.tax_context} />}
                   </div>
                 )}
               </div>
@@ -733,6 +755,64 @@ function PasteCsvBox({ onLoad }) {
   );
 }
 
+// docs/12 Prompt D-2 — renders exactly what api/lib/PortfolioTaxContext.php
+// computed: the sourced treatment note(s) for this holding, its
+// short/long-term status today, and an illustrative unrealised gain when a
+// purchase price was recorded. FACTS ONLY: never a "sell now"/"harvest now"
+// line, never a filing figure, never a claim about how much LTCG exemption
+// is left this year (this app has no transaction ledger to know that — see
+// PortfolioTaxContext.php's header for why that's a deliberate boundary).
+function PortfolioTaxContextPanel({ context }) {
+  const { needs_fund_type: needsFundType, treatments, months_held: monthsHeld, holding_period_classification: classification, gain } = context;
+
+  return (
+    <div className="mt-2 rounded-[var(--radius-ctrl)] bg-[var(--color-surface-2)] p-2.5 text-[11px]">
+      <p className="text-[10px] text-[var(--color-ink-3)] mb-2">
+        Illustrative, not tax advice — always verify against current rules before filing or acting.
+      </p>
+
+      {needsFundType && (
+        <p className="mb-2" style={{ color: 'var(--color-amber)' }}>
+          Fund type not specified — showing all three possible regimes below. Edit this holding and
+          choose equity/debt/hybrid for a precise answer.
+        </p>
+      )}
+
+      {classification && (
+        <p className="mb-2 text-[var(--color-ink)]">
+          Held <strong>{monthsHeld}</strong> month{monthsHeld === 1 ? '' : 's'} so far — would count as{' '}
+          <strong>{classification === 'long_term' ? 'long-term' : 'short-term'}</strong> if sold/withdrawn today.
+        </p>
+      )}
+
+      <div className="space-y-2 mb-2">
+        {treatments.map((t) => (
+          <div key={t.subcategory} className="border-l-2 pl-2" style={{ borderColor: 'var(--color-line-2)' }}>
+            {treatments.length > 1 && <p className="font-semibold text-[var(--color-ink)]">{t.label}</p>}
+            {t.short_term_note && <p className="text-[var(--color-ink-2)]">{t.short_term_note}</p>}
+            {t.long_term_note && <p className="text-[var(--color-ink-2)]">{t.long_term_note}</p>}
+            {t.exemption_note && <p className="text-[var(--color-ink-2)]">{t.exemption_note}</p>}
+            {t.other_note && <p className="text-[var(--color-ink-2)]">{t.other_note}</p>}
+            <p className="text-[10px] text-[var(--color-ink-3)] mt-1">
+              {t.source_name} · as of {t.as_of_date}{!t.is_verified && ' · unverified — check against current rules'}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {gain !== null ? (
+        <p className="text-[var(--color-ink)]">
+          Illustrative unrealised {gain.amount >= 0 ? 'gain' : 'loss'}: <strong>{formatCurrency(Math.abs(gain.amount))}</strong>
+          {gain.pct !== null && ` (${gain.amount >= 0 ? '+' : '−'}${Math.abs(gain.pct)}%)`} — based on your recorded purchase
+          price, not a realised or filing figure.
+        </p>
+      ) : (
+        <p className="text-[var(--color-ink-3)]">Add a purchase price to this holding to see an illustrative gain.</p>
+      )}
+    </div>
+  );
+}
+
 function Total({ label, value, highlight, negative }) {
   return (
     <div>
@@ -755,6 +835,13 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
   const [value, setValue] = useState(existing?.value != null ? String(existing.value) : '');
   const [schemeCode, setSchemeCode] = useState(existing?.amfi_scheme_code || '');
   const [unitsHeld, setUnitsHeld] = useState(existing?.units_held != null ? String(existing.units_held) : '');
+  // docs/12 Prompt D-2 (tax context, facts only). fundType only matters for
+  // category=mutual_fund (equity vs. debt is a completely different tax
+  // regime); acquisitionValue/Date are independent of each other and of
+  // everything else — a person may know one without the other.
+  const [fundType, setFundType] = useState(existing?.fund_type || '');
+  const [acquisitionValue, setAcquisitionValue] = useState(existing?.acquisition_value != null ? String(existing.acquisition_value) : '');
+  const [acquisitionDate, setAcquisitionDate] = useState(existing?.acquisition_date || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -801,6 +888,18 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
       }
     }
 
+    if (acquisitionValue.trim() !== '') {
+      const acqNum = Number(acquisitionValue);
+      if (!Number.isFinite(acqNum) || acqNum < 0) {
+        setError('Purchase price must be a valid amount (0 or more), or left blank.');
+        return;
+      }
+    }
+    if (acquisitionDate && acquisitionDate > new Date().toISOString().slice(0, 10)) {
+      setError('Purchase date cannot be in the future.');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -813,6 +912,12 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
         value: navTracked ? undefined : numericValue,
         amfi_scheme_code: navTracked ? schemeCode.trim() : null,
         units_held: navTracked ? unitsNumeric : null,
+        // docs/12 Prompt D-2 — each sent only when this row can carry it;
+        // the backend independently re-validates and nulls out anything
+        // that doesn't apply (a liability, or fund_type on a non-mutual-fund).
+        fund_type: itemKind === 'asset' && category === 'mutual_fund' ? (fundType || null) : undefined,
+        acquisition_value: itemKind === 'asset' ? (acquisitionValue.trim() !== '' ? Number(acquisitionValue) : null) : undefined,
+        acquisition_date: itemKind === 'asset' ? (acquisitionDate || null) : undefined,
       };
       if (existing) {
         await api.updatePortfolioItem(existing.id, payload);
@@ -885,6 +990,18 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
           </>
         )}
 
+        {/* docs/12 Prompt D-2 — equity vs. debt is a completely different tax
+            regime; never guessed at, so this is its own explicit choice,
+            with a real "not specified" state. */}
+        {itemKind === 'asset' && category === 'mutual_fund' && (
+          <select value={fundType} onChange={(e) => setFundType(e.target.value)} className="field text-sm col-span-2">
+            <option value="">Fund type not specified (shows all tax regimes)</option>
+            <option value="equity">Equity fund</option>
+            <option value="debt">Debt fund</option>
+            <option value="hybrid">Hybrid fund</option>
+          </select>
+        )}
+
         {navTracked ? (
           <div className="col-span-2 text-[11px] text-[var(--color-ink-3)] px-1 py-1.5">
             Value is computed from units × the synced NAV — no manual entry needed. It'll show
@@ -904,7 +1021,33 @@ function PortfolioItemForm({ clientId, existing, onSaved, onCancel }) {
           placeholder="Description (optional)"
           className="field text-sm col-span-2"
         />
+
+        {/* docs/12 Prompt D-2 — optional, independent of each other. Neither
+            is required to save the item; both stay unset until supplied. */}
+        {itemKind === 'asset' && (
+          <>
+            <input
+              type="number" min="0" step="any" value={acquisitionValue}
+              onChange={(e) => setAcquisitionValue(e.target.value)}
+              placeholder="Purchase price (₹, optional)"
+              className="field text-sm"
+            />
+            <input
+              type="date" value={acquisitionDate}
+              onChange={(e) => setAcquisitionDate(e.target.value)}
+              aria-label="Purchase date (optional)"
+              className="field text-sm"
+              max={new Date().toISOString().slice(0, 10)}
+            />
+          </>
+        )}
       </div>
+      {itemKind === 'asset' && (
+        <p className="text-[10px] text-[var(--color-ink-3)] mb-2 -mt-1">
+          Purchase price and date are optional — add either or both to see an illustrative gain and
+          holding-period fact next to this holding. Never required, never assumed.
+        </p>
+      )}
 
       {error && <p className="text-xs mb-2" style={{ color: 'var(--color-alert)' }}>{error}</p>}
 
