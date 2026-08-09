@@ -6,7 +6,7 @@ declare(strict_types=1);
 // not tenant-scoped (see sql/037_reference_costs.sql), same posture as
 // market_history_years.php. Two modes:
 //   ?category=education                          -> list every row in that category
-//   ?category=education&subcategory=engineering_private -> exactly one row (or found:false)
+//   ?category=education&subcategory=private             -> exactly one row (or found:false)
 // Output: {status, rows:[...]} or {status, row:{...}|null, found:bool}.
 // Errors: 405 (non-GET), 400 (missing category).
 

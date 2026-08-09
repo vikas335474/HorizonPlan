@@ -216,21 +216,36 @@ convention, all following FinancialFoundations' existing precedent):
 > trip + a real Playwright run (pre-merge) confirming the now-removed card
 > rendered and wrote correctly.
 >
-> **Left open, deliberately not done silently:** `PersonalisationReference.php`'s
-> own header comment already anticipated this — "when E-3 ships, its cron
-> populates `reference_costs` and this file's constants become the seed
-> data/fallback, not a second source of truth." That supersession is **not**
-> done — `reference_costs`'s education rows are split by course
-> (`engineering_government`/`engineering_private`/`medical_government`/`medical_private`),
-> while `PersonalisationReference`'s driver buckets are generic
-> (`government`/`private`/`overseas`, per E-2's own scope, docs/11 §4). The
-> two granularities don't map 1:1, so merging them needs its own
-> decide-then-build pass (most likely: broaden `reference_costs`' education
-> subcategories to match the generic driver buckets E-2 already committed
-> to, then have `PersonalisationReference::educationRangeForDriver()` /
-> `cityTierMultiplier()` read the cache when populated and fall back to the
-> hand-authored constants when it isn't) — not something to force through in
-> a merge-conflict fixup.
+> **Reconciled with `PersonalisationReference.php` in a follow-up session**
+> (confirmed with the user first via `AskUserQuestion`, per the decide-then-
+> build convention — this was a real product decision, not a mechanical
+> merge fixup): `reference_costs`' education subcategories were widened from
+> the course-specific split (`engineering_government`/`engineering_private`/
+> `medical_government`/`medical_private`) to the same generic driver enum
+> `client_dependants.cost_driver` actually uses
+> (`government`/`private`/`overseas`) — seeded with
+> `PersonalisationReference`'s own already-live figures, so the reconciliation
+> changed no behavior for anyone using the queue. `educationRangeForDriver()`
+> now reads `reference_costs` first when a `$db` is passed (e.g.
+> `dependants_list.php`) and falls back to the hand-authored constants when
+> the cache has no row yet — `reference_costs` is now the real source of
+> truth for education ranges, not a second, drifting copy. The sync
+> (`syncReferenceCosts()`) also gained a **prune** step: a `(category,
+> subcategory)` the current dataset no longer defines is deleted, not left
+> as an orphan (verified end to end against a real MariaDB — the sync's
+> first post-reconciliation run correctly removed all 7 pre-reconciliation
+> rows and reseeded the 4 reconciled ones).
+>
+> **City tier was deliberately NOT reconciled the same way** — the user chose
+> to drop the duplicate rather than force a merge. `PersonalisationReference`'s
+> multiplier is an exact derivation from a published 7th-CPC HRA percentage
+> (X=1.00 baseline by construction), not an uncertain estimate; a "sourced
+> range" cache table is the wrong shape for a precise formula. The earlier
+> `city_expense_multiplier` rows also used a different, incompatible baseline
+> (relative to a national average, not tier X) that was never wired to
+> anything — so `reference_costs` now holds no city-tier rows at all, and
+> `cityTierMultiplier()` stays a pure code-constant derivation. See
+> `api/lib/ReferenceCosts.php`'s header for the full writeup.
 >
 > Build `reference_costs`: a table of cited cost ranges (education by stage and
 > driver, healthcare, city expense multipliers), each row carrying `category`,
@@ -289,16 +304,20 @@ more personal; it should not be crossed without a deliberate decision on record.
   this up for you?" affordances render nothing until the cache is populated).
 - The guided tour still renders advisor vocabulary to self-directed users
   ("the number a **client** can hold onto", "adjust per **client**").
-- **E-2 and E-3 both built, but not fully reconciled with each other** — see
-  E-3's status note above for the full account. `reference_costs`'
-  education rows and `PersonalisationReference.php`'s driver buckets use two
-  different granularities (course-specific vs. generic government/private/
-  overseas) that don't map 1:1, so `PersonalisationReference` still serves
-  every figure `DependantsCard` shows from its own hand-authored constants,
-  not from the `reference_costs` cache. Healthcare and city-tier rows in
-  `reference_costs` are cached and readable via `reference_costs_get.php`
-  but have no UI consumer at all — `PersonalisationCard`'s city-tier/medical
-  questions use `PersonalisationReference`'s constants directly, not the
-  cache. Reconciling the two into one real source of truth is the next
-  decide-then-build item for this area, not something to force through
-  without confirming the driver-bucket question with the user first.
+- **E-2 and E-3 reconciled** (education only — see E-3's status note above
+  for the full writeup and the city-tier exception). `dependants_list.php`'s
+  suggested ranges now come from `reference_costs` first, falling back to
+  `PersonalisationReference`'s constants only while the cache is empty.
+  Re-verified end to end: `tests/run_all.sh` green (including the new
+  `tests/test_personalisation_reference_db.php`), plus a live HTTP proof —
+  editing a cached row's `low`/`high`/`source_name` directly in the DB and
+  re-hitting `dependants_list.php` returned the edited values, then a fresh
+  `reference_costs_sync.php` run restored the dataset's own numbers.
+- **Still open:** `PersonalisationCard`'s medical-cost question has no
+  suggested-range affordance at all today (`MedicalCostQuestion` just asks
+  the user to type a rupee figure) — `reference_costs`' `healthcare/
+  ongoing_medical_annual` row is cached and readable via
+  `reference_costs_get.php` but has no UI consumer yet. Wiring a "typical
+  range: ₹X–Y/year" hint onto that question is a small, low-risk follow-up,
+  not attempted in the reconciliation pass above since it's net-new UI
+  rather than resolving a duplicate.

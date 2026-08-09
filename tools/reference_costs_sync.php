@@ -57,3 +57,4 @@ try {
 
 echo "Reference-cost sync: done.\n";
 echo "  Rows written: {$result['rows_written']}\n";
+echo "  Rows pruned (no longer in the dataset): {$result['rows_pruned']}\n";
