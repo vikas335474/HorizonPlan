@@ -1,19 +1,25 @@
-// The unauthenticated entry point's audience split.
+// The unauthenticated entry point's audience content, one audience at a time.
 //
-// THE PROBLEM THIS SOLVES. /login was a single-audience page: the hero read
-// "Retirement plans YOUR CLIENTS can actually feel", all five feature bullets
-// were advisor features, and the only way in for someone planning for
-// themselves was a 12px button with a 10px caption, ranked BELOW a grid of firm
-// demos. HorizonPlan serves two audiences (sql/033 added the self-serve tier),
-// and one of them arrived to find a B2B sign-in box and no evidence the product
-// was for them. That is an information-architecture problem, not a styling one,
-// so the fix is to make the audience the FIRST thing the page resolves.
+// HISTORY, so the next change doesn't re-litigate a settled trade-off. This
+// page has swung between two failure modes:
+//   1. Advisor-only. The hero read "Retirement plans YOUR CLIENTS can
+//      actually feel", every feature bullet was an advisor feature, and the
+//      only way in for someone planning for themselves was a 12px button
+//      ranked below a grid of firm demos — the individual couldn't find
+//      themselves on the page at all.
+//   2. Dual-audience, equal weight, BOTH tracks stacked on one page (the fix
+//      for #1). That solved discoverability but reads the opposite way to an
+//      advisor: the consumer track sat first, with a solid "Start free" CTA,
+//      making the page look consumer-first to someone evaluating it as a
+//      firm product.
+// This version resolves both: ONE audience's hero + feature list + CTA track
+// renders at a time (Login.jsx's AudiencePill decides which), with a single
+// low-emphasis link to switch. Neither audience ever has to read past the
+// other's content to find its own, and neither reads as the primary one —
+// because only one is ever on screen.
 //
 // Design decisions worth keeping:
 //
-//   * Two tracks of EQUAL visual weight. Ranking one above the other is what
-//     made the consumer path invisible, and a visitor knows which one they are
-//     faster than any copy can explain.
 //   * The returning-user login form stays primary on the right. This block is
 //     for people who have no account yet; burying sign-in behind an audience
 //     question would tax every returning user to help a first-time one.
@@ -147,17 +153,23 @@ function TrackButton({ onClick, to, variant = 'quiet', children, disabled, class
 }
 
 /**
- * The two-track "new here?" block.
+ * The "new here?" block — ONE track, matching Login.jsx's AudiencePill,
+ * plus a single low-emphasis link to switch. See this file's header for why
+ * showing both tracks at once (the previous version) is the thing being
+ * fixed here.
  *
- * @param firms       demo firms from api.listDemoFirms (may be empty)
- * @param busySlug    '' | firm slug | '__personal' — which demo is opening
- * @param onFirm      (slug) => void
- * @param onPersonal  () => void
- * @param error       message from a failed demo attempt
+ * @param audience        'advisor' | 'individual' — which track to show
+ * @param onSwitchAudience () => void — flips the pill to the other audience
+ * @param firms           demo firms from api.listDemoFirms (may be empty)
+ * @param busySlug        '' | firm slug | '__personal' — which demo is opening
+ * @param onFirm          (slug) => void
+ * @param onPersonal      () => void
+ * @param error           message from a failed demo attempt
  */
-export default function AudienceTracks({ firms = [], busySlug = '', onFirm, onPersonal, error }) {
+export default function AudienceTracks({ audience, onSwitchAudience, firms = [], busySlug = '', onFirm, onPersonal, error }) {
   const opening = busySlug !== '';
   const firmOpening = opening && busySlug !== '__personal';
+  const isIndividual = audience === 'individual';
 
   return (
     <div className="mt-6">
@@ -169,9 +181,7 @@ export default function AudienceTracks({ firms = [], busySlug = '', onFirm, onPe
         <div className="h-px flex-1" style={{ backgroundColor: 'var(--color-line)' }} />
       </div>
 
-      <div className="grid gap-3">
-        {/* Consumer track FIRST — the audience that previously could not find
-            itself on this page at all. */}
+      {isIndividual ? (
         <Track
           kind="individual"
           eyebrow="For yourself"
@@ -190,7 +200,7 @@ export default function AudienceTracks({ firms = [], busySlug = '', onFirm, onPe
             Planning as a couple? You can invite your partner once you&rsquo;re in.
           </p>
         </Track>
-
+      ) : (
         <Track
           kind="adviser"
           eyebrow="For advisers &amp; firms"
@@ -233,7 +243,17 @@ export default function AudienceTracks({ firms = [], busySlug = '', onFirm, onPe
             </>
           )}
         </Track>
-      </div>
+      )}
+
+      {onSwitchAudience && (
+        <button
+          type="button"
+          onClick={onSwitchAudience}
+          className="mt-3 w-full text-center text-[12px] text-[var(--color-ink-2)] hover:text-[var(--color-ink)] hover:underline"
+        >
+          {isIndividual ? 'Advising clients instead? Switch to advisers & firms →' : 'Planning for yourself instead? Switch to individuals →'}
+        </button>
+      )}
 
       {error && (
         <p

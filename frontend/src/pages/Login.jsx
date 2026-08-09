@@ -5,10 +5,30 @@
 // client role is redirected to /goals.
 
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api, ApiError } from '../lib/api';
 import AudienceTracks from '../components/AudienceTracks';
+
+// Which audience this visit of /login is for — 'advisor' | 'individual'.
+// /signup (firm trial) and /start-free (personal trial) were always separate
+// pages; /login was the one page both audiences land on, and a prior session
+// made it dual-audience (see AudienceTracks.jsx's own header) by putting the
+// consumer track first with equal weight. That fixed individuals being
+// invisible, but reads the opposite way to an advisor evaluating the
+// product: the page now looks consumer-first. This resolves it by making
+// /login show ONE audience's content at a time — hero, feature list, and
+// sign-up CTA all swap together — with a small pill to switch, rather than
+// two half-weighted tracks stacked on the same page.
+//
+// Default (no ?for= param) is 'advisor': CLAUDE.md's own framing is
+// "B2B2C ... for Indian MFDs/IFAs and SEBI-RIA firms" first, self-serve
+// individual second — so an unmarked visit (typed URL, bookmark, an
+// advisor's own return trip) reads as a firm product by default. A consumer
+// marketing link can point straight at the other state with ?for=individual.
+function audienceFromParams(searchParams) {
+  return searchParams.get('for') === 'individual' ? 'individual' : 'advisor';
+}
 
 // Login is a two-step flow when the user has MFA enrolled:
 //   Step 1: email + password → server returns 202 mfa_required
@@ -28,6 +48,15 @@ export default function Login() {
   const { login, mfaVerify, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const audience = audienceFromParams(searchParams); // 'advisor' | 'individual'
+  function setAudience(next) {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set('for', next);
+      return p;
+    }, { replace: true });
+  }
   // Where to land after login. If the user was redirected here from a specific
   // protected route, honor that. Otherwise pick a role-appropriate default:
   // advisors/admins land on "/" (Dashboard), clients on "/goals". We must NOT
@@ -109,7 +138,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-[1.05fr_1fr]">
-      <BrandPanel />
+      <BrandPanel audience={audience} />
 
       {/* Form column */}
       <div className="flex items-center justify-center px-5 py-10" style={{ backgroundColor: 'var(--color-canvas)' }}>
@@ -119,6 +148,11 @@ export default function Login() {
             <HorizonMark size={26} />
             <span className="text-[17px] font-semibold tracking-tight text-[var(--color-ink)]">HorizonPlan</span>
           </div>
+
+          {/* The audience switch. Visible on both mobile and desktop (unlike
+              the hero, which is desktop-only) since it's what decides the
+              hero's content on desktop and the CTA/demo track below on both. */}
+          {step === 'password' && <AudiencePill audience={audience} onChange={setAudience} />}
 
           <div className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-ink)]">
@@ -254,13 +288,19 @@ export default function Login() {
           {step === 'password' && (
             <p className="mt-4 text-sm text-center text-[var(--color-ink-2)]">
               New here?{' '}
-              <Link to="/signup" className="font-medium text-[var(--color-teal-ink)] hover:underline">
-                Start your free trial
-              </Link>
+              {audience === 'individual' ? (
+                <Link to="/start-free" className="font-medium text-[var(--color-teal-ink)] hover:underline">
+                  Start planning free
+                </Link>
+              ) : (
+                <Link to="/signup" className="font-medium text-[var(--color-teal-ink)] hover:underline">
+                  Start a firm trial
+                </Link>
+              )}
             </p>
           )}
 
-          {step === 'password' && <TryDemoSection />}
+          {step === 'password' && <TryDemoSection audience={audience} onSwitchAudience={setAudience} />}
 
           <p className="mt-6 text-center text-xs text-[var(--color-ink-3)]">
             Protected by two-factor authentication · Bank-grade session security
@@ -276,7 +316,7 @@ export default function Login() {
 // that case, same graceful-degradation precedent as GoogleSignInSection with
 // no configured Client ID) and logs straight into whichever one is picked via
 // demo_login.php — no credentials involved anywhere in this flow.
-function TryDemoSection() {
+function TryDemoSection({ audience, onSwitchAudience }) {
   const { demoLogin, demoLoginPersonal } = useAuth();
   const navigate = useNavigate();
   const [firms, setFirms] = useState([]);
@@ -321,12 +361,53 @@ function TryDemoSection() {
 
   return (
     <AudienceTracks
+      audience={audience}
+      onSwitchAudience={() => onSwitchAudience(audience === 'individual' ? 'advisor' : 'individual')}
       firms={firms}
       busySlug={busySlug}
       onFirm={tryFirm}
       onPersonal={tryPersonal}
       error={error}
     />
+  );
+}
+
+// The audience switch — a small segmented pill, not a modal or a separate
+// page, so changing your mind costs one click. Drives BrandPanel's hero
+// content (desktop) and AudienceTracks' single CTA track (both). Persisted
+// in the URL (?for=) so a direct link can point at either state and a
+// refresh doesn't reset the choice.
+function AudiencePill({ audience, onChange }) {
+  const optionClass = (active) =>
+    `rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${active ? 'text-white' : 'text-[var(--color-ink-2)] hover:text-[var(--color-ink)]'}`;
+  return (
+    <div
+      className="mb-5 inline-flex rounded-full border p-0.5"
+      style={{ borderColor: 'var(--color-line-2)', backgroundColor: 'var(--color-surface-2)' }}
+      role="tablist"
+      aria-label="Who are you?"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={audience === 'advisor'}
+        onClick={() => onChange('advisor')}
+        className={optionClass(audience === 'advisor')}
+        style={audience === 'advisor' ? { backgroundColor: 'var(--color-teal)' } : undefined}
+      >
+        Advisers &amp; firms
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={audience === 'individual'}
+        onClick={() => onChange('individual')}
+        className={optionClass(audience === 'individual')}
+        style={audience === 'individual' ? { backgroundColor: 'var(--color-teal)' } : undefined}
+      >
+        Planning for yourself
+      </button>
+    </div>
   );
 }
 
@@ -416,10 +497,42 @@ function HorizonMark({ size = 22 }) {
   );
 }
 
+// Per-audience hero copy. One headline, one blurb, one feature list — never
+// both audiences' content on screen together, which was the ambiguity this
+// split fixes. Kept as plain data so BrandPanel itself stays presentational.
+const AUDIENCE_COPY = {
+  advisor: {
+    headline: 'Retirement plans your clients can actually feel',
+    blurb:
+      'Multi-goal retirement planning built for Indian markets — inflation, withdrawal rates, and the sequence-of-returns risk spreadsheets hide. Presentation-ready for the room, audit-ready for the file.',
+    eyebrow: 'Built for advisers & firms',
+    bullets: [
+      'Meeting Mode — presentation-ready, for the room',
+      'Real historical replay of a bad early decade',
+      'Your own templates & risk questionnaire, approval-gated',
+    ],
+  },
+  individual: {
+    headline: 'Will the money last?',
+    blurb:
+      'Retirement planning built for Indian markets — inflation, withdrawal rates, and the sequence-of-returns risk spreadsheets hide. No adviser needed.',
+    eyebrow: 'Planning for yourself',
+    bullets: [
+      'See the year you could stop working — and a countdown to it',
+      'One readiness score, in plain language',
+      'Plan together with your partner, each keeping your own plan',
+    ],
+  },
+};
+
 // The brand column: a deep gradient hero with the product promise and an
 // animated "rising corpus over the horizon" motif. Hidden below lg — mobile
 // gets the compact wordmark instead so the fold stays focused on the form.
-function BrandPanel() {
+// Content is audience-specific (see AUDIENCE_COPY) — deliberately ONE
+// headline/blurb/feature-list at a time, not both audiences' copy stacked,
+// so an advisor visiting never reads a consumer-first page and vice versa.
+function BrandPanel({ audience }) {
+  const copy = AUDIENCE_COPY[audience] ?? AUDIENCE_COPY.advisor;
   return (
     <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12" style={{ background: 'var(--grad-hero)' }}>
       {/* Soft light bloom */}
@@ -455,48 +568,24 @@ function BrandPanel() {
           <circle cx="312" cy="12" r="5" fill="var(--color-amber)" style={{ animation: 'floatY 4s ease-in-out 2s infinite' }} />
         </svg>
 
-        {/* Dual-audience headline. The previous one — "Retirement plans YOUR
-            CLIENTS can actually feel" — addressed advisors only, so an
-            individual arriving from a consumer link read a hero about somebody
-            else's job before reaching anything for them. The question below is
-            the one BOTH audiences actually have; the split lists underneath are
-            where they diverge. Larger type than before (34px vs 28px) because
-            the old page had no real typographic hierarchy — 28px hero down to
-            10px captions with nothing in between reads as uniformly dense. */}
+        {/* Single-audience headline + blurb, from AUDIENCE_COPY. Larger type
+            than a plain sign-in page would use (34px) because the old
+            dual-audience version needed real typographic hierarchy to fit
+            two headlines' worth of content on one screen; a single headline
+            keeps that same weight now that there's only one. */}
+        <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: '#3FD6BD' }}>
+          {copy.eyebrow}
+        </p>
         <h2 className="text-[34px] leading-[1.12] font-semibold tracking-[-0.02em] text-white">
-          Will the money last?
+          {copy.headline}
         </h2>
         <p className="mt-4 text-[15px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>
-          Retirement planning built for Indian markets — inflation, withdrawal rates,
-          and the sequence-of-returns risk spreadsheets hide. For advisers planning
-          with clients, and for people planning on their own.
+          {copy.blurb}
         </p>
 
-        {/* Two short lists rather than one of five. An honest list of what is
-            actually built, split by who it is for, so neither audience has to
-            read past the other's features to find its own. */}
-        <div className="mt-7 grid gap-x-8 gap-y-5 sm:grid-cols-2">
-          <div>
-            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: '#3FD6BD' }}>
-              Planning for yourself
-            </p>
-            <ul className="space-y-2">
-              <FeatureBullet>See the year you could stop working — and a countdown to it</FeatureBullet>
-              <FeatureBullet>One readiness score, in plain language</FeatureBullet>
-              <FeatureBullet>Plan together with your partner, each keeping your own plan</FeatureBullet>
-            </ul>
-          </div>
-          <div>
-            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: '#3FD6BD' }}>
-              Advisers &amp; firms
-            </p>
-            <ul className="space-y-2">
-              <FeatureBullet>Meeting Mode — presentation-ready, for the room</FeatureBullet>
-              <FeatureBullet>Real historical replay of a bad early decade</FeatureBullet>
-              <FeatureBullet>Your own templates &amp; risk questionnaire, approval-gated</FeatureBullet>
-            </ul>
-          </div>
-        </div>
+        <ul className="mt-7 space-y-2.5">
+          {copy.bullets.map((b) => <FeatureBullet key={b}>{b}</FeatureBullet>)}
+        </ul>
       </div>
 
       <div className="relative flex items-center gap-6 text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>
