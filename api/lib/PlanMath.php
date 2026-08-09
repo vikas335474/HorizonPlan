@@ -195,12 +195,19 @@ final class PlanMath
      * target_date), so callers can simply omit the block — same convention as
      * corpusMultiple() returning null for a non-retirement goal.
      *
+     * docs/12 Prompt D-3: this already recomputes against the CURRENT date on
+     * every call ($asOf defaults to today) — years_remaining shrinks and
+     * inflated_target eases toward target_amount as the date advances, with
+     * the corpus held at whatever base_plans.initial_net_worth currently is.
+     * The "moving target" premise in docs/12 is therefore already true for
+     * the TIME axis; what was missing was a named `is_met` state (see below).
+     *
      * @param float|null  $targetAmount   target in TODAY's rupees
      * @param string|null $targetDate     'Y-m-d'
      * @param float       $currentCorpus  base_plans.initial_net_worth
      * @param float       $inflationPct   the goal's own inflation_rate
      * @param string|null $asOf           'Y-m-d' override for testing; defaults to today
-     * @return array{years_remaining: float, inflated_target: float, covered_pct: float, shortfall: float}|null
+     * @return array{years_remaining: float, inflated_target: float, covered_pct: float, shortfall: float, is_met: bool}|null
      */
     public static function targetGoalFunding(
         ?float $targetAmount,
@@ -225,15 +232,27 @@ final class PlanMath
 
         $inflatedTarget = $targetAmount * pow(1 + ($inflationPct / 100.0), $yearsRemaining);
         // Guard against a zero/absurd inflated target producing a division by zero.
-        $coveredPct = $inflatedTarget > 0.0
-            ? min(100.0, max(0.0, ($currentCorpus / $inflatedTarget) * 100.0))
-            : 0.0;
+        $rawCoveredPct = $inflatedTarget > 0.0 ? ($currentCorpus / $inflatedTarget) * 100.0 : 0.0;
+        $coveredPct = min(100.0, max(0.0, $rawCoveredPct));
 
         return [
             'years_remaining' => round($yearsRemaining, 2),
             'inflated_target' => round($inflatedTarget, 2),
             'covered_pct'     => round($coveredPct, 1),
             'shortfall'       => round(max(0.0, $inflatedTarget - $currentCorpus), 2),
+            // docs/12 Prompt D-3 — an explicit, named "goal met" state
+            // (previously only implied by covered_pct reaching the 100% the
+            // bar happens to clamp at). Uses the UNCLAMPED ratio so a corpus
+            // that only just crosses the inflated target still reads met
+            // even after covered_pct's own clamp rounds it to display 100.0.
+            // No hysteresis/dead-zone here — see the class docblock note
+            // above progressStatus() for why: the corpus is a static,
+            // human-edited figure (docs/02 §4.1 — never auto-linked to a
+            // live-moving portfolio), so this can only change on a discrete
+            // edit or as time smoothly closes the horizon, never flicker
+            // day to day. A persisted, hysteresis-aware version becomes
+            // worth building only if/when a live portfolio link ships.
+            'is_met'          => $rawCoveredPct >= 100.0,
         ];
     }
 
@@ -608,7 +627,7 @@ final class PlanMath
      * @param float $monthlyExpensesToday total recorded monthly spend, 0 if unknown
      * @param float $additionalMonthlyExpense docs/11 E-2: recorded ongoing medical cost, added before inflating. 0.0 = no-op.
      * @param float $cityTierMultiplier docs/11 E-2: scales the retirement-year spend only. 1.0 = no-op.
-     * @return array{annual_spend_at_retirement:float,corpus_needed:float,projected_corpus:float,gap:float,covered_pct:float,years_to_retirement:int}|null
+     * @return array{annual_spend_at_retirement:float,corpus_needed:float,projected_corpus:float,gap:float,covered_pct:float,years_to_retirement:int,is_met:bool}|null
      */
     public static function retirementTarget(
         float $monthlyExpensesToday,
@@ -641,6 +660,13 @@ final class PlanMath
             'gap'                        => round($projected - $corpusNeeded, 2),
             'covered_pct'                => $corpusNeeded > 0.0 ? round(($projected / $corpusNeeded) * 100.0, 1) : 0.0,
             'years_to_retirement'        => $yearsToRetirement,
+            // docs/12 Prompt D-3 — same named "goal met" state as
+            // targetGoalFunding(), unclamped (covered_pct here already isn't
+            // clamped, unlike the target-based version, but this reads the
+            // raw gap directly rather than re-deriving it from the rounded
+            // covered_pct for the same reason: never compare on a rounded
+            // figure when the exact one is sitting right there).
+            'is_met'                     => $projected >= $corpusNeeded,
         ];
     }
 
