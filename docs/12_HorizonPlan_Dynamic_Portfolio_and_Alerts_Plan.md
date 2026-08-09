@@ -196,11 +196,55 @@ foundations/progress signals.
 
 ---
 
-### Prompt — D-2 · Per-instrument tax-treatment context (facts only)
+### Prompt — D-2 · Per-instrument tax-treatment context (facts only) — BUILT
 
 > **Adds a sourced tax-reference cache (+ optional cost-basis fields). Do after
 > D-1.**
 >
+> **Status: built** (sql/039). All three decide-first choices went with the
+> recommended default: `tax_reference` as a table+cron (`tools/tax_reference_sync.php`,
+> matching `reference_costs` exactly), cost-basis capture built alongside the
+> treatment labels in this same session, and a new `client_portfolio_items.fund_type`
+> (`equity`/`debt`/`hybrid`) field — an open question this prompt's own text
+> didn't originally call out, added because a generic "mutual fund" category
+> cannot get one correct tax note: equity funds keep a concessional LTCG
+> rate, debt funds have been taxed entirely at slab rate with no LTCG
+> concept since April 2023. An unset `fund_type` shows all three regimes
+> side by side, never a guess (`PortfolioTaxContext.php::resolveTaxSubcategories()`).
+>
+> **One deliberate scope correction from this prompt's own wording, recorded
+> rather than silently narrowed:** "(b)" below says "how much LTCG exemption
+> headroom remains this year" — that figure needs every realised gain from
+> every sale in the financial year, and this app has no transaction/sale
+> ledger, only a snapshot of current holdings. What's actually buildable and
+> shipped is an **illustrative UNREALISED gain** (current value − recorded
+> acquisition value) on a still-held position, plus whether it would count
+> as short- or long-term if sold today — never a claim about exemption
+> already used or remaining. See `api/lib/PortfolioTaxContext.php`'s header
+> for the full reasoning; a fabricated headroom number would be worse than
+> no number at all (docs/12 §2 principle 3).
+>
+> 14 categories seeded: mutual_fund (×3 fund types) / stocks / bonds / reits
+> / gold / real_estate / savings / fd / cash / ppf / epf / nps. Every row
+> `is_verified = false` — this is a good-faith, no-live-internet-access
+> summary of Indian capital-gains/income-tax rules as of the 2023/2024
+> budgets, not fetched from a live source, and must be checked against
+> current Finance Act/CBDT guidance before a real client meeting leans on an
+> exact rate. Surfaced on `ClientPortfolioCard` as a collapsed-by-default
+> "Tax context" panel per asset row (never on liabilities — out of scope),
+> for both advisor and self-serve individual sessions alike, always opening
+> with "Illustrative, not tax advice — always verify against current rules."
+>
+> Verified: real MariaDB (`sql/039` applied cleanly, `source_name` widened
+> to VARCHAR(500) mid-build after a real Finance-Act citation string
+> exceeded 255 chars), full `tests/run_all.sh` (three new/extended test
+> files — pure holding-period/gain math, dataset+sync/prune DB coverage,
+> and `client_portfolio_items` schema coverage), a real HTTP round trip
+> through four scenarios (resolved equity fund with full gain, no-cost-basis
+> stock, unresolved mutual fund showing all three regimes, an `other_asset`
+> row correctly reporting `applicable: false`), and a real Playwright run
+> confirming all of the above render correctly, including the add-item
+> form's new fund-type/purchase-price/purchase-date fields.
 > Attach, next to each holding, the **applicable tax treatment** — never a
 > filing figure, never "act now". Two layers, deliberately separable:
 >

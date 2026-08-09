@@ -19,6 +19,7 @@ for t in \
   tests/test_financial_foundations.php \
   tests/test_personalisation_reference.php \
   tests/test_portfolio_reconcile.php \
+  tests/test_portfolio_tax_context.php \
   tests/test_totp.php \
   tests/test_password_hashing.php \
   tests/test_inheritance_cascade.php \
@@ -50,7 +51,8 @@ for t in \
   tests/test_mf_nav_sync.php \
   tests/test_reference_costs_db.php \
   tests/test_personalisation_reference_db.php \
-  tests/test_portfolio_reconcile_db.php
+  tests/test_portfolio_reconcile_db.php \
+  tests/test_tax_reference_db.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"

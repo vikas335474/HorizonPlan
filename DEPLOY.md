@@ -254,6 +254,51 @@ Same CLI-only, never-shipped-by-deploy posture as the NAV cron
 (`api/lib/ReferenceCosts.php` is the shared part; `api/reference_costs_get.php`
 `require_once`s it for the in-request read; `tools/` stays server-side-only).
 
+## Sourced tax-reference sync
+
+`tools/tax_reference_sync.php` pushes the curated, cited tax-treatment
+dataset (docs/12 Prompt D-2 — capital-gains/holding-period treatment per
+instrument category, mutual funds split into equity/debt/hybrid) into
+`tax_reference` (sql/039), the cache `client_portfolio_list.php` reads (via
+`api/lib/PortfolioTaxContext.php`) to attach a `tax_context` block to every
+asset row. Same shape and precedent as the reference-cost sync above: no
+live API for Finance Act/CBDT-style rules, so the dataset lives in
+`api/lib/TaxReference.php`, curated and cited, and this job upserts it into
+the DB cache the app actually reads — **facts only, never a filing figure or
+a "sell now" prompt** (see `PortfolioTaxContext.php`'s header for the exact,
+deliberate boundary: an illustrative unrealised gain on what's still held,
+never a realised "how much LTCG exemption is left this year" number, since
+this app has no transaction ledger to know that). Every row seeds
+`is_verified` from the dataset (currently `false` on all 14 rows — Indian
+tax rules changed substantially in the 2023/2024 budgets and change again
+essentially every budget after that); a re-run never resets an
+already-verified row. The sync also **prunes** any cached row the dataset no
+longer defines, same as the reference-cost sync.
+
+**hPanel → Advanced → Cron Jobs → Create a new cron job (optional):**
+- Command: `php /home/<your-hostinger-user>/public_html/tools/tax_reference_sync.php`
+  (adjust the path as with the NAV cron above).
+- Schedule: **no fixed schedule needed** — Indian tax rules change only at
+  Union Budget time (once a year, occasionally an in-year amendment), so
+  running this by hand via SSH right after editing `TaxReference.php` for a
+  rate correction is enough. A cron entry is a convenience, not a
+  requirement, unlike the daily NAV sync.
+- Safe to run any time — a deterministic upsert (+ prune) of a constant
+  dataset, not a live fetch. A DB error mid-run rolls back the whole batch,
+  leaving the existing cache untouched rather than half-written.
+- Must run once after `sql/039_tax_context.sql` is applied — before that,
+  `tax_context` on every portfolio item reads `applicable: false` for
+  everything (never a fabricated treatment note).
+- **Before relying on the exact rates/thresholds with a real client:** verify
+  every row against the current Finance Act / CBDT guidance and flip
+  `is_verified` by hand in the DB — the UI keeps showing "illustrative —
+  verify against current rules" on every unverified row.
+
+Same CLI-only, never-shipped-by-deploy posture as the other sync tools
+(`api/lib/TaxReference.php` and `api/lib/PortfolioTaxContext.php` are the
+shared parts `client_portfolio_list.php` `require_once`s for the in-request
+read; `tools/` stays server-side-only).
+
 ## Scheduled plan-review emails cron
 
 `tools/plan_review_send.php` sends the periodic "your plan, refreshed" review

@@ -131,6 +131,28 @@ assertTrue(count($dbAdvisorA->select('client_portfolio_items', ['id' => $liabili
 $dbAdvisorA->delete('client_portfolio_items', ['id' => $liabilityId]);
 assertTrue(count($dbAdvisorA->select('client_portfolio_items', ['client_id' => 2])) === 2, 'the owning tenant can delete its own portfolio item');
 
+// --- Test 7: docs/12 Prompt D-2 — fund_type + cost basis storage ---
+$equityFundId = $dbAdvisorA->insert('client_portfolio_items', [
+    'client_id' => 2, 'item_kind' => 'asset', 'bucket' => 'liquid',
+    'category' => 'mutual_fund', 'fund_type' => 'equity',
+    'description' => 'Flexi-cap fund', 'value' => 150000.00,
+    'acquisition_value' => 100000.00, 'acquisition_date' => '2024-01-15',
+    'created_by_user_id' => 1,
+]);
+$equityFundRow = $dbAdvisorA->select('client_portfolio_items', ['id' => $equityFundId])[0];
+assertTrue($equityFundRow['fund_type'] === 'equity', 'fund_type stores correctly');
+assertTrue((float) $equityFundRow['acquisition_value'] === 100000.0, 'acquisition_value stores correctly');
+assertTrue($equityFundRow['acquisition_date'] === '2024-01-15', 'acquisition_date stores correctly');
+
+$noCostBasisId = $dbAdvisorA->insert('client_portfolio_items', [
+    'client_id' => 2, 'item_kind' => 'asset', 'bucket' => 'liquid',
+    'category' => 'stocks', 'description' => 'Some shares', 'value' => 50000.00,
+    'created_by_user_id' => 1,
+]);
+$noCostBasisRow = $dbAdvisorA->select('client_portfolio_items', ['id' => $noCostBasisId])[0];
+assertTrue($noCostBasisRow['fund_type'] === null, 'fund_type defaults to NULL when not supplied — never guessed');
+assertTrue($noCostBasisRow['acquisition_value'] === null && $noCostBasisRow['acquisition_date'] === null, 'cost basis defaults to NULL — no backfill, no fabricated figures');
+
 $db->rollBack(); // leave the DB exactly as we found it — this is a fixture, not real data
 
 echo "\nAll client portfolio DB tests passed.\n";

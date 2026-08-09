@@ -14,6 +14,16 @@ declare(strict_types=1);
 // and nulled for a liability. A NAV-tracked row seeds its value from whatever
 // mf_nav_cache already holds for that scheme (never a live AMFI call here); a
 // brand-new scheme stays "price pending" (0) until the daily cron fills it.
+//
+// docs/12 Prompt D-2 (tax context, facts only): optional `fund_type`
+// (equity|debt|hybrid), meaningful only when category=mutual_fund — the two
+// regimes are taxed completely differently, so an unset fund_type is a real
+// state (the UI shows all three), never guessed at here. Optional
+// `acquisition_value`/`acquisition_date` (asset-only, independent of each
+// other — no both-or-neither pairing like NAV tracking, since a person may
+// know one without the other) unlock an illustrative gain/holding-period
+// fact; both stay NULL, no backfill, until supplied.
+//
 // Output: {status, item_id}. Errors: 400 (validation), 404 (client not in
 // tenant), 405 (non-POST).
 
@@ -116,6 +126,54 @@ if ($itemKind !== 'liability' || $interestRate === null || $interestRate === '')
     $interestRate = (float) $interestRate;
 }
 
+// fund_type: only meaningful for a mutual_fund asset — nulled out for
+// anything else, same mirror-image pattern as bucket/interest_rate above.
+// docs/12 Prompt D-2: equity vs. debt funds are taxed completely
+// differently, so this is never inferred or defaulted.
+$fundType = $input['fund_type'] ?? null;
+if ($itemKind !== 'asset' || $category !== 'mutual_fund' || $fundType === null || $fundType === '') {
+    $fundType = null;
+} elseif (!in_array($fundType, ['equity', 'debt', 'hybrid'], true)) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'fund_type must be equity, debt, or hybrid.']);
+    exit();
+}
+
+// acquisition_value / acquisition_date (docs/12 Prompt D-2): asset-only,
+// deliberately independent of each other (unlike NAV tracking's both-or-
+// neither pairing) — a person may remember the purchase date but not the
+// exact price, or vice versa, and each is independently useful (holding-
+// period classification needs only the date; the illustrative gain needs
+// only the value alongside the item's own current value).
+$acquisitionValue = $input['acquisition_value'] ?? null;
+if ($itemKind !== 'asset' || $acquisitionValue === null || $acquisitionValue === '') {
+    $acquisitionValue = null;
+} elseif (!is_numeric($acquisitionValue) || (float) $acquisitionValue < 0) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'acquisition_value must be a non-negative number.']);
+    exit();
+} else {
+    $acquisitionValue = (float) $acquisitionValue;
+}
+
+$acquisitionDate = $input['acquisition_date'] ?? null;
+if ($itemKind !== 'asset' || $acquisitionDate === null || $acquisitionDate === '') {
+    $acquisitionDate = null;
+} else {
+    $parsedDate = DateTime::createFromFormat('Y-m-d', (string) $acquisitionDate);
+    $today = new DateTime('today');
+    if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $acquisitionDate) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'acquisition_date must be a valid date (YYYY-MM-DD).']);
+        exit();
+    }
+    if ($parsedDate > $today) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'acquisition_date cannot be in the future.']);
+        exit();
+    }
+}
+
 $clientMatches = $scopedDb->select('users', ['id' => $clientId, 'role' => 'client']);
 if (empty($clientMatches)) {
     http_response_code(404);
@@ -143,8 +201,11 @@ $id = $scopedDb->insert('client_portfolio_items', [
     'item_kind'          => $itemKind,
     'bucket'             => $bucket,
     'category'           => $category,
+    'fund_type'          => $fundType,
     'description'        => $description,
     'value'              => $resolvedValue,
+    'acquisition_value'  => $acquisitionValue,
+    'acquisition_date'   => $acquisitionDate,
     'interest_rate'      => $interestRate,
     'amfi_scheme_code'   => $schemeCode,
     'units_held'         => $schemeCode !== null ? (float) $unitsHeld : null,
