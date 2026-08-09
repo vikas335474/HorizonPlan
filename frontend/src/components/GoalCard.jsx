@@ -78,8 +78,15 @@ export default function GoalCard({ goal }) {
             <span className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">
               Covered today
             </span>
-            <span className="text-xs font-semibold tabular-nums text-[var(--color-ink)]">
-              {goal.target_funding.covered_pct}%
+            <span
+              className="text-xs font-semibold tabular-nums"
+              style={{ color: goal.target_funding.is_met ? 'var(--color-teal-ink)' : 'var(--color-ink)' }}
+            >
+              {/* docs/12 Prompt D-3 — is_met reads the unclamped ratio, so a
+                  goal that only just crosses the line still shows the
+                  celebratory state even though covered_pct itself clamps
+                  its DISPLAY figure at 100%. */}
+              {goal.target_funding.is_met ? 'Goal met' : `${goal.target_funding.covered_pct}%`}
             </span>
           </div>
           <div
@@ -88,13 +95,18 @@ export default function GoalCard({ goal }) {
             aria-label={`${goal.target_funding.covered_pct}% of the inflation-adjusted target is covered by the current corpus`}
           >
             <div
-              className="h-full rounded-full bg-[var(--color-teal)]"
-              style={{ width: `${Math.max(2, goal.target_funding.covered_pct)}%` }}
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.max(2, goal.target_funding.covered_pct)}%`,
+                backgroundColor: goal.target_funding.is_met ? 'var(--color-teal-ink)' : 'var(--color-teal)',
+              }}
             />
           </div>
           <p className="mt-1.5 text-[11px] leading-snug text-[var(--color-ink-3)]">
-            Needs ~{formatCurrency(goal.target_funding.inflated_target)} by then at{' '}
-            {formatPercent(goal.inflation_rate)} inflation. Assumes no growth on what's saved.
+            {goal.target_funding.is_met
+              ? `Today's corpus already covers the ~${formatCurrency(goal.target_funding.inflated_target)} this needs by then at ${formatPercent(goal.inflation_rate)} inflation.`
+              : <>Needs ~{formatCurrency(goal.target_funding.inflated_target)} by then at{' '}
+                  {formatPercent(goal.inflation_rate)} inflation. Assumes no growth on what's saved.</>}
           </p>
         </div>
       )}

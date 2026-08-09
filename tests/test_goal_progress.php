@@ -161,6 +161,7 @@ assertClose($t['corpus_needed'], 65970776.0, 'the corpus needed is that spend at
 assertClose($t['gap'], 50000000.0 - $t['corpus_needed'], 'the gap is projected minus needed');
 assertTrue($t['gap'] < 0, 'a 5cr projection against a 6.6cr need reads as a shortfall');
 assertClose($t['covered_pct'], 75.8, 'coverage is reported as a percentage of the target', 0.6);
+assertTrue($t['is_met'] === false, 'docs/12 D-3: a real shortfall is not met');
 
 // Retiring today: no inflation applied at all.
 $now = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 0, 30000000.0);
@@ -171,6 +172,11 @@ assertClose($now['corpus_needed'], 720000.0 / 0.035, 'and the corpus needed is s
 $funded = PlanMath::retirementTarget(60000.0, 6.0, 3.5, 20, 90000000.0);
 assertTrue($funded['gap'] > 0, 'a plan ahead of its target reports the surplus, not a capped 100%');
 assertTrue($funded['covered_pct'] > 100.0, 'and coverage above 100% is reported honestly');
+assertTrue($funded['is_met'] === true, 'docs/12 D-3: a plan ahead of target is met');
+
+// is_met at the exact boundary — projected corpus precisely equal to what's needed.
+$exactlyMet = PlanMath::retirementTarget(60000.0, 0.0, 3.5, 0, 720000.0 / 0.035);
+assertTrue($exactlyMet['is_met'] === true, 'exactly at the target counts as met (>=, not strictly >)');
 
 // --- gapClosingLevers: docs/11 E-1 "never pair a gap with silence" ---------
 

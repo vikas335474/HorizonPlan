@@ -199,6 +199,34 @@ $clients = array_map(static function (array $c) use ($minReadinessByClient, $lat
     return $c;
 }, $clients);
 
+// docs/12 Prompt D-3 — a firm-wide "goals met" count, the positive-signal
+// counterpart to attention_count below. Scoped to TARGET-BASED goals
+// (education/home/other) only, deliberately NOT retirement goals: a
+// target-based goal's "met" state is one cheap computation directly off
+// base_plans fields (PlanMath::targetGoalFunding, same call the goal's own
+// card/detail page makes), so this count can never drift from what a click-
+// through shows. A retirement goal's "met" state (PlanMath::retirementTarget)
+// needs the client's cash-flow expenses plus a full accumulation/lifecycle
+// projection — reproducing that per-goal, for every retirement goal in the
+// whole tenant, on every dashboard load would either duplicate real
+// complexity or risk a second, drifting approximation of what the goal page
+// itself computes. Same asymmetry this file already accepts for
+// min_readiness_score (retirement-only, above) — different goal shapes get
+// different aggregate signals rather than one unified figure force-fit
+// across both.
+$goalsMetCount = 0;
+foreach ($scopedDb->select('base_plans') as $goal) {
+    $funding = PlanMath::targetGoalFunding(
+        $goal['target_amount'] !== null ? (float) $goal['target_amount'] : null,
+        $goal['target_date'],
+        (float) $goal['initial_net_worth'],
+        (float) $goal['inflation_rate']
+    );
+    if ($funding !== null && $funding['is_met']) {
+        $goalsMetCount++;
+    }
+}
+
 // Aggregate stats for the dashboard header cards — computed over the WHOLE
 // tenant book, before any scope/search/attention filter or paging is applied,
 // so "clients: 240" always means the firm has 240 clients regardless of which
@@ -304,6 +332,9 @@ echo json_encode([
         'total_goals'     => $totalGoals,
         'total_aum'       => $totalAum, // sum of initial_net_worth across all goals
         'attention_count' => $attentionCount,
+        // docs/12 Prompt D-3 — target-based goals only; see the comment
+        // above $goalsMetCount for why retirement goals aren't folded in.
+        'goals_met_count' => $goalsMetCount,
         'distribution'    => $distribution,
     ],
     'advisors' => $advisors,

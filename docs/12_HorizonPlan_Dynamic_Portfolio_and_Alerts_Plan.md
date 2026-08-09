@@ -285,38 +285,68 @@ foundations/progress signals.
 
 ---
 
-### Prompt — D-3 · Goal target re-evaluation (moving target + "goal met")
+### Prompt — D-3 · Goal target re-evaluation (moving target + "goal met") — BUILT
 
 > **Mostly surfacing existing math. Do after D-1 (needs the completed
 > portfolio) — can run parallel to D-2.**
 >
-> A goal's target and how today's money tracks it should **move as prices move**,
-> not sit frozen at the number last typed. The math largely exists
-> (`targetGoalFunding()` inflates a target to its date; `readinessScoreForGoal()`;
-> `progressStatus()`'s ±5% dead zone). The new work is (a) recomputing the
-> "corpus/target needed by date" against **current** NAVs/prices, and (b) a clean,
-> explicit **"goal met"** state on the goal page and dashboard.
+> **Status: built.** The crux decision went with the recommended default —
+> own-recorded corpus, explicit goal↔holdings link deferred — confirmed with
+> the user via `AskUserQuestion`. But building it surfaced a correction to
+> this prompt's own premise, worth recording plainly:
 >
-> **Decide with the user first — this is the crux:** *what counts as a goal's
-> "current corpus"?* The guardrail (docs/02 §4.1) says the portfolio is **not**
-> automatically any goal's corpus. So re-evaluation must run on either the goal's
-> **own recorded corpus/plan inputs** (safe, unchanged binding) or an
-> **explicit, user-made link** from a goal to specific portfolio holdings (a real
-> feature, opt-in, never auto-matched — same "explicit `goal_id` link, never
-> auto-matched" precedent E-2 set for dependants↔education goals). Recommend:
-> ship the own-recorded re-evaluation first (no new binding, immediate value from
-> the NAV cron already moving those numbers), and offer the explicit
-> goal↔holdings link as the follow-on.
+> **"Moves as prices move" was only ever half true, and still is.**
+> Investigation before writing any code found that `targetGoalFunding()` and
+> `retirementTarget()` **already** recompute against the *current date* on
+> every call (`$asOf` defaults to today) — a target-based goal's
+> `inflated_target`/`covered_pct` and a retirement goal's projected-vs-needed
+> comparison both move on their own as time passes, with zero new work
+> needed. What does **not** move is the *corpus* side
+> (`base_plans.initial_net_worth`) — a static, human-typed figure,
+> deliberately decoupled from the NAV-tracked portfolio per docs/02 §4.1 (confirmed
+> by reading `ProgressSnapshot.php`: even the existing progress-tracking
+> feature reads `initial_net_worth` directly, never the portfolio ledger). So
+> "recomputing against current NAVs/prices" doesn't actually happen without
+> the explicit link this prompt already deferred — the real, honest gap
+> was never the math, it was the missing **name** for a state the math
+> already implied.
 >
-> **Likely shape.** A pure re-evaluation helper over existing `PlanMath`
-> (target inflated to date, current coverage, met/not-met with a dead-zone so it
-> doesn't flicker at the boundary); a "goal met" surface on `GoalDetail.jsx` and
-> a dashboard badge; if the explicit link is chosen, a nullable join with an
-> opt-in picker. **Verify:** real DB + `tests/run_all.sh` proving the re-evaluated
-> target equals a hand-computed inflation-to-date, that "met" latches correctly
-> across the dead zone, and a Playwright run. **What NOT to build:** auto-pooling
-> the portfolio into a goal (violates §4.1), or a "you've over/under-saved, do X"
-> recommendation.
+> **What shipped:** an explicit `is_met` boolean, added directly to
+> `PlanMath::targetGoalFunding()`'s and `PlanMath::retirementTarget()`'s
+> return arrays (`is_met` reads the *unclamped* covered-percentage/gap, so a
+> goal that only just crosses the line still reads met even where the
+> *display* figure clamps at 100%). No hysteresis/dead-zone was built —
+> recorded as a deliberate, documented choice, not an oversight: with the
+> corpus static, `covered_pct` can only change on a discrete manual edit or
+> smoothly as the horizon closes, never flicker day to day, so persisted
+> hysteresis has nothing to guard against yet. It becomes worth building
+> if/when the deferred live portfolio link ships.
+>
+> Surfaced on all three requested surfaces: `GoalCard.jsx` (roster — a "Goal
+> met" label replaces the percentage, teal-ink bar), `GoalDetail.jsx` /
+> `RetirementTargetCard.jsx` (detail page — a badge + updated copy), and a
+> new firm-wide **"N goals met target"** card on the advisor dashboard
+> (`clients_list.php`'s `stats.goals_met_count`), styled as the positive
+> counterpart to the existing attention-queue card.
+>
+> **One more scope note, mirroring the min_readiness_score asymmetry already
+> in `clients_list.php`:** the dashboard's `goals_met_count` covers
+> **target-based goals only** (education/home/other) — cheap, direct off
+> `base_plans` fields, so it can never drift from what a click-through
+> shows. Retirement goals' `is_met` (via `retirementTarget()`) needs
+> cash-flow expenses plus a full lifecycle projection; reproducing that
+> per-goal for every retirement goal in the whole tenant on every dashboard
+> load risked a second, drifting approximation of what the goal's own page
+> computes, so it's surfaced on `GoalDetail`/`RetirementTargetCard` only
+> (where `goals_projection.php` already computes it per-goal), not folded
+> into the firm-wide count.
+>
+> Verified: real MariaDB, full `tests/run_all.sh` (new `is_met` assertions
+> in `test_target_goal_funding.php` and `test_goal_progress.php`, including
+> the exact-boundary case), a live HTTP proof that funding a goal's corpus
+> flips `is_met` false→true on both `goals_list.php` and
+> `clients_list.php`'s `goals_met_count` (0→1), and a real Playwright run
+> confirming all three UI surfaces render correctly.
 
 ---
 

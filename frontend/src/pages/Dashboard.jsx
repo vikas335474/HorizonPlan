@@ -295,6 +295,36 @@ export default function Dashboard() {
               </Card>
             )}
 
+            {/* docs/12 Prompt D-3 — the positive-signal counterpart to the
+                attention queue above: how many target-based goals (education/
+                home/other) have actually reached their inflation-adjusted
+                target. Scoped to target-based goals only — see clients_list.php's
+                own comment on why a retirement-goal equivalent isn't folded
+                into this same firm-wide count. Only shown when there's
+                something to celebrate, same "no news when there's no news"
+                posture as the attention card above. */}
+            {data.stats.goals_met_count > 0 && (
+              <Card className="p-4 mb-4 flex flex-wrap items-center gap-3">
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: 'var(--color-teal-soft)' }}
+                  aria-hidden="true"
+                >
+                  <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 8.5l2.5 2.5L12 5" stroke="var(--color-teal-ink)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-[var(--color-ink)]">
+                    {data.stats.goals_met_count} goal{data.stats.goals_met_count === 1 ? '' : 's'} met target
+                  </h2>
+                  <p className="mt-0.5 text-xs text-[var(--color-ink-2)]">
+                    Education, home, or other goals whose current corpus already covers the inflation-adjusted target.
+                  </p>
+                </div>
+              </Card>
+            )}
+
             {/* Book health at a glance — the readiness spread across the whole
                 firm, as one bar rather than a number the advisor has to build
                 in their head by scrolling the roster. Counts come from the
