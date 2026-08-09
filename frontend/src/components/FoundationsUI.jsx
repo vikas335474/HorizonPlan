@@ -208,17 +208,17 @@ function ProtectionForm({ clientId, protection, onSaved, plain }) {
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-[var(--color-ink-2)]">
-            {plain ? 'Life cover you already have' : 'Life cover (sum assured)'}
+            {plain ? 'Life cover you already have (₹ sum assured)' : 'Life cover (₹ sum assured)'}
           </span>
           <input className={field} type="number" min="0" value={term}
-            onChange={(e) => setTerm(e.target.value)} placeholder="—" />
+            onChange={(e) => setTerm(e.target.value)} placeholder="e.g. 5000000 for ₹50L" />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-[var(--color-ink-2)]">
-            {plain ? 'Medical cover you already have' : 'Health cover (sum insured)'}
+            {plain ? 'Medical cover you already have (₹ sum insured)' : 'Health cover (₹ sum insured)'}
           </span>
           <input className={field} type="number" min="0" value={health}
-            onChange={(e) => setHealth(e.target.value)} placeholder="—" />
+            onChange={(e) => setHealth(e.target.value)} placeholder="e.g. 500000 for ₹5L" />
         </label>
       </div>
       {error && <p className="mt-2 text-xs text-[var(--color-alert)]">{error}</p>}
