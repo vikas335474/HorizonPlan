@@ -7,7 +7,10 @@ declare(strict_types=1);
 // asset to a liability is "delete and re-add", not an edit. NAV tracking fields
 // stay both-or-neither and are only re-validated when the request actually
 // touches one of them; changing the scheme re-seeds value from mf_nav_cache (no
-// live AMFI call). Output: {status, item_id, changed_fields[]}. Errors:
+// live AMFI call). docs/12 Prompt D-2: fund_type/acquisition_value/
+// acquisition_date are each independently editable and clearable back to
+// NULL, gated to asset rows (fund_type additionally gated to category=
+// mutual_fund). Output: {status, item_id, changed_fields[]}. Errors:
 // 400 (validation), 404 (not found), 405 (other method).
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
@@ -94,6 +97,76 @@ if (array_key_exists('value', $input)) {
         exit();
     }
     $updateData['value'] = (float) $input['value'];
+}
+
+// docs/12 Prompt D-2 — fund_type, only meaningful for a mutual_fund asset.
+// Gated against the EFFECTIVE category (the one in this same request if
+// it's changing category, else the existing one) — same reasoning as
+// bucket's re-validation, just against category instead of item_kind.
+if (array_key_exists('fund_type', $input)) {
+    $effectiveCategory = $updateData['category'] ?? $existing['category'];
+    if ($existing['item_kind'] !== 'asset' || $effectiveCategory !== 'mutual_fund') {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'fund_type only applies to a mutual_fund asset.']);
+        exit();
+    }
+    $fundType = $input['fund_type'];
+    if ($fundType === null || $fundType === '') {
+        $updateData['fund_type'] = null;
+    } elseif (!in_array($fundType, ['equity', 'debt', 'hybrid'], true)) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'fund_type must be equity, debt, or hybrid.']);
+        exit();
+    } else {
+        $updateData['fund_type'] = $fundType;
+    }
+}
+
+// docs/12 Prompt D-2 — cost basis. Asset-only, each independently
+// clearable back to NULL ("not recorded"), same posture as interest_rate
+// above. Not paired both-or-neither, per client_portfolio_create.php's own
+// reasoning.
+if (array_key_exists('acquisition_value', $input)) {
+    if ($existing['item_kind'] !== 'asset') {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'acquisition_value only applies to an asset.']);
+        exit();
+    }
+    $acqValue = $input['acquisition_value'];
+    if ($acqValue === null || $acqValue === '') {
+        $updateData['acquisition_value'] = null;
+    } elseif (!is_numeric($acqValue) || (float) $acqValue < 0) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'acquisition_value must be a non-negative number.']);
+        exit();
+    } else {
+        $updateData['acquisition_value'] = (float) $acqValue;
+    }
+}
+if (array_key_exists('acquisition_date', $input)) {
+    if ($existing['item_kind'] !== 'asset') {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'acquisition_date only applies to an asset.']);
+        exit();
+    }
+    $acqDate = $input['acquisition_date'];
+    if ($acqDate === null || $acqDate === '') {
+        $updateData['acquisition_date'] = null;
+    } else {
+        $parsedDate = DateTime::createFromFormat('Y-m-d', (string) $acqDate);
+        $today = new DateTime('today');
+        if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $acqDate) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'acquisition_date must be a valid date (YYYY-MM-DD).']);
+            exit();
+        }
+        if ($parsedDate > $today) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'acquisition_date cannot be in the future.']);
+            exit();
+        }
+        $updateData['acquisition_date'] = $acqDate;
+    }
 }
 
 // NAV tracking fields — both-or-neither, same rule as client_portfolio_create.php.

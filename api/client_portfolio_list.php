@@ -10,14 +10,25 @@ declare(strict_types=1);
 // Attaches each NAV-tracked row's cached price/date/freshness (MfNavSync) and a
 // single portfolio-wide "data as of" claim. Totals — liquid, locked, assets,
 // liabilities, net worth — are computed on every read, never stored (same
-// posture as corpus_multiple in goals_read.php). Output: {status, items[],
-// totals{}, portfolio_nav_freshness}. Errors: 400 (missing client_id),
-// 405 (non-GET).
+// posture as corpus_multiple in goals_read.php).
+//
+// docs/12 Prompt D-2: every ASSET row also carries a `tax_context` block
+// (api/lib/PortfolioTaxContext.php) — the sourced treatment note(s) that
+// would apply if sold/withdrawn today, plus an illustrative unrealised
+// gain when acquisition_value was recorded. Liabilities never carry one
+// (out of scope — see docs/12 §1). The whole tax_reference table is
+// preloaded ONCE into a map rather than queried per row, since it's small
+// (~14 rows) and static within a request.
+//
+// Output: {status, items[], totals{}, portfolio_nav_freshness}. Errors:
+// 400 (missing client_id), 405 (non-GET).
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/MfNavSync.php';
+require_once __DIR__ . '/lib/TaxReference.php';
+require_once __DIR__ . '/lib/PortfolioTaxContext.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -53,30 +64,56 @@ $rows = $scopedDb->select('client_portfolio_items', ['client_id' => $clientId]);
 $navAttached = attachNavFreshness($db, $rows);
 $rowsWithNav = $navAttached['rows'];
 
-$items = array_map(static function (array $r): array {
-    return [
-        'id'               => (int) $r['id'],
-        'item_kind'        => $r['item_kind'],
-        'bucket'           => $r['bucket'],
-        'category'         => $r['category'],
-        'description'      => $r['description'],
-        'value'            => (float) $r['value'],
+// One query for the whole cache, keyed for buildPortfolioTaxContext()'s map
+// parameter — see PortfolioTaxContext.php's header for why this is a plain
+// PHP map rather than a per-item DB call.
+$taxReferenceByKey = [];
+foreach (listTaxReference($db) as $row) {
+    $formatted = formatTaxReferenceRow($row);
+    $taxReferenceByKey[$formatted['category'] . '|' . $formatted['subcategory']] = $formatted;
+}
+
+$items = array_map(static function (array $r) use ($taxReferenceByKey): array {
+    $item = [
+        'id'                => (int) $r['id'],
+        'item_kind'         => $r['item_kind'],
+        'bucket'            => $r['bucket'],
+        'category'          => $r['category'],
+        'fund_type'         => $r['fund_type'],
+        'description'       => $r['description'],
+        'value'             => (float) $r['value'],
+        'acquisition_value' => $r['acquisition_value'] !== null ? (float) $r['acquisition_value'] : null,
+        'acquisition_date'  => $r['acquisition_date'],
         // docs/12 Prompt D-1: which rows a CAS reconcile is even allowed to
         // touch (source) and its stable match key across re-imports
         // (folio_number) — surfaced read-only here so the UI can badge a
         // holding as "from your CAS import" vs. hand-entered.
-        'source'           => $r['source'],
-        'folio_number'     => $r['folio_number'],
+        'source'            => $r['source'],
+        'folio_number'      => $r['folio_number'],
         // Liabilities only (docs/10 P1-4); NULL on assets and on any loan
         // whose rate has not been recorded.
-        'interest_rate'    => $r['interest_rate'] !== null ? (float) $r['interest_rate'] : null,
-        'amfi_scheme_code' => $r['amfi_scheme_code'],
-        'units_held'       => $r['units_held'] !== null ? (float) $r['units_held'] : null,
-        'nav_value'        => $r['nav_value'],
-        'nav_date'         => $r['nav_date'],
-        'nav_fetched_at'   => $r['nav_fetched_at'],
-        'updated_at'       => $r['updated_at'],
+        'interest_rate'     => $r['interest_rate'] !== null ? (float) $r['interest_rate'] : null,
+        'amfi_scheme_code'  => $r['amfi_scheme_code'],
+        'units_held'        => $r['units_held'] !== null ? (float) $r['units_held'] : null,
+        'nav_value'         => $r['nav_value'],
+        'nav_date'          => $r['nav_date'],
+        'nav_fetched_at'    => $r['nav_fetched_at'],
+        'updated_at'        => $r['updated_at'],
+        // docs/12 Prompt D-2 — facts only, never a filing figure or a
+        // "sell now" prompt (see PortfolioTaxContext.php's header). null
+        // for a liability — tax treatment context is asset-only scope.
+        'tax_context'       => null,
     ];
+    if ($r['item_kind'] === 'asset') {
+        $item['tax_context'] = buildPortfolioTaxContext([
+            'category'          => $r['category'],
+            'fund_type'         => $r['fund_type'],
+            'value'             => (float) $r['value'],
+            'acquisition_value' => $r['acquisition_value'] !== null ? (float) $r['acquisition_value'] : null,
+            'acquisition_date'  => $r['acquisition_date'],
+        ], $taxReferenceByKey);
+    }
+    return $item;
 }, $rowsWithNav);
 
 // docs/05 item 3: liquid vs locked totals, plus net worth (assets - liabilities)
