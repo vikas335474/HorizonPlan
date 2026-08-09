@@ -1,19 +1,31 @@
 <?php
 declare(strict_types=1);
 
+// getReferenceCost() — the cache-first read educationRangeForDriver() uses
+// below. Required here rather than left to callers (the usual convention in
+// this codebase — see FinancialFoundations.php/CashFlowSummary.php, required
+// by whichever endpoint needs both) because it is now a hard dependency of a
+// PersonalisationReference method, not an optional pairing: a caller passing
+// a $db without also having required ReferenceCosts.php would otherwise hit
+// an undefined-function fatal instead of a clean fallback.
+require_once __DIR__ . '/ReferenceCosts.php';
+
 // docs/11 Prompt E-2 · The sourced reference figures the progressive
 // personalisation queue offers — city-tier expense multipliers and
 // per-driver education cost ranges.
 //
-// WHY THESE LIVE AS CODE CONSTANTS, NOT A TABLE (YET). docs/11 Prompt E-3
-// builds `reference_costs` — a table populated by a periodic CLI cron, the
-// same shape as `market_history` and `mf_nav_cache`. Prompt E-3 is
-// deliberately sequenced AFTER this one ("E-2's UI is its only consumer"),
-// so this file is the same hand-authored, sourced-and-cited starting point
-// lib/strategyPresets.js already uses for withdrawal-rate presets — a small,
-// auditable table of numbers with their provenance written next to them.
-// When E-3 ships, its cron populates `reference_costs` and this file's
-// constants become the seed data / fallback, not a second source of truth.
+// RECONCILED WITH docs/11 Prompt E-3's `reference_costs` (sql/037,
+// api/lib/ReferenceCosts.php) — read that file's header for the full
+// account. Summary: EDUCATION_COST_RANGES below is now the FALLBACK, not
+// the source of truth — educationRangeForDriver() reads reference_costs
+// first when a $db is passed, and only falls back to these constants when
+// the cache has no row yet (the sync cron has never run) or no $db was
+// given (keeps this class usable with zero DB dependency, same as before,
+// for the pure unit tests in tests/test_personalisation_reference.php).
+// CITY TIER deliberately stays a pure code-constant derivation, never
+// backed by reference_costs — see ReferenceCosts.php's header for why an
+// exact formula from a published percentage doesn't belong in a "sourced
+// range" cache table.
 //
 // EVERY FIGURE HERE FOLLOWS docs/11's design principles:
 //   - a RANGE, never a point estimate (principle 4)
@@ -156,13 +168,37 @@ final class PersonalisationReference
     ];
 
     /**
+     * Cache-first: when $db is given, prefers reference_costs (docs/11
+     * Prompt E-3) — the actual reconciled source of truth as of the merge
+     * documented at the top of this file — and only falls back to
+     * EDUCATION_COST_RANGES above when that cache has no row yet for this
+     * driver (the sync cron has never run) or $db is null (every existing
+     * caller that doesn't pass one keeps working exactly as before).
+     * $driver is still validated against EDUCATION_COST_RANGES either way —
+     * that const remains the single definition of "which drivers exist",
+     * even when its VALUES aren't what gets returned.
+     *
      * @return array{low: float, high: float, source_name: string, source_as_of: string, is_verified: bool}|null
      */
-    public static function educationRangeForDriver(?string $driver): ?array
+    public static function educationRangeForDriver(?string $driver, ?PDO $db = null): ?array
     {
         if ($driver === null || !array_key_exists($driver, self::EDUCATION_COST_RANGES)) {
             return null;
         }
+
+        if ($db !== null) {
+            $cached = getReferenceCost($db, 'education', $driver);
+            if ($cached !== null) {
+                return [
+                    'low' => (float) $cached['low'],
+                    'high' => (float) $cached['high'],
+                    'source_name' => $cached['source_name'],
+                    'source_as_of' => $cached['as_of_date'],
+                    'is_verified' => (bool) $cached['is_verified'],
+                ];
+            }
+        }
+
         return self::EDUCATION_COST_RANGES[$driver];
     }
 }
