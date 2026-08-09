@@ -110,10 +110,48 @@ foundations/progress signals.
 
 ---
 
-### Prompt — D-1 · Portfolio input overhaul (reconcile-by-holding + full instruments + discoverability)
+### Prompt — D-1 · Portfolio input overhaul (reconcile-by-holding + full instruments + discoverability) — BUILT
 
 > **Adds columns + rewrites the import path. The foundation — everything
 > downstream reads the portfolio. Do first.**
+>
+> **Status: built** (sql/038). The `AskUserQuestion` decide-first step below
+> got interrupted mid-session; building proceeded on the strongest reasoned
+> default for each open choice, with one deliberate deviation from this
+> prompt's own suggested wording — recorded here rather than silently:
+>
+> - **Match key: folio number alone (not "AMFI scheme code + folio")**, falling
+>   back to a normalised scheme name. On inspection, a real CAS/KFintech/
+>   MFCentral export carries a folio number, not an AMFI scheme code (that
+>   code is specific to this app's own `mf_nav_cache`/AMFI NAV-file
+>   integration) — so "AMFI code + folio" was never a mappable pair of CSV
+>   columns in practice. Folio alone is in fact the *more* robust key than
+>   this prompt's original "folio + description" framing would have been: it
+>   deliberately ignores the description entirely, so a fund's display name
+>   drifting slightly between two statements (a plan-suffix change, an
+>   AMC rename) can't break a match — see `PortfolioReconcile.php`.
+> - **Buckets:** bonds and REITs/InvITs both liquid, `cash` liquid and
+>   distinct from `savings` — as recommended.
+> - **Reconciliation scope:** `client_portfolio_items.source`
+>   (`'manual'|'cas_import'`, `NOT NULL DEFAULT 'manual'`) — as recommended,
+>   and backfilling every pre-migration row to `'manual'` needed no separate
+>   step (every row before this migration genuinely was hand-entered; the
+>   old import path never tagged anything either).
+>
+> Shipped exactly the "likely shape": `client_portfolio_reconcile_preview.php`
+> (read-only diff) → `client_portfolio_import.php` (rewritten to recompute
+> the diff server-side rather than trust a client-submitted one, and apply
+> it in one transaction). No auto-delete path exists anywhere — removal
+> requires both a user-ticked checkbox in the preview AND the server's own
+> fresh recomputation still flagging that same id (`confirmedPortfolioRemovalIds()`,
+> proven live over HTTP: a request that snuck a manual holding's id into
+> `remove_ids` had it silently dropped). The instrument/discoverability piece
+> (b) and the guided-import copy/steps (c) both shipped as scoped. Verified
+> per repo convention: real MariaDB (`sql/038` applied cleanly), full
+> `tests/run_all.sh` (two new files — pure diff logic, DB-level source/tenant
+> scoping), a real import → re-import HTTP cycle proving update-not-duplicate
+> and correct missing-holding flagging, and a real Playwright run through
+> upload → guide → configure → reconcile preview → confirm.
 >
 > Three problems, one session:
 >

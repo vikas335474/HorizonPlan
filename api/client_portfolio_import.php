@@ -1,32 +1,43 @@
 <?php
 declare(strict_types=1);
 
-// Bulk import for a client's mutual fund holdings, sourced from a CAMS/
-// KFintech/MFCentral Consolidated Account Statement (CAS) export. This is
-// deliberately the CSV-mapping path, not a direct CAMS/KFintech/MFCentral API
-// integration or the SEBI Account Aggregator framework — those are a much
-// bigger, separately-scoped piece of work (OAuth-style consent flows, a new
-// external-credential security surface). This endpoint only ever creates
-// client_portfolio_items rows through the exact same tenant-scoped path
-// client_portfolio_create.php uses — no new table, no schema change.
+// docs/12 Prompt D-1 · Reconcile-by-holding CAS/KFintech/MFCentral CSV
+// import. Rewritten from the original always-INSERT behavior (docs/11-era),
+// which silently duplicated a client's whole mutual fund book on a second
+// upload — the exact bug this session fixes.
 //
-// Every imported row is forced to item_kind='asset', bucket='liquid',
-// category='mutual_fund' — a CAS/MFCentral statement only ever lists mutual
-// fund folios, which this app's bucket model already treats as liquid/
-// market-linked (see ClientPortfolioUI.jsx's ASSET_CATEGORIES), same as a
-// manually-added "Mutual fund" portfolio item. The frontend does the actual
-// CSV parsing and column mapping (advisor picks which column is the scheme
-// name vs. the current value) since CAMS/KFintech/MFCentral don't share one
-// guaranteed export layout — this endpoint only ever receives already-
-// normalized {description, value} pairs, not raw CSV.
+// This endpoint APPLIES a reconciliation; it does not compute the preview
+// the user reviewed (that's client_portfolio_reconcile_preview.php). The
+// diff is deliberately RECOMPUTED here from `items` rather than trusting a
+// client-submitted diff — a browser could otherwise claim any old_value/
+// new_value it liked. `remove_ids` is the one piece of real user judgment
+// this endpoint takes on faith, and it's the safest possible one: it only
+// ever deletes an id that (a) belongs to this client's own
+// source='cas_import' rows and (b) is independently recomputed as
+// "flagged missing from this statement" — never anything the user didn't
+// see flagged, never a manually-entered row.
 //
-// All rows import in one transaction — either the whole statement lands, or
-// none of it does, so a bad row can't leave a half-imported portfolio.
+// Every imported/updated row is forced to item_kind='asset', bucket='liquid',
+// category='mutual_fund', source='cas_import' — a CAS/MFCentral statement
+// only ever lists mutual fund folios (see PortfolioReconcile.php's header
+// for why reconciliation only ever touches cas_import-sourced rows).
+//
+// The whole reconciliation — updates, inserts, and any confirmed removals —
+// applies in one transaction: either the whole statement lands, or none of
+// it does, so a bad row can't leave a half-reconciled portfolio.
+//
+// POST only. Same self-service-write gate as every other write here.
+// Input (JSON body): client_id, items: [{description, value, folio_number?}],
+// remove_ids?: [int,...] (ids the user explicitly confirmed to remove, from
+// the preview's to_flag list).
+// Output: {status, updated_count, added_count, removed_count}.
+// Errors: 400 (validation), 404 (client not in tenant), 405 (non-POST).
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/SelfService.php';
+require_once __DIR__ . '/lib/PortfolioReconcile.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -37,10 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $db = getPdo();
-// Self-serve individual tier (sql/033): advisor-only in a firm, and
-// additionally self-service for an individual writing their OWN data in a
-// personal tenant. verifySelfServiceWrite() refuses an advisor-managed
-// client exactly as before — see api/lib/SelfService.php.
 $session = verifySelfServiceWrite($db);
 $tenantId = (int) $session['tenant_id'];
 $userId = (int) $session['user_id'];
@@ -48,10 +55,9 @@ $scopedDb = new TenantScopedDb($db, $tenantId);
 
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $clientId = (int) ($input['client_id'] ?? 0);
-// A personal user always writes their own data; any client_id in the body
-// is ignored rather than trusted, same posture as the client-facing reads.
 $clientId = resolveSelfServiceClientId($session, $clientId);
 $items = $input['items'] ?? null;
+$removeIds = $input['remove_ids'] ?? [];
 
 if ($clientId <= 0) {
     http_response_code(400);
@@ -63,14 +69,17 @@ if (!is_array($items) || count($items) === 0) {
     echo json_encode(['status' => 'error', 'message' => 'items must be a non-empty array.']);
     exit();
 }
-// A sane upper bound — a real CAS can list a few dozen folios, not thousands;
-// this guards against a malformed/misconfigured upload rather than any
-// expected real usage.
 if (count($items) > 500) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'Cannot import more than 500 items at once.']);
     exit();
 }
+if (!is_array($removeIds)) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'remove_ids must be an array.']);
+    exit();
+}
+$removeIds = array_map('intval', $removeIds);
 
 $clientMatches = $scopedDb->select('users', ['id' => $clientId, 'role' => 'client']);
 if (empty($clientMatches)) {
@@ -85,6 +94,9 @@ $clean = [];
 foreach ($items as $i => $item) {
     $description = trim((string) ($item['description'] ?? ''));
     $value = $item['value'] ?? null;
+    $folio = isset($item['folio_number']) && trim((string) $item['folio_number']) !== ''
+        ? trim((string) $item['folio_number'])
+        : null;
 
     if ($description === '') {
         http_response_code(400);
@@ -96,28 +108,61 @@ foreach ($items as $i => $item) {
         echo json_encode(['status' => 'error', 'message' => "Row " . ($i + 1) . " (\"$description\"): value must be a non-negative number."]);
         exit();
     }
-    $clean[] = ['description' => $description, 'value' => (float) $value];
+    $clean[] = ['description' => $description, 'value' => (float) $value, 'folio_number' => $folio];
 }
+
+$existingCasRows = array_map(
+    static fn(array $r): array => [
+        'id'            => (int) $r['id'],
+        'description'   => $r['description'],
+        'value'         => (float) $r['value'],
+        'folio_number'  => $r['folio_number'],
+    ],
+    $scopedDb->select('client_portfolio_items', ['client_id' => $clientId, 'source' => 'cas_import'])
+);
+
+$diff = computePortfolioReconciliation($existingCasRows, $clean);
+
+// Defense in depth: only ever delete an id that THIS recomputed diff itself
+// flagged as missing — a client-submitted remove_ids value can never reach
+// beyond what the server independently derives as safe to remove.
+$confirmedRemovals = confirmedPortfolioRemovalIds($diff, $removeIds);
 
 $db->beginTransaction();
 try {
-    foreach ($clean as $item) {
+    foreach ($diff['to_update'] as $update) {
+        $scopedDb->update('client_portfolio_items', [
+            'value'       => $update['new_value'],
+            'description' => $update['new_description'],
+        ], ['id' => $update['id']]);
+    }
+    foreach ($diff['to_add'] as $add) {
         $scopedDb->insert('client_portfolio_items', [
             'client_id'          => $clientId,
             'item_kind'          => 'asset',
             'bucket'             => 'liquid',
             'category'           => 'mutual_fund',
-            'description'        => $item['description'],
-            'value'              => $item['value'],
+            'source'             => 'cas_import',
+            'description'        => $add['description'],
+            'value'              => $add['value'],
+            'folio_number'       => $add['folio_number'],
             'created_by_user_id' => $userId,
         ]);
+    }
+    foreach ($confirmedRemovals as $id) {
+        $scopedDb->delete('client_portfolio_items', ['id' => $id]);
     }
     $db->commit();
 } catch (Throwable $e) {
     $db->rollBack();
     http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Import failed — no items were saved.']);
+    echo json_encode(['status' => 'error', 'message' => 'Import failed — no changes were saved.']);
     exit();
 }
 
-echo json_encode(['status' => 'success', 'imported_count' => count($clean)]);
+echo json_encode([
+    'status'        => 'success',
+    'updated_count' => count($diff['to_update']),
+    'added_count'   => count($diff['to_add']),
+    'removed_count' => count($confirmedRemovals),
+]);
