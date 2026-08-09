@@ -296,30 +296,63 @@ the same commit. (Tables that FK with `ON DELETE CASCADE`/`SET NULL` — e.g.
 **Always point the suite at a disposable DB.** This is the one deliberately
 deferred item on the security/quality ledger.
 
+### Migrations 033–039: Recent feature expansions (Phase 2 core + personalisation)
+
+After the core MVP (032), the following migrations added:
+
+- **033: `personal_tenants`** — Self-serve individual tier (sql/033). A personal tenant has `kind='personal'`, one user with `role='client'`, and `advisory_mode='self_directed'` (docs/04 Phase 1 scope creep; implemented by session end). Write access is gated on tenant kind, not role (`SelfService.php`).
+- **034: `financial_foundations`** — Client financial-position table (`client_protection`): emergency reserve / income-replacement cover / medical cover tracking. Two amounts + dependant count stored; thresholds are sourced reference points, never recommendations. See `FinancialFoundations.php`.
+- **035: `household_self_service`** — Extends personal tenants to support couples: partner invite (email + magic link), two-person household with shared `households.id`, per-person goals/risk. Each partner reads everything; each writes only their own data.
+- **036: `client_context`** — Personalisation context table (`client_context`): city tier (7th CPC tier, `household_id` scoped—shared between partners), ongoing medical cost (per-person). Opt-in; no backfill. Feeds `PersonalisationReference.php`.
+- **037: `reference_costs`** — Sourced reference data table: education cost ranges (government/private/overseas driver) + healthcare, with source URL + `is_verified` flag. Populated by cron; fallback to `PersonalisationReference.php` constants while empty.
+- **038: `portfolio_reconcile`** — CAS/MFCentral reconciliation rewrite (docs/12 D-1, sql/038): added `client_portfolio_items.folio_number` and `source` column ('manual' | 'cas_import'). Prevents duplicate on reimport. See `PortfolioReconcile.php`.
+- **039: `tax_context`** — Per-instrument tax treatment reference table (`tax_reference`): capital-gains/holding-period treatment notes, `is_verified` flag. Added to `client_portfolio_items`: `fund_type` (equity|debt|hybrid for mutual funds), `acquisition_value`, `acquisition_date`. See `PortfolioTaxContext.php`, `TaxReference.php`.
+
+These are the "long tail of hardening + demo + UX" sessions from `docs/CHANGELOG_SESSION_HISTORY.md`. Read `docs/12` (D-1 through D-4) for the detailed design decisions.
+
 ---
 
-## 7. `api/lib/` — the shared backend modules
+## 7. `api/lib/` — the shared backend modules (30 files)
 
 | File | Responsibility |
 |------|----------------|
+| **Security & auth** | |
 | `security_gatekeeper.php` | Auth, CSRF, MFA, sessions, rate limiting, firm-role gate, platform settings (§4). |
-| `TenantScopedDb.php` | Tenant-isolated data access (§3). |
-| `PlanMath.php` | **Pure** projection arithmetic — decumulation, accumulation, corpus composition (liquid-first), sequence-of-returns, historical replay, the 0–100 readiness score, and `targetGoalFunding()` (the funding signal for target-based goals, which deliberately assumes no growth). No DB. |
-| `GoalFieldValidation.php` | Per-field range/type validation shared by goal create + update so the two entry points can't drift. |
-| `RiskProfileScoring.php` | Pure scoring of questionnaire answers against a firm's rubric. |
-| `CashFlowSummary.php` | Normalises income/expense lines to monthly, sums surplus, and (advisor-only) compares surplus to total goal SIPs. |
-| `HouseholdProjection.php` | Sums members' projections into a household aggregate. |
-| `TemplateValidation.php` | Shared allocation/risk-profile validation for template endpoints. |
-| `PlanReview.php` / `PlanReviewMailer.php` | Jr→Sr approval-workflow transitions + review emails. |
-| `FinancialFoundations.php` | The four pre-goal adequacy checks (P1-4): emergency reserve, life cover, health cover, debt costing more than the plan assumes to earn. Pure, no DB — every threshold is a sourced reference point, and the three "not a pass" states (`not_recorded`, `not_applicable`, shortfall) are kept strictly distinct on purpose. |
-| `ProgressSnapshot.php` | Goal-progress capture (P1-1). Tenant-scoped in-request path for "Record now"; raw-SQL cross-tenant path for the monthly cron — same split, and same reasoning, as `MfNavSync.php`. |
-| `MfNavSync.php` | Daily MF-NAV price sync (cached NAVs only; never a live AMFI call inside a request). |
 | `Totp.php` | RFC 6238 TOTP, no external deps. |
 | `GoogleAuth.php` | Google Sign-In: network / pure / DB layers split for testability. |
 | `InviteTokens.php` | Magic-link invite activation (reuses `password_resets`). |
-| `Mailer.php` | Thin wrapper over PHP `mail()` (Hostinger local MTA). |
-| `DemoAccess.php` / `DemoSeeder.php` / `TrialSignup.php` | Demo login boundary, demo data seeding, self-serve trial signup — each split out of its endpoint so it's testable against a real DB without an HTTP round-trip. |
+| **Data access & persistence** | |
+| `TenantScopedDb.php` | Tenant-isolated data access (§3). |
 | `error_handler.php` | Turns fatals/uncaught exceptions into a structured JSON 500. |
+| `Mailer.php` | Thin wrapper over PHP `mail()` (Hostinger local MTA). |
+| **Planning core** | |
+| `PlanMath.php` | **Pure** projection arithmetic — decumulation, accumulation, corpus composition (liquid-first), sequence-of-returns, historical replay, the 0–100 readiness score, and `targetGoalFunding()` (the funding signal for target-based goals, which deliberately assumes no growth). No DB. |
+| `GoalFieldValidation.php` | Per-field range/type validation shared by goal create + update so the two entry points can't drift. |
+| `RiskProfileScoring.php` | Pure scoring of questionnaire answers against a firm's rubric. |
+| `TemplateValidation.php` | Shared allocation/risk-profile validation for template endpoints. |
+| `PlanReview.php` | Jr→Sr approval-workflow state transitions. |
+| `PlanReviewMailer.php` | Plan review email generation and scheduling. |
+| **Cash flow & portfolio** | |
+| `CashFlowSummary.php` | Normalises income/expense lines to monthly, sums surplus, and (advisor-only) compares surplus to total goal SIPs. |
+| `PortfolioReconcile.php` | Pure logic for CAS/MFCentral CSV reconciliation (docs/12 D-1, sql/038) — diffs, validation, deduplication. No DB. |
+| `PortfolioTaxContext.php` | Per-holding tax-context orchestrator (docs/12 D-2, sql/039) — shapes cached treatment notes with acquisition data into an honest "facts only" answer. Pure, no DB. |
+| `TaxReference.php` | Tax reference data helper — reads the cached `tax_reference` table (capital-gains/holding-period treatment notes) and validates them. |
+| `ReferenceCosts.php` | Reference-costs caching helper — reads the `reference_costs` table (education/medical cost ranges) for use in personalisation. |
+| **Households & personal planning** | |
+| `HouseholdProjection.php` | Sums members' projections into a household aggregate. |
+| `SelfService.php` | Self-serve individual tier — gates write access to personal tenants only (sql/033). Enforces "own data only" on self-directed client roles. |
+| **Progress tracking & alerts** | |
+| `ProgressSnapshot.php` | Goal-progress capture (P1-1). Tenant-scoped in-request path for "Record now"; raw-SQL cross-tenant path for the monthly cron — same split, and same reasoning, as `MfNavSync.php`. |
+| `AlertsEngine.php` | Stateless alerts/rules engine (docs/12 D-4, sql/041) — pure computation of five trigger types (goal_met, goal_drift, price_stale, review_due, foundations_gap). No DB access. |
+| `AlertsInputs.php` | Alert input assembly — bundles goal/portfolio/review/foundation data per client for the stateless engine. |
+| `FoundationsInputs.php` | Financial foundations input extraction — pulled from `foundations_read.php` so the engine and the client page never drift. |
+| **Personalisation & sync** | |
+| `PersonalisationReference.php` | Personalisation reference data — city-tier multipliers (HRA-derived, code constant), education ranges (fallback to this when `reference_costs` cache is empty). |
+| `MfNavSync.php` | Daily MF-NAV price sync (cached NAVs only; never a live AMFI call inside a request). |
+| **Demo & trials** | |
+| `DemoAccess.php` | Demo login boundary — gates login and demo reset behind environment flags. |
+| `DemoSeeder.php` | Demo data seeding — 4 firms, 160 clients, all user accounts and their relationships. |
+| `TrialSignup.php` | Self-serve trial signup helper — validates and creates new trial firm tenants. |
 
 **House style for these:** a file/class-level docblock stating *why this exists /
 the invariant it protects*, plus PHPDoc (`@param`/`@return`/`@throws`) on public
@@ -354,6 +387,69 @@ bar — match them.
   live in `components/ui.jsx`. The demo tour is `context/DemoTourContext.jsx`
   (public demo accounts only). The in-app feature run-book is `pages/FeatureGuide.jsx`
   (route `/guide`).
+
+### Frontend component structure (56 React components)
+
+**Pages** (`frontend/src/pages/`) — top-level routes:
+- `Home.jsx` — auth router (client → /goals, advisor → /dashboard)
+- `LoginPage.jsx`, `SignupPage.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx` — auth flows
+- `StartFree.jsx` — self-serve individual Q&A onboarding
+- `SignupPersonal.jsx` — personal tenant signup (self-serve + couple flow)
+- `Dashboard.jsx` — advisor/admin persona dashboard (firm book, attention queue, analytics)
+- `ClientDetail.jsx` — planner + portfolio + cash-flow + review hub for one client
+- `GoalDetail.jsx` — detailed plan + what-if UI for one goal; edit UI gated by tenant kind + role
+- `MeetingMode.jsx` — full-screen presentation view (client-safe)
+- `AdminConsole.jsx` — super_admin platform settings + firm management
+- `FeatureGuide.jsx` — in-app run-book (`/guide`)
+- `PersonalDashboard.jsx` — self-serve individual's "My goals" page
+- `HouseholdDashboard.jsx` — couple's shared household view
+
+**Components** (`frontend/src/components/`) — reusable pieces, each with file-level header:
+- **Goal & projection UI:**
+  - `GoalCard.jsx` — roster card (status, progress, drift badge)
+  - `RetirementTargetCard.jsx` — retirement goal specific (corpus, spending, readiness score)
+  - `SequenceRiskChart.jsx` — steady vs. adverse decumulation chart (Recharts)
+  - `LifecycleChart.jsx` — accumulation + decumulation lifecycle
+  - `ProgressChart.jsx` — actual vs. expected goal corpus over time (progress snapshot data)
+  - `HistoricalReplay.jsx` — market-year replay series selector + chart
+- **Portfolio & cash flow:**
+  - `ClientPortfolioUI.jsx` — asset/liability ledger + reconciliation UI
+  - `CashFlowUI.jsx` — income/expense + surplus UI
+  - `ProgressUI.jsx` — goal progress tracking + "Record now" capture
+- **Financial & risk:**
+  - `FoundationsUI.jsx` — the four pre-goal checks (emergency reserve, cover, medical, debt)
+  - `RiskProfileUI.jsx` — questionnaire authoring + scoring
+  - `PersonalisationUI.jsx` — city tier + medical cost + education drivers (E-2)
+- **Alerts & monitoring:**
+  - `AlertsUI.jsx` — the five stateless alert types (goal_met, drift, price_stale, review_due, foundations_gap)
+  - `ReadinessScore.jsx` — the 0–100 score display + caveat
+- **Plan & template:**
+  - `TemplateUI.jsx` — strategy template library + apply + approve flows
+  - `PlanReviewUI.jsx` — Jr→Sr review workflow state UI
+  - `ChangeLogUI.jsx` — audit trail / history card
+- **Client-facing & household:**
+  - `DisclosureBanner.jsx` — distribution-mode disclosure (required on every client view)
+  - `PartnerHouseholdUI.jsx` — couple household roster + invitation
+  - `AudienceTracks.jsx` — persona-aware copy (advisor vs. client labels)
+- **Admin & settings:**
+  - `OnboardingChecklist.jsx` — firm setup checklist
+  - `Spotlight.jsx` — feature spotlights (onboarding for real advisors)
+  - `ResetTriggerControl.jsx` — demo reset UI (admin only)
+  - `ScenarioPanel.jsx` — what-if scenario + sub-scenario controls
+- **Utilities:**
+  - `ProtectedRoute.jsx` — route guard (login + MFA check)
+  - `Modal.jsx`, `LiveTimelineSlider.jsx` — UI primitives
+  - `ui.jsx` — Recharts primitives, button/form/card/table/dropdown components (shadcn/ui based)
+  - `AppHeader.jsx` — responsive header (hamburger below `sm`)
+
+**Context** (`frontend/src/context/`) — state & session management:
+- `AuthContext.jsx` — session bootstrap, auth actions, user/tenant/platform data (use `useAuth()` everywhere)
+- `DemoTourContext.jsx` — guided feature tour (public demo only)
+
+**Library** (`frontend/src/lib/`) — pure helpers:
+- `api.js` — **the only place that talks to the backend**; one method per endpoint
+- `personalPlanner.js` — self-serve onboarding Q&A logic + suggested goals
+- `strategyPresets.js` — sourced illustration-framed risk bands (never recommendations)
 
 ---
 

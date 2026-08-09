@@ -82,14 +82,21 @@ Phase 1 (MVP) and the documented Phase 2 core are built, plus a long series of h
 **Deploy infra** — automated `deploy.yml` (→ `deploy` branch) + parallel `deploy-staging.yml` (→ `deploy-staging`, `VITE_APP_ENV=staging` banner).
 
 ### Known open items / deferred (not gaps introduced, decisions on record)
-- **Mandatory MFA is currently defaulted OFF** (`platform_settings.mfa_enforcement`, migration 023) for the early-access period — re-enable before real advisor/client data. The mechanism is fully built; only the default was flipped.
-- **Google Sign-In's real-browser OAuth round-trip** was never verified end-to-end (sandbox can't reach `accounts.google.com`); do it once with a real Client ID before relying on it.
-- **Destructive test-suite guard** (above) — still no hard protection against running the suite on a live DB.
+- **Mandatory MFA is currently defaulted OFF** (`platform_settings.mfa_enforcement`, migration 023) for the early-access period — **PRE-LAUNCH GATE: Re-enable before any production advisor/client logins.** The mechanism is fully built; only the default was flipped. See `docs/DEVELOPER_GUIDE.md` section 4 and `docs/01` for the security decision write-up.
+- **Google Sign-In's real-browser OAuth round-trip** was never verified end-to-end (sandbox can't reach `accounts.google.com`); **PRE-LAUNCH GATE: Perform one real OAuth round-trip with a production Client ID before launch.** Mechanism is built; the sandbox environment cannot test it. See `GoogleAuth.php`.
+- **Destructive test-suite guard** (above) — still no hard protection against running the suite on a live DB. Always point `tests/run_all.sh` at a disposable database. This is the one deliberately deferred security item on the ledger.
 - **General rate limiting** on `goals_*`/`subscenarios_*` deliberately deferred (docs/09 Session 3) — revisit only on a named abuse case.
 - **Next-build backlog** (billing, analytics dashboard, and the value-add items — household planning, PDF export, scheduled reviews, client-visible risk profile, PWA, live RTA feed, tax reports) is prioritized in `docs/10` with ready session prompts.
 
 ## Security status
-MFA (RFC 6238 TOTP, `api/lib/Totp.php`) + Google Sign-In as an equivalent second factor, CSRF (double-submit cookie, checked on every non-GET in `verifyAccess`/`verifyAccessAny`), mandatory-MFA-enrollment enforcement (server-side gate in the shared helpers, currently defaulted off per above), per-field validation on goal create/update, self-service password reset (hashed single-use tokens) + magic-link invites, and rate-limited login are all implemented. Tenant isolation is enforced through `TenantScopedDb` (with the three documented raw-tenant-scoped-JOIN read exceptions). No pre-launch security gap remains open from the Phase 8 audit trail; the one deliberately-deferred item is the destructive-test-suite guard. **Full file-by-file audit findings, the MFA/CSRF/enforcement decision write-ups, and the password-reset design are in `docs/CHANGELOG_SESSION_HISTORY.md` under "Security status".** Do not treat "no open audit gap" as "launch-ready" without re-enabling mandatory MFA and doing the real Google-OAuth round-trip check.
+**Implemented & verified:** MFA (RFC 6238 TOTP, `api/lib/Totp.php`) + Google Sign-In as an equivalent second factor; CSRF (double-submit cookie, checked on every non-GET in `verifyAccess`/`verifyAccessAny`); per-field validation on goal create/update; self-service password reset (hashed single-use tokens) + magic-link invites; rate-limited login; and tenant isolation enforced through `TenantScopedDb` (with three documented raw-tenant-scoped-JOIN read exceptions, all clearly marked). No pre-launch security gap remains open from the Phase 8 audit trail.
+
+**Pre-launch gates (do before production):**
+1. Re-enable `platform_settings.mfa_enforcement` for all production tenants (mandatory MFA, currently defaulted OFF for early-access)
+2. Test Google Sign-In OAuth round-trip with a real Client ID (sandboxed environment cannot reach `accounts.google.com`)
+3. Never run `tests/run_all.sh` against a database containing real data
+
+**Full file-by-file audit findings, the MFA/CSRF/enforcement decision write-ups, password-reset design, and tenant-isolation verification are in `docs/CHANGELOG_SESSION_HISTORY.md` under "Security status".**
 
 ## Deploy
 **Automated (preferred):** `.github/workflows/deploy.yml` builds the React app on every push to `main` (touching `frontend/`, `api/`, or the workflow) and publishes a `public_html`-shaped tree — compiled `dist/` at the root plus `api/` under `/api` — to a dedicated **`deploy` branch**, building on top of that branch's history (never force-pushed) so Hostinger's `git pull` always fast-forwards. Hostinger's native Git deployment (hPanel → Advanced → GIT, branch `deploy`, directory `public_html`) pulls it automatically. `api/db_config.php` is stripped in CI and lives only on the server, so pulls never touch it. **Full setup + gotchas in `DEPLOY.md`.** Note: the workflow only fires from `main`, so it activates after this branch is merged, not on the feature branch itself.
