@@ -423,10 +423,19 @@ export const api = {
   deletePortfolioItem: (id) =>
     request('client_portfolio_delete.php', { method: 'POST', body: JSON.stringify({ id }) }),
 
-  // Bulk import from a parsed CAMS/KFintech/MFCentral CAS CSV — items:
-  // [{ description, value }, ...]. Always lands as liquid mutual_fund assets.
-  importPortfolioItems: (clientId, items) =>
-    request('client_portfolio_import.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items }) }),
+  // docs/12 Prompt D-1 · reconcile-by-holding CAS import — two-step: preview
+  // (read-only, computes update/add/flag-missing) then confirm (applies it).
+  // items: [{ description, value, folio_number? }, ...] from a parsed CAMS/
+  // KFintech/MFCentral CAS CSV. Both always land as liquid mutual_fund
+  // assets, source='cas_import'.
+  previewPortfolioReconcile: (clientId, items) =>
+    request('client_portfolio_reconcile_preview.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items }) }),
+
+  // removeIds: ids from the preview's diff.to_flag the user explicitly
+  // confirmed removing (the server independently re-verifies every id is
+  // still flagged before deleting anything — see client_portfolio_import.php).
+  importPortfolioItems: (clientId, items, removeIds = []) =>
+    request('client_portfolio_import.php', { method: 'POST', body: JSON.stringify({ client_id: clientId, items, remove_ids: removeIds }) }),
 
   // MF NAV price-sync — recomputes NAV-tracked holdings from whatever the
   // daily cron already cached (no live AMFI call from this request).
