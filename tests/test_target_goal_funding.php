@@ -48,6 +48,7 @@ assertClose($f['years_remaining'], 8.0, 'years_remaining is the gap to the targe
 assertClose($f['inflated_target'], 3187696.0, 'target is inflated to target-date rupees at the goal\'s own rate', 50.0);
 assertClose($f['covered_pct'], 9.4, 'covered_pct is today\'s corpus over the INFLATED cost', 0.2);
 assertClose($f['shortfall'], 2887696.0, 'shortfall is the inflated cost minus what is saved today', 50.0);
+assertTrue($f['is_met'] === false, 'docs/12 D-3: 9.4% covered is clearly not met');
 
 // --- No growth is ever assumed ---------------------------------------------
 // Same goal, same corpus, only the horizon doubles. If the helper were
@@ -73,6 +74,17 @@ assertClose($z['covered_pct'], 25.0, 'coverage is a plain ratio when nothing inf
 $full = PlanMath::targetGoalFunding(1000000.0, '2027-08-08', 5000000.0, 6.0, '2026-08-08');
 assertClose($full['covered_pct'], 100.0, 'an over-funded goal reports 100%, not 470%');
 assertTrue($full['shortfall'] === 0.0, 'an over-funded goal has no shortfall (never a negative one)');
+assertTrue($full['is_met'] === true, 'docs/12 D-3: an over-funded goal is met');
+
+// --- is_met at the exact boundary, and just under it ------------------------
+// Corpus exactly equal to the inflated target (0% inflation removes any
+// rounding ambiguity from the exponent).
+$exact = PlanMath::targetGoalFunding(1000000.0, '2030-08-08', 1000000.0, 0.0, '2026-08-08');
+assertTrue($exact['is_met'] === true, 'exactly at the target counts as met (>=, not strictly >)');
+
+$justUnder = PlanMath::targetGoalFunding(1000000.0, '2030-08-08', 999999.0, 0.0, '2026-08-08');
+assertTrue($justUnder['is_met'] === false, 'one rupee under the target is not met');
+assertClose($justUnder['covered_pct'], 100.0, 'covered_pct still rounds/clamps to 100.0 for display even though is_met is false — is_met reads the UNCLAMPED ratio, not the display figure');
 
 // --- A target date in the past --------------------------------------------
 // "Due now" — the horizon floors at 0 so the target is never DEFLATED back

@@ -285,85 +285,161 @@ foundations/progress signals.
 
 ---
 
-### Prompt — D-3 · Goal target re-evaluation (moving target + "goal met")
+### Prompt — D-3 · Goal target re-evaluation (moving target + "goal met") — BUILT
 
 > **Mostly surfacing existing math. Do after D-1 (needs the completed
 > portfolio) — can run parallel to D-2.**
 >
-> A goal's target and how today's money tracks it should **move as prices move**,
-> not sit frozen at the number last typed. The math largely exists
-> (`targetGoalFunding()` inflates a target to its date; `readinessScoreForGoal()`;
-> `progressStatus()`'s ±5% dead zone). The new work is (a) recomputing the
-> "corpus/target needed by date" against **current** NAVs/prices, and (b) a clean,
-> explicit **"goal met"** state on the goal page and dashboard.
+> **Status: built.** The crux decision went with the recommended default —
+> own-recorded corpus, explicit goal↔holdings link deferred — confirmed with
+> the user via `AskUserQuestion`. But building it surfaced a correction to
+> this prompt's own premise, worth recording plainly:
 >
-> **Decide with the user first — this is the crux:** *what counts as a goal's
-> "current corpus"?* The guardrail (docs/02 §4.1) says the portfolio is **not**
-> automatically any goal's corpus. So re-evaluation must run on either the goal's
-> **own recorded corpus/plan inputs** (safe, unchanged binding) or an
-> **explicit, user-made link** from a goal to specific portfolio holdings (a real
-> feature, opt-in, never auto-matched — same "explicit `goal_id` link, never
-> auto-matched" precedent E-2 set for dependants↔education goals). Recommend:
-> ship the own-recorded re-evaluation first (no new binding, immediate value from
-> the NAV cron already moving those numbers), and offer the explicit
-> goal↔holdings link as the follow-on.
+> **"Moves as prices move" was only ever half true, and still is.**
+> Investigation before writing any code found that `targetGoalFunding()` and
+> `retirementTarget()` **already** recompute against the *current date* on
+> every call (`$asOf` defaults to today) — a target-based goal's
+> `inflated_target`/`covered_pct` and a retirement goal's projected-vs-needed
+> comparison both move on their own as time passes, with zero new work
+> needed. What does **not** move is the *corpus* side
+> (`base_plans.initial_net_worth`) — a static, human-typed figure,
+> deliberately decoupled from the NAV-tracked portfolio per docs/02 §4.1 (confirmed
+> by reading `ProgressSnapshot.php`: even the existing progress-tracking
+> feature reads `initial_net_worth` directly, never the portfolio ledger). So
+> "recomputing against current NAVs/prices" doesn't actually happen without
+> the explicit link this prompt already deferred — the real, honest gap
+> was never the math, it was the missing **name** for a state the math
+> already implied.
 >
-> **Likely shape.** A pure re-evaluation helper over existing `PlanMath`
-> (target inflated to date, current coverage, met/not-met with a dead-zone so it
-> doesn't flicker at the boundary); a "goal met" surface on `GoalDetail.jsx` and
-> a dashboard badge; if the explicit link is chosen, a nullable join with an
-> opt-in picker. **Verify:** real DB + `tests/run_all.sh` proving the re-evaluated
-> target equals a hand-computed inflation-to-date, that "met" latches correctly
-> across the dead zone, and a Playwright run. **What NOT to build:** auto-pooling
-> the portfolio into a goal (violates §4.1), or a "you've over/under-saved, do X"
-> recommendation.
+> **What shipped:** an explicit `is_met` boolean, added directly to
+> `PlanMath::targetGoalFunding()`'s and `PlanMath::retirementTarget()`'s
+> return arrays (`is_met` reads the *unclamped* covered-percentage/gap, so a
+> goal that only just crosses the line still reads met even where the
+> *display* figure clamps at 100%). No hysteresis/dead-zone was built —
+> recorded as a deliberate, documented choice, not an oversight: with the
+> corpus static, `covered_pct` can only change on a discrete manual edit or
+> smoothly as the horizon closes, never flicker day to day, so persisted
+> hysteresis has nothing to guard against yet. It becomes worth building
+> if/when the deferred live portfolio link ships.
+>
+> Surfaced on all three requested surfaces: `GoalCard.jsx` (roster — a "Goal
+> met" label replaces the percentage, teal-ink bar), `GoalDetail.jsx` /
+> `RetirementTargetCard.jsx` (detail page — a badge + updated copy), and a
+> new firm-wide **"N goals met target"** card on the advisor dashboard
+> (`clients_list.php`'s `stats.goals_met_count`), styled as the positive
+> counterpart to the existing attention-queue card.
+>
+> **One more scope note, mirroring the min_readiness_score asymmetry already
+> in `clients_list.php`:** the dashboard's `goals_met_count` covers
+> **target-based goals only** (education/home/other) — cheap, direct off
+> `base_plans` fields, so it can never drift from what a click-through
+> shows. Retirement goals' `is_met` (via `retirementTarget()`) needs
+> cash-flow expenses plus a full lifecycle projection; reproducing that
+> per-goal for every retirement goal in the whole tenant on every dashboard
+> load risked a second, drifting approximation of what the goal's own page
+> computes, so it's surfaced on `GoalDetail`/`RetirementTargetCard` only
+> (where `goals_projection.php` already computes it per-goal), not folded
+> into the firm-wide count.
+>
+> Verified: real MariaDB, full `tests/run_all.sh` (new `is_met` assertions
+> in `test_target_goal_funding.php` and `test_goal_progress.php`, including
+> the exact-boundary case), a live HTTP proof that funding a goal's corpus
+> flips `is_met` false→true on both `goals_list.php` and
+> `clients_list.php`'s `goals_met_count` (0→1), and a real Playwright run
+> confirming all three UI surfaces render correctly.
 
 ---
 
-### Prompt — D-4 · The alerts / rules engine (what makes the dashboards dynamic)
+### Prompt — D-4 · The alerts / rules engine (what makes the dashboards dynamic) — BUILT
 
 > **The unifying surface. Do last — it reads D-1..D-3's signals plus the
 > existing foundations/progress ones.**
 >
-> A single engine that computes **typed, factual triggers** and surfaces them on
-> both dashboards. Candidate triggers, all facts or nudges, none instructions:
-> *goal reached its target corpus* (D-3), *goal drifted beyond the ±band*
-> (existing `progressStatus`), *a tracked price is stale / "price pending"*
-> (the NAV cron's own signal), *a scheduled review is due* (existing
-> `plan_review_schedules`), *LTCG exemption headroom remains this year* (D-2, a
-> fact — never "so sell"), *a foundations gap* (existing `FinancialFoundations`:
-> reserve short, cover unrecorded, debt costlier than the plan's return). Each
-> alert is a `{type, severity, subject, factual_message, deep_link}` — the
-> message states the fact, the link goes to the page to act on it, the app never
-> says what to do.
+> **Status: built**, with three scope decisions made against the recommended
+> default (the user did not answer the `AskUserQuestion` posed before
+> building; each is documented here and in the code, not silently assumed):
 >
-> **Same engine, both audiences (principle 6):** an individual sees their own
-> alerts; an advisor sees them **rolled up across the book** with per-client
-> attribution, exactly like `clients_list.php`'s firm-wide attention count. No
-> second implementation.
+> **1. Five trigger types, not six.** This prompt's own text above listed a
+> sixth — *LTCG exemption headroom remains this year* — sourced from D-2. It
+> was dropped: D-2 deliberately never built a headroom figure (this app has
+> no transaction/sale ledger, so it cannot know what capital gains have
+> already been realised this financial year — see D-2's own status note and
+> `PortfolioTaxContext.php`'s header). There is no honest fact behind that
+> trigger given what D-2 actually shipped, and a fabricated substitute would
+> violate the "never invent a figure" principle this whole feature stands on.
+> The five that shipped: `goal_met` (D-3's `is_met`), `goal_drift` (existing
+> `PlanMath::progressStatus`'s ±5% dead zone, reused unchanged), `price_stale`
+> (the NAV cron's own `nav_fetched_at` freshness signal, plus "price pending"
+> for a NAV-tracked row the cron has never priced at all), `review_due`
+> (existing `plan_review_schedules` + `PlanReviewMailer.php`'s own
+> cadence→interval mapping, so this can never disagree with what the cron
+> actually sends), and `foundations_gap` (any `FinancialFoundations` check
+> that isn't a clean pass — `short`/`partial` or the open-question
+> `not_recorded`; `not_applicable` never alerts, by definition).
 >
-> **Decide with the user first:** (1) **stateless vs. stateful** — are alerts
-> derived fresh on read (simplest, always current, no dismiss), or persisted with
-> an **acknowledge/snooze** state (an advisor working a book wants to mark "seen")?
-> Recommend a **hybrid**: compute the current set on read, persist only the
-> *acknowledgement* (a small `alert_ack` table keyed by type+subject+as_of) so a
-> dismissed alert stays quiet until its underlying fact changes. (2) **Thresholds:**
-> reuse the existing sourced ones (the ±5% drift dead zone, foundations' reference
-> points) and default any *new* firm-configurable threshold **OFF**, per
-> guardrail-style caution — ship the mechanism, not an opinion. (3) **Cron vs.
-> read:** time-based triggers (review due) ride a cron like the existing ones;
-> state-based triggers compute on read (cheap). No new live outbound.
+> **2. Stateless-only this session — the hybrid ack is deferred, not built.**
+> This prompt's text above recommended a hybrid (compute fresh, persist only
+> the acknowledgement via a small `alert_ack` table). That table was **not**
+> built. Every alert is recomputed fresh from current data on every read, with
+> no acknowledge/snooze/dismiss anywhere — a documented, deliberate scope cut
+> rather than bolting a second, separate persisted-dismissal feature onto a
+> first working version. See §6 below for the standing deferral entry.
 >
-> **Likely shape.** A pure `AlertsEngine` helper (given a client's already-loaded
-> plan/portfolio/foundations/progress state → a typed alert list, fully
-> unit-testable, no DB); an endpoint per audience (individual: own; advisor:
-> book roll-up, tenant-scoped); an optional `alert_ack` table; a dashboard
-> alerts panel replacing the ad-hoc attention banner with the unified set.
-> **Verify:** real DB + `tests/run_all.sh` for the pure engine's every trigger,
-> tenant-isolation on the advisor roll-up, and Playwright on both dashboards.
-> **What NOT to build:** an alert whose action is transactional, a campaign/drip
-> engine (docs/10 anti-scope), or any trigger that phrases a fact as an
-> instruction.
+> **3. The tenant-wide book roll-up is a real subset, not the full five.**
+> `clients_list.php` gained three cheap, tenant-wide per-client booleans
+> (`has_goal_met`, `review_due`, `price_stale`) folded into the existing
+> `needsAttention()`/`attention_count` definition — no new dashboard
+> mechanism, extending the one that already exists. `goal_drift` and
+> `foundations_gap` are deliberately **excluded** from this bulk path: both
+> need a second per-client gathering pass (the latest `goal_snapshots` row, or
+> the full household cash-flow/portfolio/protection assembly) that costs real
+> time multiplied across an entire tenant's book — the exact asymmetry D-3's
+> own `goals_met_count` already accepted for retirement-goal `is_met`, applied
+> consistently here. The full five-trigger set is available per-client via
+> `alerts_read.php`, which an advisor's client-drill-in and an individual's
+> own dashboard both use.
+>
+> **What shipped.** A pure `AlertsEngine.php` (`{type, severity, subject,
+> factual_message, deep_link}`, `severity` ∈ `positive`\|`attention` — the
+> app's existing teal/amber framing, not a third vocabulary; fully
+> unit-tested against synthetic bundles, including an explicit assertion that
+> no generated message ever contains an instruction-like word). The
+> DB-touching half, `AlertsInputs.php`, assembles one client's bundle —
+> `goalAlertSummary()` computes `is_met` cheaply off `base_plans` for a
+> target-based goal and via the full lifecycle projection
+> (`retirementGoalMetState()`, mirroring `goals_projection.php`'s own
+> retirement-target computation so an alert can never disagree with what a
+> click-through to the goal shows) for a retirement goal; NAV freshness reuses
+> `MfNavSync.php`'s existing `attachNavFreshness()`; the foundations block
+> reads through a **new extraction**, `foundationsSummaryForClient()`
+> (`FoundationsInputs.php`) — pulled out of `foundations_read.php`'s
+> previously-inline gathering logic specifically so the alerts engine and a
+> client's own foundations page read through one function, not two that could
+> drift (`foundations_read.php` is now a thin auth-plus-one-call wrapper,
+> verified byte-identical via a live HTTP round trip against the pre-refactor
+> shape). `alerts_read.php` (GET, advisor-or-client, same
+> forced-to-own-id-for-a-client-session rule as `foundations_read.php`) is the
+> per-client endpoint both audiences read through. Frontend: `AlertsUI.jsx`
+> (`AlertsCard` for an advisor's client page, `ClientAlertsCard` for the
+> individual's own `/goals`), rendering nothing when there is nothing to say
+> (same convention as `FoundationsCaveat`); two new terse badges
+> (`review_due`, `price_stale`) on the advisor dashboard roster rows,
+> alongside the existing readiness/risk/drift badges.
+>
+> **Verified:** real MariaDB + full `tests/run_all.sh` (two new suites —
+> `test_alerts_engine.php`, pure, every trigger plus the composed
+> `computeClientAlerts()` including the banned-instruction-word check; and
+> `test_alerts_inputs_db.php`, tenant isolation + both goal shapes' `is_met` +
+> NAV-cache-present-vs-absent + the full bundle→alerts round trip, inside a
+> rolled-back transaction), live HTTP round trips against both the personal
+> demo (tenant 20) and the advisor demo (tenant 16) proving `alerts_read.php`'s
+> auth boundaries (client forced to own id, advisor 400/404 on a bad
+> `client_id`) and `clients_list.php`'s new fields, a production
+> frontend build, and a real Playwright run confirming the alerts panel
+> renders correctly on both the individual's `/goals` and an advisor's
+> `/clients/:id` page.
+>
+> This closes out the docs/12 D-1 → D-4 sequence.
 
 ---
 
@@ -409,6 +485,20 @@ credential/consent surface. This set stays on manual + CAS-CSV + the NAV cron.
 - **Push notifications for alerts.** The engine (D-4) produces the signals; a
   delivery channel beyond the in-app dashboard (email digest reusing `Mailer`,
   or PWA push once the PWA lands, docs/10 P1-2) is a later, separate step.
+- **Alert acknowledge/snooze (`alert_ack`), D-4 follow-on.** D-4 shipped
+  stateless-only — every alert recomputes fresh on every read, with nothing
+  persisted. An advisor working a large book will eventually want to mark an
+  alert "seen" so it stops resurfacing until the underlying fact changes; this
+  prompt's own text recommended exactly that hybrid (compute fresh, persist
+  only the acknowledgement). Deliberately not built this session — a real,
+  separate feature, not a bug in what shipped.
+- **`goal_drift`/`foundations_gap` on the tenant-wide book roll-up, D-4
+  follow-on.** `clients_list.php`'s cheap per-client booleans stop at
+  `has_goal_met`/`review_due`/`price_stale` — see D-4's status note above for
+  why the other two triggers are per-client-only (`alerts_read.php`) rather
+  than folded into the bulk tenant scan. Worth revisiting only if the cost of
+  a second per-client gathering pass, multiplied across a tenant's book,
+  becomes acceptable (e.g. a background-computed cache) — not a quick fix.
 
 ---
 

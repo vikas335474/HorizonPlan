@@ -657,21 +657,36 @@ export default function GoalDetail() {
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-[var(--color-ink)]">Funding status</h2>
                     <p className="mt-0.5 text-xs text-[var(--color-ink-2)]">
-                      What today's corpus covers of this goal's cost at the target date.
+                      {/* docs/12 Prompt D-3 — the target and coverage below already
+                          recompute against TODAY's date on every load
+                          (PlanMath::targetGoalFunding); is_met just names the
+                          state explicitly instead of leaving it implied by the bar. */}
+                      {goal.target_funding.is_met
+                        ? "Today's corpus already covers this goal's cost at the target date."
+                        : "What today's corpus covers of this goal's cost at the target date."}
                     </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-semibold tabular-nums text-[var(--color-ink)]">
-                      {goal.target_funding.covered_pct}%
-                    </div>
-                    <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">covered</div>
+                    {goal.target_funding.is_met ? (
+                      <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">Goal met</Badge>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-semibold tabular-nums text-[var(--color-ink)]">
+                          {goal.target_funding.covered_pct}%
+                        </div>
+                        <div className="text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">covered</div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 <div className="mt-3 h-2 w-full rounded-full bg-[var(--color-line)] overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[var(--color-teal)]"
-                    style={{ width: `${Math.max(2, goal.target_funding.covered_pct)}%` }}
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(2, goal.target_funding.covered_pct)}%`,
+                      backgroundColor: goal.target_funding.is_met ? 'var(--color-teal-ink)' : 'var(--color-teal)',
+                    }}
                   />
                 </div>
 
@@ -683,7 +698,7 @@ export default function GoalDetail() {
                   />
                   <Param
                     label="Still to fund"
-                    value={formatCurrency(goal.target_funding.shortfall)}
+                    value={goal.target_funding.is_met ? formatCurrency(0) : formatCurrency(goal.target_funding.shortfall)}
                   />
                   <Param
                     label="Time remaining"

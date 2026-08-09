@@ -125,7 +125,11 @@ export default function RetirementTargetCard({ target, levers = null, plain = fa
   }
 
   const covered = target.covered_pct;
-  const onTrack = target.gap >= 0;
+  // docs/12 Prompt D-3 — is_met is the same comparison this used to make
+  // inline (gap >= 0), now named on PlanMath::retirementTarget() itself so
+  // the goal-card roster and this detail card can never disagree on what
+  // "met" means.
+  const onTrack = target.is_met;
   // Clamped only for the BAR's width. The percentage itself is reported
   // unclamped below, so somebody comfortably ahead sees that they are.
   const barPct = Math.max(0, Math.min(100, covered));
@@ -136,9 +140,19 @@ export default function RetirementTargetCard({ target, levers = null, plain = fa
   return (
     <Card className="p-4 mb-4" data-tour="retirement-target-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-[var(--color-ink)]">
-          {plain ? 'How much will you need?' : 'Retirement target'}
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[var(--color-ink)]">
+            {plain ? 'How much will you need?' : 'Retirement target'}
+          </h2>
+          {onTrack && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }}
+            >
+              Goal met
+            </span>
+          )}
+        </div>
         <span className="text-xs font-medium text-[var(--color-ink-2)]">
           {countdownLabel(target.years_to_retirement)}
           {retirementAge ? ` · at ${retirementAge}` : ''}

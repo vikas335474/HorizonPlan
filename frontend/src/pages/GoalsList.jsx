@@ -12,6 +12,7 @@ import GoalCard from '../components/GoalCard';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { ClientCashFlowCard, CashFlowCard } from '../components/CashFlowUI';
 import { ClientFoundationsCard } from '../components/FoundationsUI';
+import { ClientAlertsCard } from '../components/AlertsUI';
 import { PersonalisationCard, DependantsCard } from '../components/PersonalisationUI';
 import PartnerHouseholdCard from '../components/PartnerHouseholdUI';
 import { ClientRiskProfileCard } from '../components/RiskProfileUI';
@@ -62,6 +63,10 @@ export default function GoalsList() {
         <div className="mb-6">
           <DisclosureBanner />
         </div>
+
+        {/* docs/12 Prompt D-4 — the unifying alerts surface. Renders nothing
+            when there is nothing to say, same convention as FoundationsCaveat. */}
+        <ClientAlertsCard />
 
         {/* A FIRM-managed client reads these; a self-serve individual must be
             able to WRITE them, because there is nobody else to enter their

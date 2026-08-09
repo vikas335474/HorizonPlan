@@ -16,6 +16,7 @@ for t in \
   tests/test_corpus_composition.php \
   tests/test_target_goal_funding.php \
   tests/test_goal_progress.php \
+  tests/test_alerts_engine.php \
   tests/test_financial_foundations.php \
   tests/test_personalisation_reference.php \
   tests/test_portfolio_reconcile.php \
@@ -52,7 +53,8 @@ for t in \
   tests/test_reference_costs_db.php \
   tests/test_personalisation_reference_db.php \
   tests/test_portfolio_reconcile_db.php \
-  tests/test_tax_reference_db.php
+  tests/test_tax_reference_db.php \
+  tests/test_alerts_inputs_db.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"
