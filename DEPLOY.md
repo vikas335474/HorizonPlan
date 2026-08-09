@@ -214,17 +214,21 @@ itself stays server-side-only, run via cron or SSH).
 ## Sourced reference-cost library sync
 
 `tools/reference_costs_sync.php` pushes the curated, cited cost-range dataset
-(docs/11 Prompt E-3 — education by driver, healthcare, city-tier expense
-multipliers) into `reference_costs` (sql/037), the cache the self-serve
-plan's "shall I look this up for you?" prompt reads from. Unlike the NAV
-sync, there is no single live API for AICTE/NMC/MOSPI/7th-CPC style figures —
-the dataset lives in `api/lib/ReferenceCosts.php`, curated and cited, and
-this job's only real work is upserting it into the DB cache the app actually
-reads. Every row seeds as `is_verified = 0` (same disclosure as
-`market_history`'s own seed, sql/015) until a human checks it against the
-named source and flips the flag by hand — a re-run never resets an
-already-verified row (see the ON DUPLICATE KEY UPDATE in
-`syncReferenceCosts()`).
+(docs/11 Prompt E-3 — education by driver, healthcare) into `reference_costs`
+(sql/037), the cache `api/lib/PersonalisationReference.php`'s education
+lookup reads first (falling back to its own constants if this cache is
+empty) and `reference_costs_get.php` serves directly. Unlike the NAV sync,
+there is no single live API for AICTE/NMC/MOSPI-style figures — the dataset
+lives in `api/lib/ReferenceCosts.php`, curated and cited, and this job's only
+real work is upserting it into the DB cache the app actually reads. A row
+seeds as `is_verified` per the dataset's own value (the education rows carry
+`true`/`false` inherited from the docs/11 Prompt E-2 reconciliation — see
+`ReferenceCosts.php`'s header) until a human checks it against the named
+source and flips the flag by hand — a re-run never resets an existing row's
+`is_verified` either way (see the ON DUPLICATE KEY UPDATE in
+`syncReferenceCosts()`). The sync also **prunes** any cached row whose
+(category, subcategory) the dataset no longer defines — safe because this
+table is entirely CLI-cron-owned, no user data ever lands in it.
 
 **hPanel → Advanced → Cron Jobs → Create a new cron job:**
 - Command: `php /home/<your-hostinger-user>/public_html/tools/reference_costs_sync.php`
@@ -234,13 +238,17 @@ already-verified row (see the ON DUPLICATE KEY UPDATE in
   (e.g. `0 4 1 * *`) is plenty; there's no daily-freshness requirement like
   the NAV sync's AMFI export.
 - Safe to run any time, including manually via SSH — it's a deterministic
-  upsert of a constant dataset, not a live fetch. A DB error mid-run rolls
-  back the whole batch (transaction owned by this script, not
+  upsert (+ prune) of a constant dataset, not a live fetch. A DB error
+  mid-run rolls back the whole batch (transaction owned by this script, not
   `syncReferenceCosts()` itself), leaving the existing cache untouched rather
   than half-written.
 - Must run once after `sql/037_reference_costs.sql` is applied — before that,
-  the cache is empty and the opt-in prompt simply renders nothing (never a
+  the cache is empty, `PersonalisationReference` runs entirely on its own
+  fallback constants, and `reference_costs_get.php` returns nothing (never a
   fabricated range).
+- **Note (city tier):** `reference_costs` deliberately holds no
+  `city_expense_multiplier` rows — see `ReferenceCosts.php`'s header for why
+  that figure stays a pure code-derived formula, not a cached range.
 
 Same CLI-only, never-shipped-by-deploy posture as the NAV cron
 (`api/lib/ReferenceCosts.php` is the shared part; `api/reference_costs_get.php`

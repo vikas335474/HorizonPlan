@@ -12,9 +12,12 @@ declare(strict_types=1);
 // already does for cash_flow_items.
 //
 // Each row carries its sourced suggested cost range for the recorded driver
-// (PersonalisationReference::educationRangeForDriver) and, when linked to a
-// goal, that goal's current target_amount so the UI can show "suggested
-// ₹X–Y vs. your goal's current ₹Z" side by side — never applied automatically.
+// (PersonalisationReference::educationRangeForDriver($driver, $db) — cache-
+// first against reference_costs/docs/11 Prompt E-3 since the reconciliation,
+// falling back to PersonalisationReference's own constants if that cache
+// isn't populated yet) and, when linked to a goal, that goal's current
+// target_amount so the UI can show "suggested ₹X–Y vs. your goal's current
+// ₹Z" side by side — never applied automatically.
 
 require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
@@ -71,7 +74,7 @@ foreach ($sharedClientIds as $sharedId) {
     }
 }
 
-$dependants = array_map(static function (array $row) use ($scopedDb): array {
+$dependants = array_map(static function (array $row) use ($scopedDb, $db): array {
     $goal = null;
     if ($row['goal_id'] !== null) {
         $goalRows = $scopedDb->select('base_plans', ['id' => (int) $row['goal_id']]);
@@ -90,7 +93,7 @@ $dependants = array_map(static function (array $row) use ($scopedDb): array {
         'label'          => $row['label'],
         'current_age'    => $row['current_age'] !== null ? (int) $row['current_age'] : null,
         'cost_driver'    => $row['cost_driver'],
-        'suggested_range' => PersonalisationReference::educationRangeForDriver($row['cost_driver']),
+        'suggested_range' => PersonalisationReference::educationRangeForDriver($row['cost_driver'], $db),
         'goal'           => $goal,
     ];
 }, $rows);
