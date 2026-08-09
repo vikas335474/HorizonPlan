@@ -16,6 +16,7 @@ import { RiskProfileSummary } from '../components/RiskProfileUI';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { CashFlowCard } from '../components/CashFlowUI';
 import { FoundationsCard } from '../components/FoundationsUI';
+import { AlertsCard } from '../components/AlertsUI';
 import { ReadinessScoreBadge } from '../components/ReadinessScore';
 import { Card, EmptyState, Spinner, Button } from '../components/ui';
 import { formatCurrency } from '../lib/format';
@@ -70,6 +71,10 @@ export default function ClientGoals() {
         <div className="mb-6">
           <DisclosureBanner />
         </div>
+
+        {/* docs/12 Prompt D-4 — the unifying alerts surface. Renders nothing
+            when there is nothing to say. */}
+        <AlertsCard clientId={clientId} />
 
         {/* docs/08 gap #5 "client overview depth" — a consolidated glance at
             this client's goals before drilling into the portfolio/risk/goal

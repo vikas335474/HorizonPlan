@@ -480,6 +480,17 @@ export const api = {
   saveFoundations: (fields) =>
     request('foundations_upsert.php', { method: 'POST', body: JSON.stringify(fields) }),
 
+  // --- Alerts / rules engine (docs/12 Prompt D-4) ---
+  // Every currently-true fact for one client: a goal reaching its target, a
+  // goal drifting behind plan, a NAV-tracked holding's price going stale, a
+  // scheduled plan review coming due, and any foundations gap. Recomputed
+  // fresh on every call — no acknowledge/dismiss yet (see AlertsEngine.php's
+  // header). clientId is ignored for a client session (forced server-side to
+  // their own). Each alert: { type, severity: 'positive'|'attention',
+  // subject, factual_message, deep_link }.
+  getAlerts: (clientId) =>
+    request(`alerts_read.php${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ''}`),
+
   // --- Progressive personalisation (docs/11 Prompt E-2) ---
   // City tier (+ optional multiplier override) and an ongoing monthly medical
   // cost. Both feed goals_projection.php's retirement_target as opt-in

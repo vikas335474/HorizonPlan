@@ -621,6 +621,15 @@ function ClientHealthBadges({ client }) {
       {client.progress_status === 'behind' && (
         <ProgressStatusBadge status={client.progress_status} />
       )}
+      {/* docs/12 Prompt D-4 — the two cheap tenant-wide alert signals,
+          rendered the same terse way as the drift badge above: only when
+          true, never a reassuring "up to date" nobody asked for. */}
+      {client.review_due && (
+        <Badge fg="var(--color-amber)" bg="var(--color-amber-soft)">Review due</Badge>
+      )}
+      {client.price_stale && (
+        <Badge fg="var(--color-amber)" bg="var(--color-amber-soft)">Price stale</Badge>
+      )}
       {client.risk_band !== null ? (
         <Badge fg="var(--color-teal-ink)" bg="var(--color-teal-soft)">{client.risk_band}</Badge>
       ) : (

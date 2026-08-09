@@ -38,6 +38,10 @@ require_once __DIR__ . '/lib/security_gatekeeper.php';
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/PlanMath.php';
+// docs/12 Prompt D-4 — reviewDueAlert()/stalePriceAlert() for the cheap
+// tenant-wide book signals below. Both are pure; nothing here writes.
+require_once __DIR__ . '/lib/AlertsEngine.php';
+require_once __DIR__ . '/lib/MfNavSync.php'; // attachNavFreshness()
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -215,6 +219,9 @@ $clients = array_map(static function (array $c) use ($minReadinessByClient, $lat
 // different aggregate signals rather than one unified figure force-fit
 // across both.
 $goalsMetCount = 0;
+// Per-client attribution alongside the firm-wide count — docs/12 principle 6's
+// cheap tenant-wide rollup extending this same loop rather than a second pass.
+$hasGoalMetByClient = [];
 foreach ($scopedDb->select('base_plans') as $goal) {
     $funding = PlanMath::targetGoalFunding(
         $goal['target_amount'] !== null ? (float) $goal['target_amount'] : null,
@@ -224,8 +231,52 @@ foreach ($scopedDb->select('base_plans') as $goal) {
     );
     if ($funding !== null && $funding['is_met']) {
         $goalsMetCount++;
+        $hasGoalMetByClient[(int) $goal['client_id']] = true;
     }
 }
+
+// docs/12 Prompt D-4 — the tenant-wide "cheap signals" half of the alerts
+// engine (principle 6). Deliberately only the two flat, one-row-per-client-ish
+// reads: a scheduled review coming due, and any NAV-tracked holding gone
+// stale. goal_drift and foundations_gap are NOT computed here — both need a
+// second gathering pass per client (goal_snapshots + household cash-flow/
+// portfolio assembly) that costs real time multiplied by a whole tenant's
+// book; a click into a client's own alerts_read.php is where those live. Same
+// asymmetry $goalsMetCount already accepts for retirement goals, above.
+$reviewDueByClient = [];
+foreach ($scopedDb->select('plan_review_schedules') as $schedule) {
+    $due = reviewDueAlert(
+        (int) $schedule['client_id'],
+        '', // the client label never renders here — only the boolean is used
+        (string) $schedule['cadence'],
+        $schedule['last_sent_at']
+    );
+    if ($due !== null) {
+        $reviewDueByClient[(int) $schedule['client_id']] = true;
+    }
+}
+
+$navTrackedRows = array_values(array_filter(
+    $scopedDb->select('client_portfolio_items'),
+    static fn(array $r) => $r['amfi_scheme_code'] !== null && $r['units_held'] !== null
+));
+$enrichedNavRows = attachNavFreshness($db, $navTrackedRows)['rows'];
+$priceStaleByClient = [];
+foreach ($enrichedNavRows as $row) {
+    $stale = stalePriceAlert((int) $row['id'], (string) $row['description'], $row['nav_fetched_at'] ?? null);
+    if ($stale !== null) {
+        $priceStaleByClient[(int) $row['client_id']] = true;
+    }
+}
+
+// docs/12 Prompt D-4 — attach the three cheap per-client booleans computed
+// above. See their own comments for why goal_drift/foundations_gap aren't here.
+$clients = array_map(static function (array $c) use ($hasGoalMetByClient, $reviewDueByClient, $priceStaleByClient): array {
+    $c['has_goal_met'] = $hasGoalMetByClient[$c['client_id']] ?? false;
+    $c['review_due'] = $reviewDueByClient[$c['client_id']] ?? false;
+    $c['price_stale'] = $priceStaleByClient[$c['client_id']] ?? false;
+    return $c;
+}, $clients);
 
 // Aggregate stats for the dashboard header cards — computed over the WHOLE
 // tenant book, before any scope/search/attention filter or paging is applied,
@@ -238,12 +289,17 @@ $totalAum     = array_sum(array_column($clients, 'total_net_worth'));
 // "Needs attention" — the same definition the dashboard UI used to apply
 // client-side, moved here so it can drive both the firm-wide count and the
 // server-side filter/sort from ONE rule rather than two that could drift:
-// no goals yet, never risk-profiled, or a worst-goal readiness below 40 (the
-// "Needs attention" band in ReadinessScore.jsx).
+// no goals yet, never risk-profiled, a worst-goal readiness below 40 (the
+// "Needs attention" band in ReadinessScore.jsx), a review coming due, or a
+// NAV-tracked holding's price gone stale (docs/12 Prompt D-4 — folding the
+// two cheap tenant-wide alert signals into this existing definition rather
+// than a second, parallel dashboard mechanism).
 $needsAttention = static function (array $c): bool {
     return $c['goal_count'] === 0
         || $c['risk_band'] === null
-        || ($c['min_readiness_score'] !== null && $c['min_readiness_score'] < 40);
+        || ($c['min_readiness_score'] !== null && $c['min_readiness_score'] < 40)
+        || $c['review_due']
+        || $c['price_stale'];
 };
 $attentionCount = count(array_filter($clients, $needsAttention));
 
