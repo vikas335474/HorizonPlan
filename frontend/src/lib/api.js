@@ -376,6 +376,17 @@ export const api = {
   // library's read side — cited ranges (education by driver, healthcare,
   // city-expense multipliers), never a point estimate. Pass subcategory to
   // fetch exactly one row (or found:false), omit it to list a whole category.
+  //
+  // *** DELIBERATELY UNCALLED — this is not a dead wrapper. *** Every surface
+  // that needs a reference range gets it EMBEDDED in the response it was
+  // already fetching, so the figure and the thing it annotates can never
+  // arrive out of step: dependants_list.php attaches `suggested_range` per
+  // child, and living_cost_estimate.php resolves the living_cost rows
+  // server-side. Fetching the same rows a second time from the browser would
+  // reintroduce exactly the drift that embedding removes. This method stays as
+  // the endpoint's typed client for a future surface that genuinely needs a
+  // standalone lookup (the cached healthcare row still has no UI consumer —
+  // docs/11 §6, a recorded deferral). Do not "clean it up" as unused.
   getReferenceCosts: (category, subcategory) => {
     const params = new URLSearchParams({ category });
     if (subcategory) params.set('subcategory', subcategory);

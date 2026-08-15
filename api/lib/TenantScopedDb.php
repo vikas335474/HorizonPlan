@@ -36,6 +36,21 @@ final class TenantScopedDb
         $this->tenantId = $tenantId;
     }
 
+    /**
+     * Which tenant this instance is bound to.
+     *
+     * Read-only on purpose — there is no setter, and there must never be one.
+     * The whole isolation guarantee rests on the tenant being fixed at
+     * construction, so a helper that could be re-pointed mid-request would
+     * undo it. Exposed so a caller that already holds a scoped instance can
+     * ask a tenant-level question (e.g. tenantIsPersonal()) without carrying
+     * the id separately and risking the two drifting apart.
+     */
+    public function tenantId(): int
+    {
+        return $this->tenantId;
+    }
+
     private function assertAllowedTable(string $table): void
     {
         if (!in_array($table, self::ALLOWED_TABLES, true)) {

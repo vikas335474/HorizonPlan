@@ -37,7 +37,38 @@ function normalizeUser(raw) {
     // picker logs into (see api/lib/DemoAccess.php). Never true for an
     // admin-created or trial-signup account, so the tour can't nag them.
     isDemo: !!raw.is_demo,
+    // Who this is, for surfaces that address the person by name. Only
+    // session.php carries these — login.php / mfa_verify.php don't, exactly
+    // like the tenant and platform blocks, so both are null for the moment
+    // between login and the refreshSession() that immediately follows.
+    // Consumers must treat null as "not known yet", never as "no name".
+    //
+    // displayName is ALSO legitimately null forever: sql/035 added the column
+    // nullable with no backfill, so everyone predating it has none. See
+    // displayNameFor() below for the shared fallback.
+    displayName: raw.display_name ?? null,
+    email: raw.email ?? null,
   };
+}
+
+/**
+ * The name to address someone by, with the fallback chain in one place so no
+ * two surfaces disagree about what to call the same person.
+ *
+ * users.display_name is nullable and un-backfilled (sql/035), so the email
+ * local part is the honest stand-in — it is what the person typed to get here.
+ * Returns null rather than a placeholder like "there" when nothing is known,
+ * so a caller can drop the greeting entirely instead of rendering a greeting
+ * addressed to nobody.
+ */
+export function displayNameFor(user) {
+  if (!user) return null;
+  if (user.displayName && user.displayName.trim() !== '') return user.displayName.trim();
+  if (user.email && user.email.includes('@')) {
+    const local = user.email.split('@')[0].trim();
+    if (local !== '') return local;
+  }
+  return null;
 }
 
 // docs/09 Piece 1 — only session.php returns this block (same precedent as

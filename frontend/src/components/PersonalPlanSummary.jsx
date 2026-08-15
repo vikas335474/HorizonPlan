@@ -28,13 +28,25 @@ import { api } from '../lib/api';
 import { Card } from './ui';
 import { leverLine } from './RetirementTargetCard';
 import { retirementCountdown } from '../lib/personalPlanner';
+import { useAuth, displayNameFor } from '../context/AuthContext';
+
+// "Aug 2026" — a monthly series never needs the day, and the window this
+// labels is measured in months at minimum.
+function shortMonth(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+}
 
 /**
  * @param goals  the already-loaded goals array from GoalsList (not re-fetched)
  */
 export default function PersonalPlanSummary({ goals }) {
+  const { user } = useAuth();
   const [projection, setProjection] = useState(null);
   const [alerts, setAlerts] = useState(null);
+  const [progress, setProgress] = useState(null);
 
   // The retirement goal is the one this block reports on: it is the only goal
   // type that carries a readiness score and a solvable gap.
@@ -67,6 +79,18 @@ export default function PersonalPlanSummary({ goals }) {
       .catch(() => { if (!cancelled) setAlerts([]); });
     return () => { cancelled = true; };
   }, []);
+
+  // The recorded readiness history for this goal (sql/042). Separate from the
+  // projection above: that one is today's answer, this one is how it has moved.
+  useEffect(() => {
+    if (retirementGoalId === null) return undefined;
+    let cancelled = false;
+    api
+      .getGoalProgress(retirementGoalId)
+      .then((res) => { if (!cancelled) setProgress(res); })
+      .catch(() => { if (!cancelled) setProgress(null); });
+    return () => { cancelled = true; };
+  }, [retirementGoalId]);
 
   // Nothing to stand on yet — the empty state in GoalsList handles this case.
   if (!goals || goals.length === 0) return null;
@@ -114,8 +138,47 @@ export default function PersonalPlanSummary({ goals }) {
     };
   }
 
+  // --- who this plan is about, and what it assumes ------------------------
+  //
+  // Not decoration. current_age and retirement_age are the two most
+  // load-bearing inputs in the whole plan — they set the horizon every other
+  // number is computed over — and until now they were visible only by opening
+  // a goal. A wrong age silently invalidates the entire projection, so the
+  // assumptions are stated on the surface that leads with the answer.
+  const name = displayNameFor(user);
+  const currentAge = retirementGoal?.current_age ?? null;
+  const retirementAge = retirementGoal?.retirement_age ?? null;
+
+  // How the ANSWER has moved (sql/042). Null until two scored snapshots exist;
+  // the server refuses to report a delta from one reading, so there is nothing
+  // to guard against here beyond the null itself.
+  const readinessChange = progress?.readiness_change ?? null;
+
   return (
     <Card className="p-5 mb-4">
+      {/* --- who you are, and what this plan assumes about you --- */}
+      {(name || currentAge !== null) && (
+        <div className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-[var(--color-line)] pb-3">
+          {name && (
+            <span className="text-sm font-semibold text-[var(--color-ink)]">{name}</span>
+          )}
+          {currentAge !== null && (
+            <span className="text-xs text-[var(--color-ink-2)] tabular-nums">
+              {name ? '· ' : ''}age {currentAge}
+              {retirementAge !== null && <> · retiring at {retirementAge}</>}
+            </span>
+          )}
+          {retirementGoal && (
+            <Link
+              to={`/goals/${retirementGoal.id}`}
+              className="ml-auto text-[11px] text-[var(--color-ink-3)] underline hover:text-[var(--color-ink)]"
+            >
+              Not right? Change it
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* --- where you stand --- */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -140,6 +203,31 @@ export default function PersonalPlanSummary({ goals }) {
               {score}
               <span className="text-sm font-normal text-[var(--color-ink-3)]"> / 100</span>
             </p>
+
+            {/* How that answer has MOVED across the tracked window.
+                Deliberately "since <month>", never "this month vs last": a
+                monthly framing on a multi-decade plan trains exactly the
+                short-horizon evaluation habit that makes long-term investors
+                worse off. A zero delta is worth saying out loud — "unchanged"
+                is a real and reassuring answer, not an empty state. */}
+            {readinessChange && (
+              <p
+                className="mt-1 text-[11px] tabular-nums"
+                style={{
+                  color:
+                    readinessChange.delta > 0
+                      ? 'var(--color-teal-ink)'
+                      : readinessChange.delta < 0
+                        ? 'var(--color-amber-ink)'
+                        : 'var(--color-ink-3)',
+                }}
+              >
+                {readinessChange.delta > 0 && `▲ ${readinessChange.delta} `}
+                {readinessChange.delta < 0 && `▼ ${Math.abs(readinessChange.delta)} `}
+                {readinessChange.delta === 0 && 'Unchanged '}
+                since {shortMonth(readinessChange.from_date)}
+              </p>
+            )}
           </div>
         )}
       </div>

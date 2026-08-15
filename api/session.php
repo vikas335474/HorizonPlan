@@ -38,7 +38,7 @@ issueCsrfToken();
 // read to tell the frontend whether this user has MFA enrolled. This drives
 // the soft app-layer MFA gate (redirect unenrolled users to Settings) — the
 // column value itself is never returned, only the boolean derived from it.
-$mfaStmt = $db->prepare("SELECT mfa_secret, google_sub, firm_role, email FROM users WHERE id = :id LIMIT 1");
+$mfaStmt = $db->prepare("SELECT mfa_secret, google_sub, firm_role, email, display_name FROM users WHERE id = :id LIMIT 1");
 $mfaStmt->execute([':id' => (int) $session['user_id']]);
 $mfaRow = $mfaStmt->fetch();
 
@@ -72,6 +72,13 @@ echo json_encode([
         'tenant_id'    => (int) $session['tenant_id'],
         'role'         => $session['role'],
         'firm_role'    => $mfaRow['firm_role'] ?? null,
+        // Who this is, for the UI to say so. display_name is nullable (sql/035
+        // added it; everyone predating it has NULL and there is no backfill),
+        // so the frontend falls back to the email local part rather than
+        // rendering an empty greeting. Both are the caller's OWN details —
+        // this endpoint only ever reads the session's own user row.
+        'display_name' => $mfaRow['display_name'] ?? null,
+        'email'        => $mfaRow['email'] ?? null,
         // MFA is satisfied by either factor — TOTP or a linked Google
         // account (see security_gatekeeper.php::userHasMfaEnrolled()).
         'mfa_enrolled'      => !empty($mfaRow['mfa_secret']) || !empty($mfaRow['google_sub']),

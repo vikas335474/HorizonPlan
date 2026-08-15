@@ -180,8 +180,17 @@ equivalent at **`sql/manual/reference_costs_seed.sql`** — paste it into
 hPanel's database tool and the cache is populated with no CLI at all. It is
 generated from the same dataset the sync writes, so it cannot drift by a
 transcription error, and it is an upsert, so it is safe to run more than once
-and safe to run before or after the real sync. Regenerate it after changing
-the dataset:
+and safe to run before or after the real sync.
+
+> **Apply `sql/043` before this seed (or use the copy embedded at the top of
+> it).** Migration 037 created `reference_costs.unit` as `VARCHAR(20)`, and the
+> living-cost rows carry `inr_monthly_per_capita` — 22 characters. Without the
+> widening ALTER, MySQL rejects all 15 living-cost rows with
+> `SQLSTATE[22001] Data too long for column 'unit'`, and the
+> `reference_costs_sync` cron fatals part-way through on every run. The seed
+> file repeats the ALTER at its top so pasting that one file is sufficient.
+
+Regenerate the seed after changing the dataset:
 
 ```bash
 php -r 'require "api/lib/ReferenceCosts.php"; /* see the file header */' \

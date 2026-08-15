@@ -118,6 +118,46 @@ assertTrue($education['expected_value'] === null, 'a target-based goal stores NU
 assertTrue($education['funding_covered_pct'] !== null, 'a target-based goal stores funding coverage instead');
 assertTrue((float) $education['funding_covered_pct'] > 0.0 && (float) $education['funding_covered_pct'] < 100.0, 'coverage is a sane percentage');
 
+// --- 3b. readiness score is recorded, and NULL is never faked (sql/042) -----
+//
+// The individual dashboard leads with the readiness score and states how it
+// has moved. That is only honest if the stored series distinguishes "not
+// scorable" from "scored zero" — a target-based goal and a goal in genuine
+// trouble must never render the same.
+assertTrue(
+    $retirement['readiness_score'] !== null,
+    'a projectable goal records the readiness score the plan implied on that date'
+);
+assertTrue(
+    (int) $retirement['readiness_score'] >= 0 && (int) $retirement['readiness_score'] <= 100,
+    'the recorded readiness score is on the documented 0-100 scale'
+);
+assertTrue(
+    (int) $retirement['readiness_score'] === PlanMath::readinessScoreForGoal(10000000.0, 4.0, 6.0, 8.0, 30),
+    'the stored score is exactly what PlanMath would compute for the same goal — the snapshot cannot disagree with the goal\'s own page'
+);
+assertTrue(
+    $education['readiness_score'] === null,
+    'a target-based goal stores NULL readiness — it carries no return assumption, so no score exists to record'
+);
+
+// A zero-corpus goal must record NULL, not the ~89 the raw survival maths
+// produces for withdrawing a percentage of nothing. Someone who has not
+// started saving must never see a flattering score in their history.
+$stmt = $db->prepare(
+    "INSERT INTO base_plans
+        (id, tenant_id, client_id, goal_type, goal_label, initial_net_worth, inflation_rate,
+         withdrawal_rate, drawdown_return_rate, projection_horizon_years, created_at)
+     VALUES (102, 1, 11, 'retirement', 'Not started yet', 0, 6, 4, 8, 30, :created)"
+);
+$stmt->execute([':created' => $twoYearsAgo]);
+captureClientProgress($scopedA, $db, 1, 11, 10, $asOf);
+$zeroCorpus = $scopedA->select('goal_snapshots', ['goal_id' => 102])[0];
+assertTrue(
+    $zeroCorpus['readiness_score'] === null,
+    'a zero-corpus goal records NULL readiness, never the flattering score a percentage of nothing survives to'
+);
+
 // --- 4. net worth ----------------------------------------------------------
 $nw = $scopedA->select('client_net_worth_snapshots', ['client_id' => 11])[0];
 assertTrue((float) $nw['assets_total'] === 800000.0, 'assets are summed across liquid and locked');

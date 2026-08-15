@@ -68,6 +68,10 @@ $points = array_map(static function (array $r): array {
         'corpus_value'        => (float) $r['corpus_value'],
         'expected_value'      => $r['expected_value'] !== null ? (float) $r['expected_value'] : null,
         'funding_covered_pct' => $r['funding_covered_pct'] !== null ? (float) $r['funding_covered_pct'] : null,
+        // sql/042 — the score as the plan stood on this date. Null is "not
+        // scored" (target-based goal, zero corpus, or a row predating the
+        // migration), never zero.
+        'readiness_score'     => $r['readiness_score'] !== null ? (int) $r['readiness_score'] : null,
         // Lets the UI distinguish a reading someone took before a meeting
         // from one the scheduled job recorded unattended.
         'automatic'           => $r['created_by_user_id'] === null,
@@ -95,10 +99,43 @@ if ($points !== []) {
     ];
 }
 
+// How the ANSWER has moved across the tracked window — not how the corpus has.
+// The two are different questions and only this one is what a person opens the
+// app to ask ("am I in better shape than when I last looked?").
+//
+// Computed over SCORED points only. Rows can carry a NULL readiness_score for
+// several honest reasons (a target-based goal, a zero corpus, or simply
+// predating sql/042), and treating any of those as a zero would manufacture a
+// catastrophic drop out of a row that never had a score at all.
+//
+// Null below two scored points, exactly as client_progress_read.php refuses to
+// report a net-worth change from a single reading: one observation is a
+// position, not a movement, and "0 change" implies a stability nobody measured.
+//
+// first -> latest, deliberately NOT last-month-vs-this-month. Framing this as a
+// monthly delta would teach a person with a 20-year horizon to evaluate on a
+// monthly cadence, which is the documented behaviour (myopic loss aversion)
+// that makes long-horizon investors worse off. The UI names the start date so
+// the window is explicit rather than implied.
+$readinessChange = null;
+$scored = array_values(array_filter($points, static fn(array $p): bool => $p['readiness_score'] !== null));
+if (count($scored) > 1) {
+    $firstScored = $scored[0];
+    $lastScored  = $scored[count($scored) - 1];
+    $readinessChange = [
+        'from_date'  => $firstScored['as_of_date'],
+        'to_date'    => $lastScored['as_of_date'],
+        'from_score' => $firstScored['readiness_score'],
+        'to_score'   => $lastScored['readiness_score'],
+        'delta'      => $lastScored['readiness_score'] - $firstScored['readiness_score'],
+    ];
+}
+
 echo json_encode([
-    'status'        => 'success',
-    'goal_id'       => $goalId,
-    'tracking_mode' => $trackingMode,
-    'points'        => $points,
-    'latest'        => $latest,
+    'status'           => 'success',
+    'goal_id'          => $goalId,
+    'tracking_mode'    => $trackingMode,
+    'points'           => $points,
+    'latest'           => $latest,
+    'readiness_change' => $readinessChange,
 ]);

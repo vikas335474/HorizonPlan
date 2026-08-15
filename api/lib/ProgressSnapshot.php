@@ -60,7 +60,7 @@ function progressYearsElapsed(string $planCreatedAt, string $asOfDate): float
  * what a snapshot means.
  *
  * @param array<string,mixed> $goal a base_plans row
- * @return array{corpus_value: float, expected_value: ?float, funding_covered_pct: ?float}
+ * @return array{corpus_value: float, expected_value: ?float, funding_covered_pct: ?float, readiness_score: ?int}
  */
 function progressValuesForGoal(array $goal, string $asOfDate): array
 {
@@ -91,10 +91,34 @@ function progressValuesForGoal(array $goal, string $asOfDate): array
         $asOfDate
     );
 
+    // sql/042 — the readiness score AS THE PLAN STOOD on this date, so the
+    // dashboard can say "62 in March, 68 now" instead of only ever showing
+    // today's reading. Guarded on exactly the same condition goals_list.php
+    // and goals_projection.php use (both rates present), so a snapshot can
+    // never carry a score the goal's own page would refuse to compute.
+    //
+    // Null is a real state, not a gap: target-based goals carry no return
+    // assumption, and readinessScoreForGoal() itself returns null for a zero
+    // corpus rather than the flattering ~89 the raw survival maths produces.
+    $readiness = null;
+    if ($goal['withdrawal_rate'] !== null && $goal['drawdown_return_rate'] !== null) {
+        $readiness = PlanMath::readinessScoreForGoal(
+            $corpus,
+            (float) $goal['withdrawal_rate'],
+            (float) $goal['inflation_rate'],
+            (float) $goal['drawdown_return_rate'],
+            (int) $goal['projection_horizon_years'],
+            $goal['liquid_corpus_amount'] !== null ? (float) $goal['liquid_corpus_amount'] : null,
+            $goal['locked_corpus_amount'] !== null ? (float) $goal['locked_corpus_amount'] : null,
+            $goal['locked_return_rate'] !== null ? (float) $goal['locked_return_rate'] : null
+        );
+    }
+
     return [
         'corpus_value'        => $corpus,
         'expected_value'      => $expected,
         'funding_covered_pct' => $funding !== null ? (float) $funding['covered_pct'] : null,
+        'readiness_score'     => $readiness,
     ];
 }
 
@@ -137,12 +161,13 @@ function upsertGoalSnapshot(PDO $db, int $tenantId, int $goalId, int $clientId, 
 {
     $stmt = $db->prepare(
         "INSERT INTO goal_snapshots
-            (tenant_id, goal_id, client_id, as_of_date, corpus_value, expected_value, funding_covered_pct, created_by_user_id)
-         VALUES (:tenant_id, :goal_id, :client_id, :as_of, :corpus, :expected, :funding, :uid)
+            (tenant_id, goal_id, client_id, as_of_date, corpus_value, expected_value, funding_covered_pct, readiness_score, created_by_user_id)
+         VALUES (:tenant_id, :goal_id, :client_id, :as_of, :corpus, :expected, :funding, :readiness, :uid)
          ON DUPLICATE KEY UPDATE
             corpus_value = VALUES(corpus_value),
             expected_value = VALUES(expected_value),
             funding_covered_pct = VALUES(funding_covered_pct),
+            readiness_score = VALUES(readiness_score),
             created_by_user_id = VALUES(created_by_user_id)"
     );
     $stmt->execute([
@@ -153,6 +178,7 @@ function upsertGoalSnapshot(PDO $db, int $tenantId, int $goalId, int $clientId, 
         ':corpus'    => $values['corpus_value'],
         ':expected'  => $values['expected_value'],
         ':funding'   => $values['funding_covered_pct'],
+        ':readiness' => $values['readiness_score'],
         ':uid'       => $userId,
     ]);
 }

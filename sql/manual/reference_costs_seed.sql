@@ -26,7 +26,19 @@
 -- are transcriptions of MOSPI HCES 2023-24 published figures, not fetched from
 -- a live source. The UI keeps labelling them unverified until a human checks
 -- them against the fact sheet and flips the flag.
+--
+-- *** RUN sql/043 FIRST, or the living_cost rows below will all fail. ***
+-- Migration 037 created `unit` as VARCHAR(20); the living-cost unit
+-- ('inr_monthly_per_capita') is 22 characters, so MySQL rejects those 15 rows
+-- outright with SQLSTATE[22001] "Data too long for column 'unit'". The widening
+-- ALTER is repeated at the top of this file so pasting THIS ONE FILE is
+-- sufficient — it is idempotent and harmless if 043 has already been applied.
 -- ============================================================================
+
+-- Prerequisite from sql/043 — see the note above. Safe to re-run.
+ALTER TABLE reference_costs
+    MODIFY COLUMN unit VARCHAR(32) NOT NULL
+        COMMENT 'absolute-rupee unit only, never a multiplier: inr_total | inr_annual | inr_monthly_per_capita';
 
 INSERT INTO reference_costs
   (category, subcategory, label, unit, low, high, source_name, source_url, as_of_date, is_verified, fetched_at)
