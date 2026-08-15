@@ -55,7 +55,8 @@ for t in \
   tests/test_portfolio_reconcile_db.php \
   tests/test_tax_reference_db.php \
   tests/test_alerts_inputs_db.php \
-  tests/test_product_events.php
+  tests/test_product_events.php \
+  tests/test_personal_digest.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"
