@@ -54,12 +54,26 @@ for t in \
   tests/test_personalisation_reference_db.php \
   tests/test_portfolio_reconcile_db.php \
   tests/test_tax_reference_db.php \
-  tests/test_alerts_inputs_db.php
+  tests/test_alerts_inputs_db.php \
+  tests/test_product_events.php
 do
   echo "──────────────────────────────────────────────"
   echo "▶ $t"
   php "$t" || status=1
 done
+
+# docs/13 §7.1 — the one JavaScript module with real decision logic in it
+# (lib/personalPlanner.js decides which goals every self-serve plan starts
+# with). Run with node's own runtime, no test framework and no new dependency.
+# Self-skips when node isn't installed, the same posture the DB tests use for a
+# missing database — a missing optional runtime is not a test failure.
+echo "──────────────────────────────────────────────"
+echo "▶ tests/test_personal_planner.mjs"
+if command -v node >/dev/null 2>&1; then
+  node tests/test_personal_planner.mjs || status=1
+else
+  echo "SKIP: node not installed — personal-planner tests not run."
+fi
 
 echo "──────────────────────────────────────────────"
 if [ "$status" -eq 0 ]; then

@@ -56,7 +56,12 @@ function Figure({ label, value, tone = 'ink', sub }) {
 // change, with the other named alongside it. Renders nothing for a lever that
 // couldn't be solved (e.g. no years left to add SIP into) rather than a
 // confusing "N/A".
-function leverLine(levers, plain) {
+// Exported (docs/13 I-2) so the goal roster and the personal plan summary can
+// state the SAME sentence this card does. Deliberately one definition rather
+// than a second copy — the precedent is FoundationsInputs.php, extracted for
+// exactly this reason: two places computing "what closes the gap" is two
+// places that can disagree with each other in front of the same person.
+export function leverLine(levers, plain) {
   if (!levers) return null;
   const { extra_monthly_sip: extraSip, deferral_years: deferralYears, smaller_lever: smaller } = levers;
   if (extraSip == null && deferralYears == null) return null;

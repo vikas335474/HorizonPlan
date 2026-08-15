@@ -133,6 +133,11 @@ export function suggestGoals(answers) {
   const monthly = Number(answers.monthly_saving) || 0;
   const goals = [];
 
+  // docs/13 I-6 is NOT implemented here, deliberately — see the note on
+  // target-based goals below. All of the stated monthly saving goes to the
+  // retirement goal, because it is currently the only goal type this app can
+  // model a contribution for.
+
   // Retirement — always suggested. It's the product's whole subject, and it's
   // the one goal everyone has whether or not they've named it.
   //
@@ -163,6 +168,24 @@ export function suggestGoals(answers) {
       sip_step_up_rate: 0,
     },
   });
+
+  // A NOTE ON THE TARGET-BASED GOALS BELOW (docs/13 G5 / I-6).
+  //
+  // Education and home goals are created with no contribution, and that is
+  // not an oversight in this file — it is the shape of the whole app today:
+  //   * goals_create.php nulls monthly_sip_amount for any non-retirement goal
+  //   * PlanMath::targetGoalFunding() ignores contributions on purpose, and
+  //     documents itself as "a floor, not a forecast"
+  //   * CLAUDE.md's standing rule is that target-based goals carry no return
+  //     assumption and the app will not invent one
+  //
+  // So sending a SIP from here would be silently dropped by the server, and
+  // showing one on the review screen would promise a projection the goal
+  // cannot produce. Letting these goals model contributions is a real product
+  // decision (it needs a return assumption for a goal type that deliberately
+  // has none) and belongs in a decide-then-build session, not a quiet change
+  // here. Until then these are honest targets to save toward, and the review
+  // screen says exactly that rather than implying a funded path.
 
   if (answers.kids === 'one' || answers.kids === 'many') {
     // Assumes college at ~18 for a young child. The person overwrites both the
