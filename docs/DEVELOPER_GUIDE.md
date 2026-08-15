@@ -341,6 +341,7 @@ These are the "long tail of hardening + demo + UX" sessions from `docs/CHANGELOG
 | `PortfolioTaxContext.php` | Per-holding tax-context orchestrator (docs/12 D-2, sql/039) — shapes cached treatment notes with acquisition data into an honest "facts only" answer. Pure, no DB. |
 | `TaxReference.php` | Tax reference data helper — reads the cached `tax_reference` table (capital-gains/holding-period treatment notes) and validates them. |
 | `ReferenceCosts.php` | Reference-costs caching helper — reads the `reference_costs` table (education/medical cost ranges) for use in personalisation. |
+| `LivingCostReference.php` | The MOSPI-HCES living-cost anchor for the retirement-spend estimate — dataset, state/sector resolution with a *reported* national fallback, and per-capita→household scaling. Pure, no DB. Read its header before changing a figure: MPCE is a population average, not a retirement target. |
 | **Households & personal planning** | |
 | `HouseholdProjection.php` | Sums members' projections into a household aggregate. |
 | `SelfService.php` | Self-serve individual tier — gates write access to personal tenants only (sql/033). Enforces "own data only" on self-directed client roles. |

@@ -622,6 +622,21 @@ export const api = {
     return request(`change_log_list.php?${params.toString()}`);
   },
 
+  // --- Living-cost anchor (MOSPI HCES) ---
+  // A sourced population average for someone who doesn't know their own
+  // monthly spend. Context BESIDE their own figure — never pre-filled into it:
+  // MPCE is an average across all households and this product's users spend
+  // well above it, so an uncritical anchor understates a retirement target.
+  // See api/lib/LivingCostReference.php. The response carries its own caveat
+  // string; render it, don't rewrite it.
+  getLivingCostEstimate: ({ state, sector = 'urban', householdSize, clientId } = {}) => {
+    const params = new URLSearchParams({ sector });
+    if (state) params.set('state', state);
+    if (householdSize) params.set('household_size', String(householdSize));
+    if (clientId) params.set('client_id', String(clientId));
+    return request(`living_cost_estimate.php?${params.toString()}`);
+  },
+
   // --- Monthly plan digest (docs/13 I-9) ---
   // The caller's OWN preference — there is no user_id here, and the server
   // resolves identity from the session. Self-serve individuals only (403 for a

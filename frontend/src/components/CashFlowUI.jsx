@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import LivingCostAnchor from './LivingCostAnchor';
 import { Card, Badge, Button, Spinner } from './ui';
 import { formatCurrency } from '../lib/format';
 
@@ -176,6 +177,13 @@ export function CashFlowCard({ clientId }) {
           onCancel={() => setAdding(false)}
         />
       )}
+
+      {/* A sourced anchor for someone who doesn't know their own monthly
+          spend. Self-serve only: a firm-managed client's adviser supplies
+          this judgement, and handing a population average to someone who
+          has one would undercut them. Context only — it never writes to a
+          figure here. See LivingCostAnchor.jsx. */}
+      {isSelfDirected && expense.length === 0 && <LivingCostAnchor clientId={clientId} />}
     </Card>
   );
 }
