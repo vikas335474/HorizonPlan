@@ -271,43 +271,87 @@ event.
 
 ## 6. Prioritised backlog
 
+> **Build status (this session).** P0 and P1 are built, plus I-11 from P2.
+> I-6 was **investigated and deliberately not built** — see its entry for why;
+> it turned out to rest on a false premise in this document's own G5. I-9, I-10
+> and I-12 are not started.
+
 ### P0 — Fix the flow before adding to it
 
-**I-1 · Invert the individual home screen.** Reorder `GoalsList.jsx` for
-`tenant.kind === 'personal'`: standing → next action → goals → everything else
-collapsed under "Refine your plan" with a completion count. No new components.
-Advisor-managed clients keep today's order exactly. *(§4.1, closes G1)*
+**I-1 · Invert the individual home screen.** ✅ **Built.** `GoalsList.jsx` now
+branches on `tenant.kind === 'personal'`: standing → next action → goals →
+everything else inside a collapsed `RefineSection`. Advisor-managed clients
+keep the original order, unchanged. *(§4.1, closes G1)*
 
-**I-2 · Surface the gap-closer where the gap is stated.** Render the smaller
-lever from `gap_closing_levers` on the goal card and on the home standing
-block. The math and the endpoint already exist; this is a rendering change.
-*(§4.2, closes G2)*
+**I-2 · Surface the gap-closer where the gap is stated.** ✅ **Built** — on the
+home standing block (`PersonalPlanSummary.jsx`), via the *same*
+`goals_projection.php` call the goal page uses, so the two can never disagree.
+`leverLine()` was **exported** from `RetirementTargetCard.jsx` rather than
+copied, following the `FoundationsInputs.php` precedent.
 
-**I-3 · Make the empty state a door.** Link `/start` from the `GoalsList` empty
-state, and allow re-entry for a personal tenant with zero goals. One-line fix
-for a total dead end. *(Closes G3)*
+**Scoped down from the original proposal**, which also said "on the goal card".
+Per-goal levers would need a projection call per goal on the roster — the same
+cost asymmetry `clients_list.php` already refuses for `goal_drift`. The
+standing block carries it once, for the retirement goal, which is the only goal
+type with a solvable gap anyway. *(§4.2, closes G2)*
 
-**I-4 · End onboarding on the chart.** Add the proof screen after plan creation
-and navigate there instead of `/goals`. *(§4.2, closes G4)*
+**I-3 · Make the empty state a door.** ✅ **Built.** The `GoalsList` empty state
+now links to `/start`. *(Closes G3)*
 
-**I-5 · Ship `product_events`.** Migration plus a single write helper. Nothing
-else in this backlog can be prioritised honestly without it. *(§5, closes G9)*
+**I-4 · End onboarding on the chart.** ✅ **Built.** A `PlanCreated` proof screen
+fetches the real projection and states the countdown, whether the plan reaches
+its number, and — if not — what closes the gap. *(§4.2, closes G4)*
+
+**I-5 · Ship `product_events`.** ✅ **Built.** `sql/040`, `api/lib/ProductEvents.php`,
+`api/product_event_log.php`, `api.logEvent()`. The privacy rule is enforced by
+`tests/test_product_events.php`, which asserts a rupee figure cannot reach the
+table through an unlisted key, a whitelisted integer key, or a numeric string.
+Wired into the onboarding funnel and the lever click. *(§5, closes G9)*
 
 ### P1 — Correctness and consent
 
-**I-6 · Split the monthly saving across goals.** In `suggestGoals()`, allocate
-the stated monthly saving across the suggested goals rather than putting all of
-it on retirement, and show the split on the review screen as an editable
-starting point. *(Closes G5)*
+**I-6 · Split the monthly saving across goals.** ❌ **Investigated, deliberately
+not built.** G5's premise was wrong, and this is worth recording rather than
+quietly dropping.
 
-**I-7 · Require an explicit risk choice.** Initialise `riskId` to `null` and
-gate `canAdvance()` on it, matching every other question in the wizard.
+The proposal was to allocate the stated monthly saving across the suggested
+goals. Attempting it surfaced three facts:
+
+1. `goals_create.php:130` explicitly nulls `monthly_sip_amount` for any
+   non-retirement goal, so a SIP sent from the wizard would be silently
+   discarded.
+2. `PlanMath::targetGoalFunding()` ignores contributions by design and
+   documents itself as *"a floor, not a forecast"*.
+3. `CLAUDE.md`'s standing rule is that target-based goals carry **no return
+   assumption and the app will not invent one** — and projecting a
+   contribution requires one.
+
+So the real gap is not "the wizard doesn't split the SIP". It is that
+**target-based goals have no accumulation model at all**, which is a
+deliberate, documented product position. Changing it means giving education and
+home goals a return assumption and adding a projected figure alongside the
+existing no-growth floor — a decide-then-build product decision, not a wizard
+tweak. `personalPlanner.js` now carries a comment saying exactly this, and
+`test_personal_planner.mjs` asserts the current behaviour so it cannot drift
+silently.
+
+**Open question for the next session:** should a self-serve individual's
+target-based goals project contributions using the risk band they already
+chose? The person picked that rate, so using it invents nothing — but it
+changes what `covered_pct` means. Needs an explicit decision.
+
+**I-7 · Require an explicit risk choice.** ✅ **Built.** `riskId` starts `null`
+and `canAdvance()` gates on it, with a hint saying why Continue is disabled.
 *(Closes G6)*
 
-**I-8 · Accessibility pass on the wizard.** Remove the auto-advance on choice
-buttons (select, then Continue), add `aria-live` to the progress indicator, use
-`inputMode="numeric"` with text inputs for currency so Indian digit grouping
-survives typing and the scroll wheel cannot change a value. *(Closes G7)*
+**I-8 · Accessibility pass on the wizard.** ✅ **Built.** Choice questions are
+now a real `radiogroup` and no longer auto-advance; the step counter is a
+`role="status" aria-live="polite"` region; currency and number inputs are
+`type="text" inputMode="numeric"` so a stray scroll wheel cannot silently
+change a value. **Also found and fixed while in there:** `min`/`max` on the
+questions were never actually enforced — an age of 200 passed straight through
+— so `canAdvance()` now checks the range and `advanceHint()` explains any
+block. *(Closes G7)*
 
 ### P2 — Retention and depth
 
@@ -319,9 +363,12 @@ only, same rule as the alerts engine. Opt-out from day one. *(Closes G8)*
 at a time; show two side by side. The single highest-value borrow from Boldin
 and ProjectionLab. *(§3)*
 
-**I-11 · Offer partner planning at the natural moment.** When someone answers
-"yes, one person depends on my income", offer the partner invite right there
-instead of leaving it seventh on the home screen. *(Closes G10)*
+**I-11 · Offer partner planning at the natural moment.** ✅ **Built.** The invite
+appears on the proof screen, but **only** when the person answered that someone
+depends on their income. Placed after plan creation rather than mid-wizard: it
+is a natural next step once a plan exists, and interrupting the questions to
+ask for someone else's email would cost more completions than it gains
+partners. *(Closes G10)*
 
 ### P3 — Spikes, not commitments
 
@@ -341,9 +388,14 @@ Repo convention: pure tests are plain PHP under `tests/`, run by
 `tests/test_goal_progress.php`). DB-touching tests take the `*_db.php` suffix
 and self-skip without a configured database.
 
-### 7.1 `tests/test_personal_planner.php` (new, pure)
+### 7.1 `tests/test_personal_planner.mjs` (new, pure) — ✅ built, 32 assertions
 
-`suggestGoals()` has no test file today.
+`suggestGoals()` had no test file. **Note the extension:** this document
+originally specified a `.php` test for a JavaScript module, which is not
+possible. It runs on node's own runtime with no test framework and no new
+dependency, using the same PASS/FAIL convention as the PHP tests, and
+`run_all.sh` skips it when node is absent — the same self-skipping posture the
+DB tests use.
 
 - Always suggests a retirement goal, whatever the answers.
 - `kids: 'none'` produces no education goal; `'one'` produces one; `'many'`
@@ -366,13 +418,24 @@ Guards I-2 against regression at the contract level.
   advisor session. (This is the actual bug risk in I-2: a client-session
   response that quietly omits the field.)
 
-### 7.3 `tests/test_product_events_db.php` (new, DB, with I-5)
+### 7.3 `tests/test_product_events.php` (new, pure) — ✅ built, 24 assertions
 
-- An event row is tenant-scoped and written through `TenantScopedDb`.
-- `event_name` outside the enum is rejected.
-- **`event_context` never contains a numeric financial value** — assert against
-  a written row, so the privacy rule in §5 is enforced by the suite rather than
-  by good intentions.
+Shipped as a **pure** test rather than the `*_db.php` originally specified: all
+the enforcement lives in `sanitiseProductEventContext()`, which takes no PDO,
+so the privacy rule is testable with no database and therefore actually runs in
+this environment.
+
+- `event_name` outside the closed set is rejected; a typo is not silently
+  recorded as a new event.
+- **A financial value cannot reach `event_context`** — asserted for an unlisted
+  key, a whitelisted *integer* key (out-of-range guard), a whitelisted key
+  carrying a numeric *string*, and a float. This is §5's rule enforced by the
+  suite rather than by good intentions.
+- Arrays, booleans, nulls and over-long strings are dropped rather than coerced.
+
+**Still worth adding (not built):** a `*_db.php` companion asserting the row is
+tenant-scoped through `TenantScopedDb` and that the FK cascade clears events
+with the user.
 
 ### 7.4 Additions to existing files
 

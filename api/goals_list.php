@@ -96,6 +96,13 @@ $result = array_map(static function (array $goal): array {
         'withdrawal_rate'          => $withdrawalRate,
         'drawdown_return_rate'     => $drawdownReturnRate,
         'projection_horizon_years' => (int) $goal['projection_horizon_years'],
+        // docs/13 I-1 — the two accumulation ages, so a roster view can show
+        // the retirement countdown without fetching a full projection just to
+        // learn two numbers that are already on this row. Null for any goal
+        // whose accumulation phase was never set up (every target-based goal,
+        // and a decumulation-only retirement goal).
+        'current_age'              => $goal['current_age'] !== null ? (int) $goal['current_age'] : null,
+        'retirement_age'           => $goal['retirement_age'] !== null ? (int) $goal['retirement_age'] : null,
         'readiness_score'          => $readinessScore,
         'target_funding'           => $targetFunding,
         // Jr -> Sr Advisor Plan-Approval Workflow — same convention as

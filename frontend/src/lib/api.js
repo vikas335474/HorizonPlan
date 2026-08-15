@@ -621,6 +621,28 @@ export const api = {
     if (tenantId) params.set('tenant_id', String(tenantId));
     return request(`change_log_list.php?${params.toString()}`);
   },
+
+  // --- Product analytics (docs/13 I-5) ---
+  // Record one event about USING the product. The server attributes it to the
+  // caller's own session, and reduces `context` to a whitelisted,
+  // non-financial subset (step index, screen slug, lever type) before storing
+  // — see api/lib/ProductEvents.php. Never pass an amount, an age, or a goal
+  // label; they will be dropped, and they should not be sent in the first
+  // place.
+  //
+  // Deliberately fire-and-forget: analytics must never break, delay or fail
+  // the user-facing action it accompanies, so callers do not await this and
+  // the promise swallows its own errors.
+  logEvent: (eventName, context) => {
+    try {
+      return request('product_event_log.php', {
+        method: 'POST',
+        body: JSON.stringify({ event_name: eventName, ...(context ? { context } : {}) }),
+      }).catch(() => null);
+    } catch {
+      return Promise.resolve(null);
+    }
+  },
 };
 
 export { ApiError };
