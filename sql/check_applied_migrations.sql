@@ -18,38 +18,195 @@
 -- half-applied state as a clean "applied".
 --
 -- 'MISSING' means the migration has not been applied to this database. Apply
--- missing ones in ascending numeric order.
+-- missing ones in ASCENDING NUMERIC ORDER, one file at a time, checking each
+-- succeeds before starting the next.
 --
--- Covers 033 onward — the self-serve individual tier and later. Earlier
--- migrations predate the tier and are assumed present on any live deployment;
--- add markers here as new migrations land.
+-- COVERS 024 THROUGH 043. This file used to cover only 033-035, which meant it
+-- could not answer the question it exists to answer for two thirds of the
+-- migrations that had shipped — a database missing 037 or 040 was reported as
+-- fully up to date. Add a marker here whenever a new migration lands; a
+-- migration with no marker is invisible to this check.
+--
+-- ONE SPECIAL CASE, 043. That migration WIDENS an existing column rather than
+-- adding one, so "does reference_costs.unit exist" is true either way and would
+-- report applied on an unmigrated database. Its marker checks the column's
+-- LENGTH instead. This matters: without 043 the living-cost rows cannot be
+-- written at all (SQLSTATE[22001]) and the reference-costs cron fatals on every
+-- run, while the column itself looks perfectly present.
 
-SELECT '033_personal_tenants                  (tenants.kind)' AS migration,
-       IF(COUNT(*) > 0, 'applied', 'MISSING')                 AS state
+SELECT '024_platform_settings_reset_cooldown  (platform_settings.last_reset_at)' AS migration,
+       IF(COUNT(*) > 0, 'applied', 'MISSING')                                    AS state
   FROM information_schema.COLUMNS
- WHERE TABLE_SCHEMA = DATABASE()
-   AND TABLE_NAME   = 'tenants'
-   AND COLUMN_NAME  = 'kind'
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'platform_settings' AND COLUMN_NAME = 'last_reset_at'
+
+UNION ALL
+SELECT '025_password_resets_purpose           (password_resets.purpose)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'password_resets' AND COLUMN_NAME = 'purpose'
+
+UNION ALL
+SELECT '026_plan_review                       (tenants.requires_plan_review)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tenants' AND COLUMN_NAME = 'requires_plan_review'
+
+UNION ALL
+SELECT '026_plan_review                       (base_plans.review_status)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'base_plans' AND COLUMN_NAME = 'review_status'
+
+UNION ALL
+SELECT '027_mf_nav_sync                       (client_portfolio_items.amfi_scheme_code)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_portfolio_items' AND COLUMN_NAME = 'amfi_scheme_code'
+
+UNION ALL
+SELECT '027_mf_nav_sync                       (mf_nav_cache table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mf_nav_cache'
+
+UNION ALL
+SELECT '028_plan_review_schedule              (plan_review_schedules table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plan_review_schedules'
+
+UNION ALL
+SELECT '029_households                        (households table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'households'
+
+UNION ALL
+SELECT '029_households                        (users.household_id)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'household_id'
+
+UNION ALL
+SELECT '030_cash_flow                         (cash_flow_items table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cash_flow_items'
+
+UNION ALL
+SELECT '031_client_advisor_assignment         (users.assigned_advisor_id)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'assigned_advisor_id'
+
+UNION ALL
+SELECT '032_progress_snapshots                (goal_snapshots table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'goal_snapshots'
+
+UNION ALL
+SELECT '032_progress_snapshots                (client_net_worth_snapshots table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_net_worth_snapshots'
+
+UNION ALL
+SELECT '033_personal_tenants                  (tenants.kind)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tenants' AND COLUMN_NAME = 'kind'
 
 UNION ALL
 SELECT '034_financial_foundations             (client_protection table)',
        IF(COUNT(*) > 0, 'applied', 'MISSING')
   FROM information_schema.TABLES
- WHERE TABLE_SCHEMA = DATABASE()
-   AND TABLE_NAME   = 'client_protection'
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_protection'
 
 UNION ALL
 SELECT '034_financial_foundations             (client_portfolio_items.interest_rate)',
        IF(COUNT(*) > 0, 'applied', 'MISSING')
   FROM information_schema.COLUMNS
- WHERE TABLE_SCHEMA = DATABASE()
-   AND TABLE_NAME   = 'client_portfolio_items'
-   AND COLUMN_NAME  = 'interest_rate'
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_portfolio_items' AND COLUMN_NAME = 'interest_rate'
 
 UNION ALL
 SELECT '035_household_self_service            (users.display_name)',
        IF(COUNT(*) > 0, 'applied', 'MISSING')
   FROM information_schema.COLUMNS
- WHERE TABLE_SCHEMA = DATABASE()
-   AND TABLE_NAME   = 'users'
-   AND COLUMN_NAME  = 'display_name';
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'display_name'
+
+UNION ALL
+SELECT '036_client_context                    (client_context table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_context'
+
+UNION ALL
+SELECT '036_client_context                    (client_dependants table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_dependants'
+
+UNION ALL
+SELECT '037_reference_costs                   (reference_costs table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reference_costs'
+
+UNION ALL
+SELECT '038_portfolio_reconcile               (client_portfolio_items.source)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_portfolio_items' AND COLUMN_NAME = 'source'
+
+UNION ALL
+SELECT '038_portfolio_reconcile               (client_portfolio_items.folio_number)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_portfolio_items' AND COLUMN_NAME = 'folio_number'
+
+UNION ALL
+SELECT '039_tax_context                       (client_portfolio_items.fund_type)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_portfolio_items' AND COLUMN_NAME = 'fund_type'
+
+UNION ALL
+SELECT '039_tax_context                       (client_portfolio_items.acquisition_value)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'client_portfolio_items' AND COLUMN_NAME = 'acquisition_value'
+
+UNION ALL
+SELECT '039_tax_context                       (tax_reference table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tax_reference'
+
+UNION ALL
+SELECT '040_product_events                    (product_events table)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_events'
+
+UNION ALL
+SELECT '041_personal_plan_digest              (users.plan_digest_opt_in)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'plan_digest_opt_in'
+
+UNION ALL
+SELECT '042_goal_snapshot_readiness           (goal_snapshots.readiness_score)',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'goal_snapshots' AND COLUMN_NAME = 'readiness_score'
+
+-- 043 WIDENS an existing column, so column existence proves nothing — see the
+-- header. The check is on length: < 32 means unmigrated, and the living-cost
+-- rows cannot be stored until it is fixed.
+UNION ALL
+SELECT '043_reference_costs_unit_width        (reference_costs.unit >= VARCHAR(32))',
+       IF(COUNT(*) > 0, 'applied', 'MISSING')
+  FROM information_schema.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reference_costs' AND COLUMN_NAME = 'unit'
+   AND CHARACTER_MAXIMUM_LENGTH >= 32;
