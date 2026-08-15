@@ -67,6 +67,8 @@ declare(strict_types=1);
  *
  * @return list<array{category:string,subcategory:string,label:string,unit:string,low:float,high:float,source_name:string,source_url:?string,as_of_date:string,is_verified:bool}>
  */
+
+require_once __DIR__ . '/LivingCostReference.php';
 function referenceCostDataset(): array
 {
     $asOf = '2025-01-01';
@@ -108,6 +110,14 @@ function referenceCostDataset(): array
             'source_name' => 'Illustrative range — no single published index; verify against IRDAI health-claims data before relying on it',
             'source_url' => null, 'as_of_date' => $asOf, 'is_verified' => false,
         ],
+
+        // ── Living cost: the retirement-spend anchor (MOSPI HCES) ──
+        // Appended here rather than given its own sync tool ON PURPOSE. The
+        // prune below selects EVERY row in reference_costs and deletes what
+        // this dataset does not define, so a second tool writing to this table
+        // would have its rows silently removed on the next run of this one.
+        // One dataset, one sync, one prune. See LivingCostReference.php.
+        ...livingCostDataset(),
     ];
 }
 

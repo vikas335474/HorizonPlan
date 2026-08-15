@@ -69,6 +69,37 @@ Fix this first, before adding a single new input.
 | Medical-course cost | NMC publishes fee disclosures; state counselling sites publish seat fees. | Range only: government MBBS ≈ ₹1–5L total; private ≈ ₹60L–1.2Cr. |
 | Engineering-course cost | AICTE / institute fee disclosures. | Range only. |
 | General "cost of living" sites | Crowd-sourced, unverifiable, ToS-restricted. | **Do not scrape.** |
+| Retirement-spend anchor for someone who doesn't know their own spending | **MOSPI HCES** publishes average MPCE by state and urban/rural. | Sourced anchor **beside** the person's own figure, never pre-filled. See below. |
+
+**Numbeo, specifically — asked for, and declined.** Numbeo is the canonical
+example of the "general cost-of-living sites" row above, and the question came
+up directly, so the answer belongs on the record rather than in a rule someone
+has to infer. Verified against Numbeo's own terms:
+
+- Automated collection (scraping/crawling) is **prohibited** without prior
+  written permission.
+- Commercial use requires a paid subscription, and that licence **"does not
+  permit the republication or dissemination of Numbeo data through other APIs
+  or public-facing data feeds without prior consent"** — which is arguably
+  exactly what showing Numbeo-derived rupee figures to end users in this
+  product would be.
+- The data is crowd-sourced and its Indian coverage is thin outside the metros
+  and skewed toward expatriate cost baskets — the wrong shape for a product
+  whose market is largely non-metro India.
+
+**MOSPI's Household Consumption Expenditure Survey is better on every axis that
+matters here:** official, free, citable, no licensing surface, and it covers
+every state and UT including rural. It is the source behind
+`api/lib/LivingCostReference.php`.
+
+**The trap, and how it is handled.** MPCE is *average per-capita consumption*,
+not "what a comfortable retirement costs" — and this product's users spend well
+above the population average. An anchor that reads low understates a retirement
+target, which is the most harmful error this app could make. So the figure is
+**never pre-filled** into the person's expense field; it renders beside it as
+context, scaled from per-capita to household size, carrying the API's own
+caveat verbatim, and saying out loud when it has fallen back to the national
+average rather than their state's.
 
 **Two non-obvious calls, both load-bearing:**
 
