@@ -153,6 +153,46 @@ to build up manually. Staging is exactly where to point anything that would
 be too risky to run against production first — a new migration, the demo
 reset endpoint, a rate-limit change — before it goes anywhere near real data.
 
+## Running a one-off script without SSH
+
+Hostinger Premium has **no SSH**, so there is no way to run a PHP CLI script on
+demand — only scheduled cron jobs. Two things follow.
+
+**1. `tools/` is now published by the deploy pipeline.** It previously was not,
+which meant every cron path documented below (`public_html/tools/<name>.php`)
+did not exist on the server and no cron could ever have run. If your NAV sync
+or progress snapshot has been silently doing nothing, this is why. Fixed in
+`.github/workflows/deploy.yml`; the next push to `main` publishes them.
+
+Serving them from `public_html` is safe because every tool opens with a
+`PHP_SAPI !== 'cli'` guard that 403s an HTTP request. The workflow now
+**asserts** that guard on every file it ships, so a new tool that forgets it
+fails the build rather than quietly becoming a public endpoint. Seed and admin
+scripts (`seed_demo_data*`, `bootstrap_admin`, `set_password`, `check_login`,
+`seed_templates`) are deliberately stripped and never reach production.
+
+**2. To run a sync once, use a throwaway cron.** Schedule it a few minutes out,
+let it fire, then delete the cron job. That is the supported path for a
+first-time population.
+
+**Or paste the SQL.** For `reference_costs` specifically there is a generated
+equivalent at **`sql/manual/reference_costs_seed.sql`** — paste it into
+hPanel's database tool and the cache is populated with no CLI at all. It is
+generated from the same dataset the sync writes, so it cannot drift by a
+transcription error, and it is an upsert, so it is safe to run more than once
+and safe to run before or after the real sync. Regenerate it after changing
+the dataset:
+
+```bash
+php -r 'require "api/lib/ReferenceCosts.php"; /* see the file header */' \
+  # the full generator command is in the file's own header comment
+```
+
+The other syncs (`tax_reference_sync`, `mf_nav_sync`) have no pasteable
+equivalent — use the throwaway-cron method for those.
+
+---
+
 ## Monthly goal-progress snapshot cron
 
 `tools/progress_snapshot.php` records, once a month, what each goal's corpus
