@@ -390,19 +390,35 @@ bar — match them.
 
 ### Frontend component structure (56 React components)
 
-**Pages** (`frontend/src/pages/`) — top-level routes:
-- `Home.jsx` — auth router (client → /goals, advisor → /dashboard)
-- `LoginPage.jsx`, `SignupPage.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx` — auth flows
-- `StartFree.jsx` — self-serve individual Q&A onboarding
-- `SignupPersonal.jsx` — personal tenant signup (self-serve + couple flow)
-- `Dashboard.jsx` — advisor/admin persona dashboard (firm book, attention queue, analytics)
-- `ClientDetail.jsx` — planner + portfolio + cash-flow + review hub for one client
-- `GoalDetail.jsx` — detailed plan + what-if UI for one goal; edit UI gated by tenant kind + role
-- `MeetingMode.jsx` — full-screen presentation view (client-safe)
-- `AdminConsole.jsx` — super_admin platform settings + firm management
-- `FeatureGuide.jsx` — in-app run-book (`/guide`)
-- `PersonalDashboard.jsx` — self-serve individual's "My goals" page
-- `HouseholdDashboard.jsx` — couple's shared household view
+**Pages** (`frontend/src/pages/`, 22 files) — one per route in `App.jsx`. `Home()`
+is *not* a file: it's a small role-router function defined inside `App.jsx` that
+sends a `client` session to `/goals` and everyone else to `Dashboard`.
+
+| Route | File | Who |
+|-------|------|-----|
+| `/login` | `Login.jsx` | public |
+| `/signup` | `Signup.jsx` | public (firm trial) |
+| `/start-free` | `PersonalSignup.jsx` | public (self-serve individual signup) |
+| `/start` | `PersonalOnboarding.jsx` | personal tenant only (guided Q&A setup) |
+| `/forgot-password` · `/reset-password` · `/accept-invite` | `ForgotPassword.jsx`, `ResetPassword.jsx` (`mode="invite"` for the third) | public |
+| `/` | `Dashboard.jsx` via `Home()` | advisor / super_admin |
+| `/clients/:clientId` | `ClientGoals.jsx` | advisor |
+| `/goals` | `GoalsList.jsx` | client (own goals) |
+| `/goals/:id` | `GoalDetail.jsx` | both (advisor edit affordances role-gated) |
+| `/goals/:id/report` | `PlanReport.jsx` | both (printable client report) |
+| `/goals/:id/meeting` | `MeetingMode.jsx` | advisor (full-screen presentation) |
+| `/admin` | `AdminConsole.jsx` | super_admin |
+| `/practice` | `PracticeAnalytics.jsx` | sr_advisor / firm_admin |
+| `/households` · `/households/:householdId` | `Households.jsx`, `HouseholdDetail.jsx` | advisor |
+| `/templates` | `AdvisorTemplates.jsx` | advisor / super_admin |
+| `/risk-questionnaire` | `RiskQuestionnaireBuilder.jsx` | advisor / super_admin |
+| `/activity` | `ActivityLog.jsx` | advisor / super_admin |
+| `/reviews` | `PlanReviewQueue.jsx` | advisor / super_admin |
+| `/guide` | `FeatureGuide.jsx` | advisor / super_admin |
+| `/settings` | `Settings.jsx` | any session |
+
+The per-route comments in `App.jsx` state the intended role; **the real gate is
+always server-side** on each endpoint.
 
 **Components** (`frontend/src/components/`) — reusable pieces, each with file-level header:
 - **Goal & projection UI:**
@@ -446,10 +462,12 @@ bar — match them.
 - `AuthContext.jsx` — session bootstrap, auth actions, user/tenant/platform data (use `useAuth()` everywhere)
 - `DemoTourContext.jsx` — guided feature tour (public demo only)
 
-**Library** (`frontend/src/lib/`) — pure helpers:
+**Library** (`frontend/src/lib/`, 5 files) — pure helpers:
 - `api.js` — **the only place that talks to the backend**; one method per endpoint
 - `personalPlanner.js` — self-serve onboarding Q&A logic + suggested goals
 - `strategyPresets.js` — sourced illustration-framed risk bands (never recommendations)
+- `format.js` — shared rupee / percent / date formatting
+- `csv.js` — CSV parsing for the CAS import flow
 
 ---
 
