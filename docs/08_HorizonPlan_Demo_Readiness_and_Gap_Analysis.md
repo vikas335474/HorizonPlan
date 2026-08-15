@@ -1,5 +1,15 @@
 # HorizonPlan — Demo Readiness & Gap Analysis
 
+> **STATUS NOTE (added during a later documentation-accuracy pass): this
+> document is a point-in-time snapshot** from an early session — most of the
+> "Gaps, prioritized" list below has since been built. It is kept verbatim as
+> the historical record of what the product looked like at that point (per
+> this repo's convention of not rewriting history — see
+> `docs/CHANGELOG_SESSION_HISTORY.md`); each item is annotated inline with
+> its **current** status. For what's actually built today, `CLAUDE.md`'s
+> "Current state — what's built" capability index is the live source of
+> truth, not this file.
+
 Written after a session focused on firm onboarding UX, demo-data preparation, and a full test pass — not a new build phase. Companion to `04_HorizonPlan_Feature_Roadmap.md` (which governs *what* belongs in each phase) and `07_HorizonPlan_Product_Vision_Differentiation.md` (the differentiation bets already shipped). This document answers a narrower question: **is the product, as it stands today, something you could put in front of a real MFD/IFA or SEBI-RIA firm and have it read as a credible SaaS product, and what's the prioritized list to close the remaining gaps?**
 
 No phase was skipped to write this. Everything in this session is either (a) UX polish on already-shipped Phase 1 scope (tenant onboarding was always Phase 1 — see `04`'s "Tenant onboarding (admin-created, not self-serve signup)" — this session made it feel like onboarding a customer instead of filling out a database record, it didn't add new scope), or (b) demo-data/testing hygiene that doesn't correspond to a roadmap phase at all. Phase 2's candidate items (cross-goal allocation, WhatsApp sharing, advisory-mode activation flow) are untouched and still gated behind their validation criteria in `04`.
@@ -24,20 +34,20 @@ Is this demo-ready for a real advisor or distributor conversation? **Yes, for th
 ## Gaps, prioritized
 
 **Security / compliance (carried over from `docs/02`'s Phase 8 audit — still open, highest priority regardless of demo needs):**
-1. **MFA enrollment is not mandatory.** Unenrolled users still get a full session on password alone. Needs a deliberate decision (block at login vs. admin-forced enrollment) before any real client data goes in.
-2. **No rate limiting beyond login.** `goals_*`/`subscenarios_*` endpoints have none. Low urgency at current scale, worth a decision.
-3. **Per-field validation gap in `goals_update.php`** — only `projection_horizon_years` is range-checked; `initial_net_worth`, `inflation_rate`, `target_amount`, `target_date`, `withdrawal_rate`, `drawdown_return_rate` accept anything.
+1. **MFA enrollment is not mandatory.** Unenrolled users still get a full session on password alone. Needs a deliberate decision (block at login vs. admin-forced enrollment) before any real client data goes in. — ***Built, but still defaulted OFF.*** The full mechanism (RFC 6238 TOTP + Google Sign-In as an equivalent second factor, server-side mandatory-enrollment gate) shipped; `platform_settings.mfa_enforcement` is deliberately left off for the early-access period (CLAUDE.md "Known open items"). Re-enabling it before real data is still the one open action item, not a build gap.
+2. **No rate limiting beyond login.** `goals_*`/`subscenarios_*` endpoints have none. Low urgency at current scale, worth a decision. — ***Still open, deliberately deferred*** (docs/09 Session 3) — revisit only on a named abuse case, per CLAUDE.md.
+3. **Per-field validation gap in `goals_update.php`** — only `projection_horizon_years` is range-checked; `initial_net_worth`, `inflation_rate`, `target_amount`, `target_date`, `withdrawal_rate`, `drawdown_return_rate` accept anything. — ***Built.*** `GoalFieldValidation.php` now validates every field, shared by create/update (CLAUDE.md "Plans & scenarios").
 
 **Onboarding / admin UX (this session closed the biggest piece; smaller items remain):**
-4. **Advisor invites are still a temp password, not a magic sign-in link.** Emailing it is better than nothing, but a real SaaS onboarding flow sends a link the advisor clicks to set their own password (same mechanism as `password_reset_confirm.php` already implements) — invited-user activation should reuse that token infrastructure instead of a shared temp password shown to the admin.
-5. **Advisor dashboard / client list is still weak.** Flagged directly by you in an earlier session and picked as the next UX target, but the modal-focus bug and corpus composition took priority. Still open — needs a specific pain point named (empty states, search/filter, at-a-glance client status) before a redesign session, same as before.
-6. **No in-app onboarding beyond the new firm wizard.** A first-time advisor lands on an empty client list with no guided "add your first client → create a goal → send a report" walkthrough.
+4. **Advisor invites are still a temp password, not a magic sign-in link.** — ***Built.*** Magic-link invite activation now reuses the password-reset token infrastructure (CLAUDE.md "Platform & access").
+5. **Advisor dashboard / client list is still weak.** — ***Built.*** A persona-aware dashboard with a firm-wide attention banner, a book-health bar, and server-side search/sort/scope/pagination shipped (CLAUDE.md "Advisor & admin UX"), plus the alerts engine (docs/12 D-4) layered dynamic per-client signals on top.
+6. **No in-app onboarding beyond the new firm wizard.** — ***Built.*** An onboarding checklist + spotlight, a guided demo tour, and an in-app feature guide (`/guide`) all shipped (CLAUDE.md "Advisor & admin UX").
 
 **Platform-evaluation gaps (what a distributor, not an advisor, will ask about):**
-7. **No billing/subscription/plan-tier concept.** Every tenant has identical capability today — no seat limits, no plan gating, nothing to demo a monetization story with.
-8. **No advisor-facing analytics/engagement dashboard** — already scoped as Phase 3 candidate in `04`, correctly deferred, but worth knowing it's the first thing a retention-minded distributor will ask for.
-9. **No audit-log UI for admins beyond template history.** `change_log` captures every mutation but nothing surfaces it — a compliance-minded RIA principal will ask "can I see who changed what."
-10. **Mobile responsiveness hasn't been explicitly audited** — the design system (Tailwind, `ui.jsx`) is responsive-by-convention but no session has tested on an actual small viewport.
+7. **No billing/subscription/plan-tier concept.** — ***Still open*** (docs/09 Session 8) — needs a real business decision on tiers/billing model before it's an engineering task, per that session's own guardrail.
+8. **No advisor-facing analytics/engagement dashboard** — ***Partly built, partly still open.*** Per-firm **Practice analytics** (`/practice`, sr_advisor/firm_admin: per-advisor load, readiness/risk distribution, review pipeline, coverage gaps) shipped and is documented in CLAUDE.md. What's still open is the *different* audience this item originally meant — a super_admin-facing view of *advisor engagement with the platform itself* (login frequency, feature usage) — see docs/09 Session 9, which now explicitly distinguishes the two so they don't get conflated again.
+9. **No audit-log UI for admins beyond template history.** — ***Built.*** A read-only firm-wide audit log (`change_log_list.php`, per-goal History card + `/activity`) shipped (CLAUDE.md "Firm governance").
+10. **Mobile responsiveness hasn't been explicitly audited** — ***Built/audited.*** A dedicated mobile-responsiveness pass (Session 7) plus tablet/client-role follow-ups shipped; `AppHeader` collapses to a hamburger below `sm` (CLAUDE.md "Advisor & admin UX").
 
 **Lower priority / explicitly out of scope per the roadmap (listed here only so nothing looks accidentally forgotten):**
 11. WhatsApp report sharing, cross-goal portfolio allocation, advisory-mode activation flow — Phase 2 candidates in `04`, correctly not built yet, gated behind Phase 1's validation criteria.
@@ -47,3 +57,5 @@ Is this demo-ready for a real advisor or distributor conversation? **Yes, for th
 ## Recommended next session
 
 Given you're stepping away: the highest-leverage next session is **either** (a) mandatory MFA enrollment — the one remaining pre-launch security blocker, small and well-scoped — **or** (b) the advisor dashboard/client-list redesign you already picked, now that the admin side has a matching bar of polish to design toward. Both are self-contained, testable in one session, and don't require a new validation gate to justify (unlike anything in the Phase 2 candidate list).
+
+> **Both of these were subsequently done** (see the status annotations above) — this recommendation is left as written for the historical record. For what's actually next, see `docs/10`'s prioritized backlog and CLAUDE.md's "Next-build backlog" line.
