@@ -104,6 +104,61 @@ assertTrue(str_contains($reserveAlert['factual_message'], 'falls short'), 'a rea
 $lifeCoverAlert = array_values(array_filter($mixed, static fn($a) => $a['subject']['check_id'] === 'life_cover'))[0];
 assertTrue(str_contains($lifeCoverAlert['factual_message'], 'not been recorded'), 'not_recorded is worded as an open question, never a flattering pass');
 
+// --- who the alert is ADDRESSED to (alertPossessive) --------------------------
+//
+// One engine, two audiences (docs/12 principle 6), and they need different
+// grammar for the identical fact. An adviser must know WHICH client; a
+// self-serve individual is reading about themselves, where third person reads
+// as the app discussing them with somebody else. It lands the same way in the
+// monthly digest EMAIL, which embeds these strings verbatim
+// (PersonalDigestMailer::composeDigestBody), so this is asserted here at the
+// source rather than trusted to each surface.
+assertTrue(alertPossessive('Asha Rao', false) === "Asha Rao's", 'an adviser reading their book sees the client named');
+assertTrue(alertPossessive('Asha Rao', true) === 'Your', 'someone reading about themselves is addressed in the second person');
+
+$selfGap = foundationsGapAlerts(1, 'Asha Rao', [
+    'checks' => [['id' => 'emergency_reserve', 'status' => 'not_recorded']],
+    'unmet' => 0, 'open' => 1, 'ok' => 0,
+], alertPossessive('Asha Rao', true));
+assertTrue(
+    $selfGap[0]['factual_message'] === 'Your emergency reserve has not been recorded yet.',
+    'a self-serve individual reads "Your emergency reserve…", not their own name in the third person'
+);
+assertTrue(
+    !str_contains($selfGap[0]['factual_message'], 'Asha Rao'),
+    'the person\'s own name never appears in an alert addressed to them'
+);
+
+$selfReview = reviewDueAlert(1, 'Asha Rao', 'quarterly', null, '2026-08-09', alertPossessive('Asha Rao', true));
+assertTrue(
+    $selfReview['factual_message'] === 'Your quarterly plan review is due.',
+    'the same second-person rule applies to a review-due alert'
+);
+
+// The perspective is GRAMMAR ONLY — it must never change which alerts fire.
+$advisorView = foundationsGapAlerts(1, 'Asha Rao', [
+    'checks' => [
+        ['id' => 'emergency_reserve', 'status' => 'short'],
+        ['id' => 'life_cover', 'status' => 'not_recorded'],
+        ['id' => 'costly_debt', 'status' => 'ok'],
+    ],
+    'unmet' => 1, 'open' => 1, 'ok' => 1,
+]);
+$selfView = foundationsGapAlerts(1, 'Asha Rao', [
+    'checks' => [
+        ['id' => 'emergency_reserve', 'status' => 'short'],
+        ['id' => 'life_cover', 'status' => 'not_recorded'],
+        ['id' => 'costly_debt', 'status' => 'ok'],
+    ],
+    'unmet' => 1, 'open' => 1, 'ok' => 1,
+], alertPossessive('Asha Rao', true));
+assertTrue(
+    count($advisorView) === count($selfView)
+        && array_column($advisorView, 'type') === array_column($selfView, 'type')
+        && array_column($advisorView, 'severity') === array_column($selfView, 'severity'),
+    'changing perspective changes wording only — the same alerts fire, with the same types and severities'
+);
+
 // --- computeClientAlerts(): the composed whole -------------------------------
 
 $bundle = [

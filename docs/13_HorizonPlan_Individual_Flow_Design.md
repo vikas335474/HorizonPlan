@@ -396,6 +396,63 @@ is a natural next step once a plan exists, and interrupting the questions to
 ask for someone else's email would cost more completions than it gains
 partners. *(Closes G10)*
 
+**I-13 · Say who the plan is about, and how its answer has moved.** ✅ **Built.**
+Three additions to the standing block, from a review that weighed the
+practitioner position against what individuals demonstrably ask for.
+
+*What individuals ask for:* essentially every personal-finance product sold to
+consumers leads with **net worth over time** — Notion templates, Sheets
+trackers, Empower, Popadex. The line going up *is* the product. The second
+recurring want is "am I on track?", and the honest answer is against the
+person's own goal, never a peer benchmark — which validates the existing
+readiness score over any "compare to others your age" feature.
+
+*Where the practitioner view overrides it:* a **month-over-month** delta is the
+wrong instrument, for three separate reasons. (1) Benartzi & Thaler's myopic
+loss aversion is the documented result — more frequent evaluation means more
+observed small losses, lower equity allocation, worse lifetime outcomes; a
+person with a 19-year horizon should not be handed a monthly scoreboard. (2)
+The data cannot support it: `initial_net_worth` is static and deliberately
+decoupled from the NAV-tracked portfolio (docs/02 §4.1), so a goal-corpus
+monthly chart would flat-line and read as broken. (3) It answers a portfolio
+question when this product exists to answer a planning one.
+
+So what shipped:
+
+1. **Identity + assumption strip.** Name, current age, retirement age, with a
+   "Not right? Change it" link. `current_age`/`retirement_age` set the horizon
+   every other number is computed over and were visible only inside a goal — a
+   wrong age silently invalidated the entire projection with nothing on the
+   surface to catch it. `session.php` now carries `display_name`/`email`;
+   `displayNameFor()` in `AuthContext.jsx` holds the single fallback chain
+   (display_name → email local part → no greeting at all rather than a greeting
+   addressed to nobody), because sql/035 left the column nullable and
+   un-backfilled.
+
+2. **`NetWorthTrend.jsx`** — the missing consumer for a series that already had
+   a table (sql/032), a monthly cron, an endpoint and an API method, and no UI
+   whatsoever. Delta framed **"since you started tracking"** with the start
+   month named; renders nothing below **three** points, because two joined dots
+   read as a trend when they are only the two facts held.
+
+3. **Readiness delta.** `goal_snapshots.readiness_score` (sql/042) stores the
+   score *as the plan stood* on each date — stored, not recomputed, for the same
+   reason 032 stores `expected_value`: recomputing would let a return-assumption
+   edit today rewrite what the score was last March. `readiness_change` in
+   `goal_progress_read.php` spans **scored points only** (NULL means
+   target-based, zero-corpus, or pre-migration — never zero) and is null below
+   two of them.
+
+**Advisor dashboard deliberately unchanged**, and the asymmetry is the finding.
+An advisor's question is not "how am I doing" but "which of my 200 clients need
+me this week, and what changed since I last looked". A per-client time series is
+noise at 25 rows a page and already lives correctly on the client page. The real
+advisor-side gap is that `needsAttention()` is **stateless** — it recomputes
+every load, so an advisor who cleared the queue Monday sees the identical banner
+Friday. That is the already-recorded `alert_ack` deferral (docs/12 D-4), not
+this one. Book-level trend (AUM, readiness spread over time) would be the
+advisor-appropriate series if one is ever built.
+
 ### P3 — Spikes, not commitments
 
 **I-12 · "Ask your plan" spike.** A natural-language question box over the

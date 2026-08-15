@@ -38,7 +38,17 @@ foreach ($dataset as $row) {
     $byKey[$key] = $row;
     assertTrue($row['low'] <= $row['high'], "low <= high for $key");
     assertTrue($row['low'] > 0, "low is positive for $key");
-    assertTrue(in_array($row['unit'], ['inr_total', 'inr_annual'], true), "unit is inr_total or inr_annual for $key — no multiplier rows (city tier is deliberately not cached here)");
+    // Every unit here must be an ABSOLUTE RUPEE FIGURE. That is the invariant
+    // this guards — not the specific list. A dimensionless unit (a multiplier,
+    // a ratio, a percentage) would mean someone had cached a city-tier-style
+    // scaling factor in this table, which the reconciliation in
+    // ReferenceCosts.php's header explicitly rules out; the redundant
+    // city_expense_multiplier check below guards the same thing by name.
+    // Extend this list when a new absolute-rupee unit ships — living_cost's
+    // inr_monthly_per_capita is one, and it is per-capita rather than
+    // per-household precisely so nothing downstream can quietly read a
+    // per-person figure as a household one (LivingCostReference.php).
+    assertTrue(in_array($row['unit'], ['inr_total', 'inr_annual', 'inr_monthly_per_capita'], true), "unit is an absolute rupee figure for $key — no multiplier/ratio rows (city tier is deliberately not cached here)");
     assertTrue(array_key_exists('is_verified', $row) && is_bool($row['is_verified']), "$key carries an explicit boolean is_verified in the dataset itself");
 }
 

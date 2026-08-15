@@ -11,6 +11,7 @@ import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import GoalCard from '../components/GoalCard';
 import PersonalPlanSummary from '../components/PersonalPlanSummary';
+import NetWorthTrend from '../components/NetWorthTrend';
 import { ClientPortfolioCard } from '../components/ClientPortfolioUI';
 import { ClientCashFlowCard, CashFlowCard } from '../components/CashFlowUI';
 import { ClientFoundationsCard } from '../components/FoundationsUI';
@@ -131,6 +132,22 @@ export default function GoalsList() {
             {goals.map((goal) => (
               <GoalCard key={goal.id} goal={goal} />
             ))}
+          </div>
+        )}
+
+        {/* How the money has actually moved, from the recorded monthly
+            snapshots. Sits AFTER the goals on purpose: the plan is the point of
+            this page, and a portfolio chart above it would make this a tracking
+            app. Renders nothing until three readings exist, so a new plan never
+            shows an empty frame.
+
+            Personal-tenant only, matching the ordering branch above. A
+            firm-managed client's progress narrative belongs to their adviser,
+            who already has this series on the client page — surfacing it here
+            unasked would change a firm's client experience, not this one. */}
+        {isSelfDirected && goals && goals.length > 0 && (
+          <div className="mt-4">
+            <NetWorthTrend />
           </div>
         )}
 

@@ -26,6 +26,7 @@ require_once __DIR__ . '/CashFlowSummary.php';
 require_once __DIR__ . '/PersonalisationReference.php';
 require_once __DIR__ . '/MfNavSync.php'; // attachNavFreshness()
 require_once __DIR__ . '/FoundationsInputs.php';
+require_once __DIR__ . '/SelfService.php'; // tenantIsPersonal()
 
 /**
  * A retirement goal's is_met + progress_status, reusing the exact same
@@ -192,9 +193,18 @@ function gatherClientAlertBundle(TenantScopedDb $scopedDb, PDO $db, int $clientI
         ? ['cadence' => (string) $scheduleRows[0]['cadence'], 'last_sent_at' => $scheduleRows[0]['last_sent_at']]
         : null;
 
+    // Is the person who will READ these alerts the same person they are ABOUT?
+    // Decided on TENANT KIND, not role — the same gate SelfService.php uses
+    // throughout, and for the same reason: a personal tenant is a "tenant of
+    // one", so its client is always reading about themselves, while a firm's
+    // client role says nothing about who is looking. Purely grammatical (see
+    // alertPossessive()); it changes no fact, threshold or severity.
+    $isSelf = tenantIsPersonal($db, $scopedDb->tenantId());
+
     return [
         'client_id'         => $clientId,
         'client_label'      => $clientLabel,
+        'is_self'           => $isSelf,
         'goals'             => $goals,
         'nav_tracked_items' => $navBundle,
         'review_schedule'   => $reviewSchedule,

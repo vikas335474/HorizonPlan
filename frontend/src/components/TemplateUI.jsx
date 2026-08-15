@@ -382,21 +382,50 @@ export function ApproveButton({ templateId, customizationId, approvalStatus, onA
 // between "exists in the library" and "usable on a real plan" is visible
 // rather than just producing a 403 after the fact.
 
+// How templates_library.php's `source` tag renders, and which id space the
+// entry belongs to. Global and own templates are both template_strategies rows
+// (one id space); a customization is a different table, hence the key prefix.
+const LIBRARY_SOURCES = {
+  global:     { label: 'Global',        kind: 'template' },
+  own:        { label: 'My created',    kind: 'template' },
+  customized: { label: 'My customized', kind: 'customization' },
+};
+
 export function ApplyTemplateModal({ open, onClose, onApplied, goalId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [applyingId, setApplyingId] = useState(null);
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [riskFilter, setRiskFilter] = useState('');
 
+  // Same 300ms debounce the client roster uses, so typing doesn't fire a
+  // request per keystroke.
   useEffect(() => {
-    if (!open) return;
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // templates_library.php, NOT templates_list.php.
+  //
+  // The library endpoint was built with exactly this picker in mind — it
+  // merges global + own + customizations into one list, tags each with its
+  // provenance, and filters by name/description and risk profile server-side —
+  // and then nothing ever called it. This picker meanwhile rendered three
+  // unsearchable buckets from templates_list.php, so a firm with a real
+  // template library had to scroll it. Same data, one request, searchable.
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
     setLoading(true);
     setError('');
-    api.listTemplates()
-      .then(setData)
-      .catch((err) => setError(err.message || 'Could not load templates.'))
-      .finally(() => setLoading(false));
-  }, [open]);
+    api.searchTemplateLibrary(debouncedQuery, riskFilter)
+      .then((res) => { if (!cancelled) setData(res); })
+      .catch((err) => { if (!cancelled) setError(err.message || 'Could not load templates.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, debouncedQuery, riskFilter]);
 
   async function handleApply(entry) {
     setApplyingId(entry.key);
@@ -414,13 +443,20 @@ export function ApplyTemplateModal({ open, onClose, onApplied, goalId }) {
     }
   }
 
-  const rows = data
-    ? [
-        ...(data.global_templates ?? []).map((t) => ({ ...t, kind: 'template', key: `t${t.id}`, sourceLabel: 'Global' })),
-        ...(data.my_templates ?? []).map((t) => ({ ...t, kind: 'template', key: `t${t.id}`, sourceLabel: 'My created' })),
-        ...(data.my_customizations ?? []).map((c) => ({ ...c, kind: 'customization', key: `c${c.id}`, sourceLabel: 'My customized' })),
-      ]
-    : [];
+  const rows = (data?.templates ?? []).map((t) => {
+    const meta = LIBRARY_SOURCES[t.source] ?? LIBRARY_SOURCES.own;
+    return {
+      ...t,
+      kind: meta.kind,
+      sourceLabel: meta.label,
+      key: `${meta.kind === 'customization' ? 'c' : 't'}${t.id}`,
+    };
+  });
+
+  // An empty library and an over-narrow filter are different problems with
+  // different fixes, so they get different copy — telling someone to go create
+  // a template when they have twenty and simply mistyped is a dead end.
+  const isFiltered = debouncedQuery !== '' || riskFilter !== '';
 
   return (
     <Modal
@@ -429,6 +465,29 @@ export function ApplyTemplateModal({ open, onClose, onApplied, goalId }) {
       title="Apply a strategy template"
       description="Sets this goal's post-retirement return assumption from an approved template. Only approved templates can be applied to a real plan."
     >
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name or description…"
+          aria-label="Search strategy templates"
+          className="field min-w-0 flex-1"
+        />
+        <select
+          value={riskFilter}
+          onChange={(e) => setRiskFilter(e.target.value)}
+          aria-label="Filter by risk profile"
+          className="field"
+        >
+          <option value="">Any risk profile</option>
+          <option value="conservative">Conservative</option>
+          <option value="moderate">Moderate</option>
+          <option value="balanced">Balanced</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
+      </div>
+
       {loading && <Spinner label="Loading templates…" />}
       {error && (
         <p className="mb-3 text-sm rounded-[var(--radius-ctrl)] bg-[var(--color-alert-soft)] px-3 py-2" style={{ color: 'var(--color-alert)' }}>
@@ -437,9 +496,15 @@ export function ApplyTemplateModal({ open, onClose, onApplied, goalId }) {
       )}
 
       {data && rows.length === 0 && (
-        <EmptyState title="No templates yet">
-          Create or fork a strategy template first, from the Templates page.
-        </EmptyState>
+        isFiltered ? (
+          <EmptyState title="Nothing matches that">
+            No template matches your search or risk filter. Clear them to see the whole library.
+          </EmptyState>
+        ) : (
+          <EmptyState title="No templates yet">
+            Create or fork a strategy template first, from the Templates page.
+          </EmptyState>
+        )
       )}
 
       {data && rows.length > 0 && (
