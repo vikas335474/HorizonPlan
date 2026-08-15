@@ -307,6 +307,7 @@ After the core MVP (032), the following migrations added:
 - **037: `reference_costs`** — Sourced reference data table: education cost ranges (government/private/overseas driver) + healthcare, with source URL + `is_verified` flag. Populated by cron; fallback to `PersonalisationReference.php` constants while empty.
 - **038: `portfolio_reconcile`** — CAS/MFCentral reconciliation rewrite (docs/12 D-1, sql/038): added `client_portfolio_items.folio_number` and `source` column ('manual' | 'cas_import'). Prevents duplicate on reimport. See `PortfolioReconcile.php`.
 - **039: `tax_context`** — Per-instrument tax treatment reference table (`tax_reference`): capital-gains/holding-period treatment notes, `is_verified` flag. Added to `client_portfolio_items`: `fund_type` (equity|debt|hybrid for mutual funds), `acquisition_value`, `acquisition_date`. See `PortfolioTaxContext.php`, `TaxReference.php`.
+- **041: `personal_plan_digest`** — `users.plan_digest_opt_in` (default **0**) + `plan_digest_last_sent_at` for the monthly self-serve digest (docs/13 I-9). Opt-in by design: applying it cannot start emailing anyone. See `PersonalDigestMailer.php`, `tools/personal_digest_send.php`.
 - **040: `product_events`** — The first telemetry in this codebase (docs/13 I-5). Tenant-scoped, both FKs `ON DELETE CASCADE`. `event_name` is a closed set and `event_context` is a whitelist of non-financial labels (step index, screen slug, lever type). **Never stores a financial value** — enforced by `tests/test_product_events.php`, not by convention. See `ProductEvents.php`.
 
 These are the "long tail of hardening + demo + UX" sessions from `docs/CHANGELOG_SESSION_HISTORY.md`. Read `docs/12` (D-1 through D-4) for the detailed design decisions.
@@ -333,6 +334,7 @@ These are the "long tail of hardening + demo + UX" sessions from `docs/CHANGELOG
 | `TemplateValidation.php` | Shared allocation/risk-profile validation for template endpoints. |
 | `PlanReview.php` | Jr→Sr approval-workflow state transitions. |
 | `PlanReviewMailer.php` | Plan review email generation and scheduling. |
+| `PersonalDigestMailer.php` | The self-serve individual's monthly plan digest (docs/13 I-9, sql/041) — who is due, and the body composed from AlertsEngine's facts. Opt-in only; never instructs. |
 | **Cash flow & portfolio** | |
 | `CashFlowSummary.php` | Normalises income/expense lines to monthly, sums surplus, and (advisor-only) compares surplus to total goal SIPs. |
 | `PortfolioReconcile.php` | Pure logic for CAS/MFCentral CSV reconciliation (docs/12 D-1, sql/038) — diffs, validation, deduplication. No DB. |

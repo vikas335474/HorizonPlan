@@ -622,6 +622,17 @@ export const api = {
     return request(`change_log_list.php?${params.toString()}`);
   },
 
+  // --- Monthly plan digest (docs/13 I-9) ---
+  // The caller's OWN preference — there is no user_id here, and the server
+  // resolves identity from the session. Self-serve individuals only (403 for a
+  // firm's client, whose adviser owns the follow-up). Opt-in, default off.
+  getDigestPref: () => request('personal_digest_pref.php'),
+  setDigestPref: (optIn) =>
+    request('personal_digest_pref.php', {
+      method: 'POST',
+      body: JSON.stringify({ opt_in: optIn }),
+    }),
+
   // --- Product analytics (docs/13 I-5) ---
   // Record one event about USING the product. The server attributes it to the
   // caller's own session, and reduces `context` to a whitelisted,

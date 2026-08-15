@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import ScenarioPanel from '../components/ScenarioPanel';
+import ScenarioCompare from '../components/ScenarioCompare';
 import { Card, Badge, Button, Spinner } from '../components/ui';
 import { ApplyTemplateModal } from '../components/TemplateUI';
 import { ReadinessScoreCard, scoreContradictsTarget } from '../components/ReadinessScore';
@@ -70,6 +71,10 @@ export default function GoalDetail() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  // docs/13 I-10 — the compare view. Off by default: the accordion below is
+  // where scenarios are edited, and this answers a different question ("which
+  // of these do I want?") that only arises once more than one exists.
+  const [comparing, setComparing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [baselineProjection, setBaselineProjection] = useState(null);
@@ -980,10 +985,30 @@ export default function GoalDetail() {
                   Try different assumptions without touching the base goal.
                 </p>
               </div>
-              <Button onClick={handleCreateScenario} disabled={creating}>
-                {creating ? 'Creating…' : '+ New scenario'}
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* docs/13 I-10 — only offered for a retirement goal (a
+                    target-based goal has no projection to compare) and only
+                    once there is something to compare the baseline against. */}
+                {isRetirement && subScenarios && subScenarios.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setComparing((c) => !c)}
+                    aria-expanded={comparing}
+                  >
+                    {comparing ? 'Hide comparison' : 'Compare side by side'}
+                  </Button>
+                )}
+                <Button onClick={handleCreateScenario} disabled={creating}>
+                  {creating ? 'Creating…' : '+ New scenario'}
+                </Button>
+              </div>
             </div>
+
+            {comparing && isRetirement && subScenarios && subScenarios.length > 0 && (
+              <div className="mb-4">
+                <ScenarioCompare goal={goal} subScenarios={subScenarios} plain={isSelfDirected} />
+              </div>
+            )}
 
             {createError && (
               <p className="mb-3 text-sm" style={{ color: 'var(--color-alert)' }}>{createError}</p>

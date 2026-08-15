@@ -179,6 +179,36 @@ accumulate on its own.
 - No backfill, ever: history starts the first time a snapshot runs. The app
   does not invent readings for dates nobody observed.
 
+## Monthly plan-digest cron (self-serve individuals)
+
+`tools/personal_digest_send.php` emails a self-serve individual a short,
+factual summary of where their plan stands (docs/13 I-9). It exists because
+the snapshot cron above has been recording each person's progress and telling
+them nothing about it — with no nudge, the self-serve tier had no reason for
+anyone to come back.
+
+**hPanel → Advanced → Cron Jobs → Create a new cron job:**
+- Command: `php /home/<your-hostinger-user>/public_html/tools/personal_digest_send.php`
+- Schedule: monthly, a few days AFTER the snapshot cron so the digest
+  describes fresh facts rather than last month's — e.g. `0 6 4 * *` (6 AM on
+  the 4th, given a snapshot on the 1st).
+- **Nobody is emailed unless they asked.** The recipient query requires
+  `users.plan_digest_opt_in = 1` (sql/041, default **0**) and a
+  `kind='personal'` tenant. Applying the migration cannot start mailing
+  anyone; a firm's client is never included, because their adviser owns the
+  follow-up (that is what the plan-review mailer is for).
+- Safe to run more than once: a person is only due when their last send is at
+  least a month old, so a same-day re-run mails nobody twice. A send that
+  fails is *not* marked sent, so the next run retries it rather than losing a
+  month.
+- Someone with nothing worth reporting is skipped and **not** marked sent —
+  silence rather than a "no change this month" email, and they are
+  reconsidered next run.
+- Run it once with `--dry-run` first on a real database: it prints each body
+  and mails nothing.
+- Demo tenants are protected regardless, because `sendMail()` itself
+  suppresses delivery while `platform_settings.demo_mode` is on.
+
 This is CLI-only and never shipped by the deploy pipeline, same as the NAV
 cron below (only `api/lib/ProgressSnapshot.php` ships, which
 `api/progress_capture.php` also uses in-request for "Record now").

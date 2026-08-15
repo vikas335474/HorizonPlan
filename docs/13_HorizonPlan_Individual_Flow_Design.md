@@ -271,10 +271,10 @@ event.
 
 ## 6. Prioritised backlog
 
-> **Build status (this session).** P0 and P1 are built, plus I-11 from P2.
-> I-6 was **investigated and deliberately not built** — see its entry for why;
-> it turned out to rest on a false premise in this document's own G5. I-9, I-10
-> and I-12 are not started.
+> **Build status.** P0, P1 and P2 are built. I-6 was **investigated and
+> deliberately not built** — see its entry for why; it turned out to rest on a
+> false premise in this document's own G5. I-12 remains a spike, not a
+> commitment.
 
 ### P0 — Fix the flow before adding to it
 
@@ -355,13 +355,39 @@ block. *(Closes G7)*
 
 ### P2 — Retention and depth
 
-**I-9 · The monthly "here's where you are" email.** The snapshot cron already
-records the data; send the person a plain, factual summary with a link. Facts
-only, same rule as the alerts engine. Opt-out from day one. *(Closes G8)*
+**I-9 · The monthly "here's where you are" email.** ✅ **Built.** `sql/041`,
+`api/lib/PersonalDigestMailer.php`, `tools/personal_digest_send.php`,
+`personal_digest_pref.php`, `DigestPreference.jsx`.
 
-**I-10 · Side-by-side scenario compare.** Sub-scenarios exist but are viewed one
-at a time; show two side by side. The single highest-value borrow from Boldin
-and ProjectionLab. *(§3)*
+The body is composed from **AlertsEngine's existing facts** rather than a second
+view of the plan — a digest that computed its own numbers would eventually
+contradict the app, and being told two different things about your own money is
+worse than being told nothing. `tests/test_personal_digest.php` asserts no
+instruction word survives into a composed body, the same guard the alerts engine
+holds itself to.
+
+**Changed from the plan: opt-IN, not opt-out.** This document said "opt-out from
+day one". That contradicts `CLAUDE.md`'s standing "default new toggles OFF" rule
+*and* the direct precedent in `PlanReviewMailer` (docs/10 P0-3), whose own header
+states a client is only ever emailed when someone explicitly opted them in. The
+column defaults to `0`, so applying the migration cannot start emailing anybody.
+The opt-in is offered where it is actually relevant — the post-onboarding proof
+screen and Settings — rather than assumed.
+
+Someone with nothing worth reporting is skipped and **not** marked sent: silence
+rather than a "no change this month" email, and they are reconsidered next run.
+*(Closes G8)*
+
+**I-10 · Side-by-side scenario compare.** ✅ **Built.** `ScenarioCompare.jsx`, on
+`GoalDetail` behind a "Compare side by side" toggle, shown only for a retirement
+goal with at least one scenario.
+
+Read-only on purpose: editing stays in `ScenarioPanel`. A grid where every cell
+is editable is a spreadsheet, and a spreadsheet is what this product exists to
+replace. It calls the same `goals_projection.php` once per column — no new
+backend, and no second computation that could disagree with the panel a column
+came from. Includes the **adverse-sequence** row, which names the year the money
+runs out rather than showing a flattering steady-return ending balance. *(§3)*
 
 **I-11 · Offer partner planning at the natural moment.** ✅ **Built.** The invite
 appears on the proof screen, but **only** when the person answered that someone

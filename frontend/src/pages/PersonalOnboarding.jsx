@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import DisclosureBanner from '../components/DisclosureBanner';
 import { leverLine } from '../components/RetirementTargetCard';
+import DigestPreference from '../components/DigestPreference';
 import { Card, Button } from '../components/ui';
 import { formatCurrency } from '../lib/format';
 import {
@@ -553,6 +554,13 @@ function PlanCreated({ goalId, countdown, offerPartner = false, onContinue }) {
               Your plan was created. We couldn't draw the summary just now — open it to see the detail.
             </p>
           )}
+
+          {/* docs/13 I-9 — offered here because this is the moment it makes
+              sense: the person has just built the thing the summary would be
+              about. Unticked, like everywhere else. */}
+          <div className="mt-5 border-t border-[var(--color-line)] pt-4">
+            <DigestPreference compact />
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link to={`/goals/${goalId}`}>

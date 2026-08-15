@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import AppHeader from '../components/AppHeader';
 import { Card, Button, Badge } from '../components/ui';
+import DigestPreference from '../components/DigestPreference';
 
 // Settings: MFA enrollment + password change. Reachable from the header on any
 // authenticated route; also the redirect target of ProtectedRoute's mandatory-
@@ -68,6 +69,8 @@ export default function Settings() {
             onContinue={() => navigate(continuePath, { replace: true })}
           />
           <PasswordSection />
+          {/* docs/13 I-9 — renders nothing outside a personal tenant. */}
+          <DigestPreference />
           {canBrand && (
             <BrandingSection
               tenantId={user.tenantId}
