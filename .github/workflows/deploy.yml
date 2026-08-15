@@ -65,12 +65,38 @@ jobs:
           cp -a frontend/dist/. _site/
           # PHP API served as-is, same origin under /api — no build step.
           cp -a api _site/api
+          # Cron scripts. Every documented cron in DEPLOY.md points at
+          # public_html/tools/<name>.php, but this tree never shipped tools/,
+          # so none of those paths existed on the server and no cron could
+          # ever have run — the NAV sync and progress snapshot included.
+          #
+          # Safe to serve from public_html: every file in tools/ opens with a
+          # `PHP_SAPI !== 'cli'` guard that 403s an HTTP request, which is
+          # what DEPLOY.md already relies on when it calls them
+          # "never reachable over HTTP". The guard is asserted below rather
+          # than assumed, so a new tool that forgets it fails the build
+          # instead of quietly becoming a public endpoint.
+          cp -a tools _site/tools
+          # Seed/admin scripts are destructive and have no business on a
+          # production box even behind the CLI guard.
+          rm -f _site/tools/seed_demo_data.php \
+                _site/tools/seed_demo_data_full.php \
+                _site/tools/seed_templates.php \
+                _site/tools/bootstrap_admin.php \
+                _site/tools/set_password.php \
+                _site/tools/check_login.php
           # Belt-and-suspenders: real credentials must never reach the branch.
           rm -f _site/api/db_config.php
           echo "Assembled tree:"
           ls -la _site
           test -f _site/index.html || { echo "index.html missing from build"; exit 1; }
           test -f _site/.htaccess || { echo ".htaccess missing from build"; exit 1; }
+          # Every shipped tool must refuse an HTTP request. This is the check
+          # that lets us put tools/ under public_html at all.
+          for t in _site/tools/*.php; do
+            grep -q "PHP_SAPI !== 'cli'" "$t" \
+              || { echo "FAIL: $t has no CLI-only guard and must not be published"; exit 1; }
+          done
 
       - name: Publish to deploy branch
         run: |
