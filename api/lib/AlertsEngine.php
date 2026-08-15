@@ -131,8 +131,11 @@ function stalePriceAlert(int $itemId, string $description, ?string $navFetchedAt
  * cron actually sends. Pure: takes the schedule row's own fields plus an
  * as-of date, no DateTimeImmutable/"now" ambiguity leaking in from the caller.
  */
-function reviewDueAlert(int $clientId, string $clientLabel, string $cadence, ?string $lastSentAt, ?string $asOfDate = null): ?array
+function reviewDueAlert(int $clientId, string $clientLabel, string $cadence, ?string $lastSentAt, ?string $asOfDate = null, ?string $possessive = null): ?array
 {
+    // See alertPossessive(): "Priya Raman's" for an adviser reading about a
+    // client, "Your" for someone reading about themselves.
+    $possessive = $possessive ?? "{$clientLabel}'s";
     $spec = planReviewIntervalSpec($cadence);
     if ($spec === null) {
         return null; // 'off', or an unrecognised cadence — nothing due
@@ -162,9 +165,32 @@ function reviewDueAlert(int $clientId, string $clientLabel, string $cadence, ?st
         'type'            => 'review_due',
         'severity'        => 'attention',
         'subject'         => ['client_id' => $clientId, 'client_label' => $clientLabel],
-        'factual_message' => "{$clientLabel}'s {$cadence} plan review is due.",
+        'factual_message' => "{$possessive} {$cadence} plan review is due.",
         'deep_link'       => '/goals',
     ];
+}
+
+/**
+ * How an alert refers to the person it is about.
+ *
+ * The engine is shared by two audiences (docs/12 principle 6) and they need
+ * different grammar for the same fact. An adviser reading their book needs to
+ * know WHICH client — "Priya Raman's emergency reserve has not been recorded
+ * yet". A self-serve individual is reading about themselves, and third person
+ * there is not a style nit: it reads as though the app is discussing them with
+ * somebody else, and it lands the same way in the monthly digest EMAIL, which
+ * embeds these messages verbatim (PersonalDigestMailer::composeDigestBody).
+ *
+ * Returning a POSSESSIVE rather than a name is what makes both forms work from
+ * one template — "Your" cannot be produced by appending "'s" to a label, so a
+ * label alone could never express the second-person case.
+ *
+ * Note this is purely grammatical. It changes no fact, no severity, and no
+ * threshold — the same alert fires either way.
+ */
+function alertPossessive(string $clientLabel, bool $isSelf): string
+{
+    return $isSelf ? 'Your' : "{$clientLabel}'s";
 }
 
 /**
@@ -177,8 +203,10 @@ function reviewDueAlert(int $clientId, string $clientLabel, string $cadence, ?st
  * @param array{checks:list<array<string,mixed>>,unmet:int,open:int,ok:int} $foundationsSummary
  * @return list<array<string,mixed>>
  */
-function foundationsGapAlerts(int $clientId, string $clientLabel, array $foundationsSummary): array
+function foundationsGapAlerts(int $clientId, string $clientLabel, array $foundationsSummary, ?string $possessive = null): array
 {
+    $possessive = $possessive ?? "{$clientLabel}'s";
+
     $labels = [
         'emergency_reserve' => 'emergency reserve',
         'life_cover'        => 'life cover',
@@ -194,8 +222,8 @@ function foundationsGapAlerts(int $clientId, string $clientLabel, array $foundat
         }
         $label = $labels[$check['id']] ?? $check['id'];
         $message = $status === 'not_recorded'
-            ? "{$clientLabel}'s {$label} has not been recorded yet."
-            : "{$clientLabel}'s {$label} falls short of the reference point.";
+            ? "{$possessive} {$label} has not been recorded yet."
+            : "{$possessive} {$label} falls short of the reference point.";
         $alerts[] = [
             'type'            => 'foundations_gap',
             'severity'        => 'attention',
@@ -244,20 +272,28 @@ function computeClientAlerts(array $bundle, ?string $asOfDate = null): array
             $alerts[] = $priceAlert;
         }
     }
+    // Second person when the reader IS the subject (a self-serve individual),
+    // third person for an adviser reading their book. See alertPossessive().
+    // Defaults to false so any caller that hasn't opted in keeps the existing
+    // advisor-facing wording rather than silently addressing a stranger as
+    // "you".
+    $possessive = alertPossessive((string) $bundle['client_label'], (bool) ($bundle['is_self'] ?? false));
+
     if ($bundle['review_schedule'] !== null) {
         $reviewAlert = reviewDueAlert(
             (int) $bundle['client_id'],
             (string) $bundle['client_label'],
             (string) $bundle['review_schedule']['cadence'],
             $bundle['review_schedule']['last_sent_at'] ?? null,
-            $asOfDate
+            $asOfDate,
+            $possessive
         );
         if ($reviewAlert !== null) {
             $alerts[] = $reviewAlert;
         }
     }
     if ($bundle['foundations'] !== null) {
-        foreach (foundationsGapAlerts((int) $bundle['client_id'], (string) $bundle['client_label'], $bundle['foundations']) as $gapAlert) {
+        foreach (foundationsGapAlerts((int) $bundle['client_id'], (string) $bundle['client_label'], $bundle['foundations'], $possessive) as $gapAlert) {
             $alerts[] = $gapAlert;
         }
     }
