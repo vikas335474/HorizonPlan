@@ -25,6 +25,7 @@ import PlanReport from './pages/PlanReport';
 import MeetingMode from './pages/MeetingMode';
 import AdminConsole from './pages/AdminConsole';
 import PracticeAnalytics from './pages/PracticeAnalytics';
+import ProductAnalytics from './pages/ProductAnalytics';
 import AdvisorTemplates from './pages/AdvisorTemplates';
 import RiskQuestionnaireBuilder from './pages/RiskQuestionnaireBuilder';
 import ActivityLog from './pages/ActivityLog';
@@ -93,6 +94,12 @@ export default function App() {
               dashboard. sr_advisor/firm_admin (and super_admin); the page
               client-guards and firm_analytics.php enforces requireFirmRole. */}
           <Route path="/practice" element={<ProtectedRoute><PracticeAnalytics /></ProtectedRoute>} />
+
+          {/* Platform product analytics — the missing consumer for
+              product_events (docs/13 §5). super_admin-only, cross-tenant;
+              server-enforced via verifyAccess(db, 'super_admin') on
+              product_analytics.php, page also client-guards. */}
+          <Route path="/product-analytics" element={<ProtectedRoute><ProductAnalytics /></ProtectedRoute>} />
 
           {/* docs/10 P0-1 — household / family aggregate planning; advisor-only,
               server-enforced (verifyAccess 'advisor' on every households_* /
