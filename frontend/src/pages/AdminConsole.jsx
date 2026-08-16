@@ -553,9 +553,14 @@ function TenantRow({ tenant, onChanged }) {
                 >
                   {tenant.advisory_mode}
                 </Badge>
+                {tenant.plan && (
+                  <Badge fg="var(--color-ink-2)" bg="var(--color-surface-2)">
+                    {tenant.plan.name}
+                  </Badge>
+                )}
               </div>
               <p className="mt-0.5 text-xs text-[var(--color-ink-3)]">
-                {tenant.advisor_count} advisor{tenant.advisor_count === 1 ? '' : 's'} · {tenant.client_count} client{tenant.client_count === 1 ? '' : 's'}
+                {tenant.advisor_count}{tenant.plan?.max_advisors != null ? `/${tenant.plan.max_advisors}` : ''} advisor{tenant.advisor_count === 1 ? '' : 's'} · {tenant.client_count} client{tenant.client_count === 1 ? '' : 's'}
               </p>
             </div>
           </div>
@@ -581,6 +586,7 @@ function TenantRow({ tenant, onChanged }) {
 // panels instead of one coherent view. ──────────────────────────────────────
 function FirmDetailModal({ tenantId, onClose, onChanged }) {
   const [detail, setDetail] = useState(null);
+  const [plans, setPlans] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -592,6 +598,11 @@ function FirmDetailModal({ tenantId, onClose, onChanged }) {
       .then((res) => setDetail(res))
       .catch((e) => setError(e.message || 'Could not load this firm.'))
       .finally(() => setLoading(false));
+    if (!plans) {
+      // Fixed catalog (docs/09 Session 8) — fetched once per modal session,
+      // not on every refresh, since it never changes underneath us.
+      api.listSubscriptionPlans().then((res) => setPlans(res.plans)).catch(() => {});
+    }
   }
 
   useEffect(() => {
@@ -613,6 +624,21 @@ function FirmDetailModal({ tenantId, onClose, onChanged }) {
       refresh();
     } catch (e) {
       setError(e.message || 'Could not change mode.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Billing (docs/09 Session 8) — plan_code is super_admin-only server-side
+  // (tenant_update.php), same restriction class as advisory_mode.
+  async function setPlan(planCode) {
+    if (!detail || planCode === detail.tenant.plan?.code || busy) return;
+    setBusy(true);
+    try {
+      await api.updateTenant(detail.tenant.id, { plan_code: planCode });
+      refresh();
+    } catch (e) {
+      setError(e.message || 'Could not change the plan.');
     } finally {
       setBusy(false);
     }
@@ -647,12 +673,51 @@ function FirmDetailModal({ tenantId, onClose, onChanged }) {
       {detail && (
         <div className="space-y-6">
           <div className="grid grid-cols-3 gap-3">
-            <StatCard label="Advisors" value={detail.tenant.advisor_count} />
+            <StatCard
+              label="Advisors"
+              value={
+                detail.tenant.plan?.max_advisors != null
+                  ? `${detail.tenant.advisor_count}/${detail.tenant.plan.max_advisors}`
+                  : detail.tenant.advisor_count
+              }
+            />
             <StatCard label="Clients" value={detail.tenant.client_count} />
             <StatCard label="Goals" value={detail.tenant.goal_count} accent="teal" />
           </div>
 
-          <div>
+          {detail.tenant.plan && (
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-2">Plan</h3>
+              <p className="mb-2 text-xs text-[var(--color-ink-3)]">
+                Gates advisor seats only — clients and goals are unlimited on every tier (docs/09 Session 8).
+                Price is informational; no payment is processed by this app.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(plans || []).map((p) => (
+                  <button
+                    key={p.code}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setPlan(p.code)}
+                    className="px-3 py-1.5 rounded-[var(--radius-ctrl)] border text-sm font-medium transition-colors text-left"
+                    style={
+                      detail.tenant.plan.code === p.code
+                        ? { backgroundColor: 'var(--color-ink)', color: 'white', borderColor: 'var(--color-ink)' }
+                        : { color: 'var(--color-ink-2)', borderColor: 'var(--color-line-2)' }
+                    }
+                  >
+                    <div>{p.name}</div>
+                    <div className="text-xs opacity-80">
+                      {p.max_advisors != null ? `${p.max_advisors} advisor seats` : 'Unlimited seats'}
+                      {p.price_inr_monthly != null ? ` · ₹${p.price_inr_monthly.toLocaleString('en-IN')}/mo` : ''}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-5 border-t border-[var(--color-line)]">
             <h3 className="text-sm font-semibold text-[var(--color-ink)] mb-2">Compliance mode</h3>
             <p className="mb-2 text-xs text-[var(--color-ink-3)]">
               Advisory mode carries advice language and is for SEBI-RIA firms only — set it only after off-platform review (docs/02 §3.6).

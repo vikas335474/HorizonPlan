@@ -164,14 +164,21 @@ export const api = {
       }),
     }),
 
-  // Update a firm's advisory_mode and/or white-label branding. `changes` is a
-  // subset of { advisory_mode, white_label } — white_label is an object
-  // { company_name?, logo_url?, primary_color? } or null to clear it.
+  // Update a firm's advisory_mode, white-label branding, and/or plan_code
+  // (docs/09 Session 8, super_admin only for plan_code). `changes` is a
+  // subset of { advisory_mode, white_label, plan_code, requires_plan_review } —
+  // white_label is an object { company_name?, logo_url?, primary_color? } or
+  // null to clear it.
   updateTenant: (tenantId, changes) =>
     request('tenant_update.php', {
       method: 'POST',
       body: JSON.stringify({ tenant_id: tenantId, ...changes }),
     }),
+
+  // Billing (docs/09 Session 8): the fixed subscription-plan catalog — id,
+  // code, name, max_advisors (null = unlimited), price_inr_monthly
+  // (informational only). Super Admin only, backs the plan picker.
+  listSubscriptionPlans: () => request('subscription_plans_list.php'),
 
   // Add an advisor to an existing firm. firmRole (docs/09 Piece 2) is
   // optional — omit for the pre-migration default (treated as sr_advisor).

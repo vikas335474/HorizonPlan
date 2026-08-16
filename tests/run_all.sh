@@ -44,6 +44,7 @@ for t in \
   tests/test_household_projection_db.php \
   tests/test_cash_flow_summary_db.php \
   tests/test_client_assignment_db.php \
+  tests/test_plan_limits_db.php \
   tests/test_progress_snapshot_db.php \
   tests/test_self_service_db.php \
   tests/test_foundations_db.php \

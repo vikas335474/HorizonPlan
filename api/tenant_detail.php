@@ -30,7 +30,12 @@ if ($tenantId <= 0) {
 }
 
 $tenantStmt = $db->prepare(
-    'SELECT id, company_name, advisory_mode, white_label_settings, requires_plan_review, created_at FROM tenants WHERE id = :id LIMIT 1'
+    'SELECT t.id, t.company_name, t.advisory_mode, t.white_label_settings, t.requires_plan_review, t.created_at,
+            t.kind, p.code AS plan_code, p.name AS plan_name, p.max_advisors, p.price_inr_monthly
+       FROM tenants t
+       LEFT JOIN subscription_plans p ON p.id = t.plan_id
+      WHERE t.id = :id
+      LIMIT 1'
 );
 $tenantStmt->execute([':id' => $tenantId]);
 $tenant = $tenantStmt->fetch();
@@ -82,6 +87,14 @@ echo json_encode([
         'advisor_count' => count($advisors),
         'client_count'  => $clientCount,
         'goal_count'    => $goalCount,
+        // Billing (docs/09 Session 8, sql/044) — null for a personal-kind
+        // tenant, which never has a plan_id (sql/044's decision record).
+        'plan'          => $tenant['plan_code'] !== null ? [
+            'code'              => $tenant['plan_code'],
+            'name'              => $tenant['plan_name'],
+            'max_advisors'      => $tenant['max_advisors'] !== null ? (int) $tenant['max_advisors'] : null,
+            'price_inr_monthly' => $tenant['price_inr_monthly'] !== null ? (int) $tenant['price_inr_monthly'] : null,
+        ] : null,
     ],
     'advisors' => $advisors,
 ]);

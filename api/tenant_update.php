@@ -101,6 +101,28 @@ if (array_key_exists('white_label', $input)) {
     }
 }
 
+if (array_key_exists('plan_code', $input)) {
+    // Billing (docs/09 Session 8) — same restriction as advisory_mode:
+    // super_admin only, never a firm-self-serve toggle. Changing a firm's
+    // seat cap is the platform provider's call, not the firm's own.
+    if ($session['role'] !== 'super_admin') {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'Only a Super Admin can change a firm\'s plan.']);
+        exit();
+    }
+    $planCode = (string) $input['plan_code'];
+    $planStmt = $db->prepare('SELECT id FROM subscription_plans WHERE code = :code LIMIT 1');
+    $planStmt->execute([':code' => $planCode]);
+    $planId = $planStmt->fetchColumn();
+    if ($planId === false) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => 'Unknown plan_code.']);
+        exit();
+    }
+    $set[] = 'plan_id = :plan_id';
+    $params[':plan_id'] = (int) $planId;
+}
+
 if (array_key_exists('requires_plan_review', $input)) {
     // Jr -> Sr Advisor Plan-Approval Workflow (decision #3): opt-in per
     // tenant. Not a compliance control like advisory_mode — a firm_admin (or
