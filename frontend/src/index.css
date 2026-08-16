@@ -26,10 +26,33 @@
   /* Measured amber — used sparingly for highlights, corpus figures */
   --color-amber: #A9782F;
   --color-amber-soft: #F5ECDC;
+  /* Darker amber for text-on-light where the display amber (#A9782F) does
+     not carry enough contrast against a white surface — mirrors --color-teal-ink
+     and --color-coral-ink. Was silently used by PersonalPlanSummary.jsx and
+     NetWorthTrend.jsx to colour a DECREASING delta, and it fell back to the
+     parent colour because it wasn't defined here — a visible "▼ 4" was
+     rendering in the surrounding ink colour instead of amber, muting the
+     signal the code intended. */
+  --color-amber-ink: #7A5720;
 
   /* Alert / override state — muted rust, never alarming red */
   --color-alert: #B44A38;
   --color-alert-soft: #F7E7E3;
+
+  /* Warm coral — the individual (self-serve) side of the brand. Deliberately
+     warmer and lighter than --color-alert (#B44A38, muted rust): --alert must
+     never read as "in the brand" and coral must never read as an error state.
+     Currently used ONLY on the public landing page's "for individuals" sections
+     to give the two audiences visually distinct territory; not yet applied
+     inside the authenticated app. */
+  --color-coral: #E86A5C;
+  --color-coral-soft: #FDECE6;
+  --color-coral-ink: #A03A25;
+
+  /* Warm-coral hero gradient — the individual band's replacement for
+     --grad-hero (which stays as the advisor-side dark hero). Reads as a
+     light, warm surface rather than an institutional dark one. */
+  --grad-warm: linear-gradient(150deg, #FEF3EE 0%, #FBE0D3 55%, #F5C4B0 130%);
 
   --radius-sm: 6px;
   --radius-ctrl: 8px;
@@ -44,6 +67,12 @@
   --shadow-md: 0 2px 6px -2px rgba(15, 23, 41, 0.06), 0 8px 20px -6px rgba(15, 23, 41, 0.10);
   --shadow-lg: 0 4px 12px -4px rgba(15, 23, 41, 0.08), 0 18px 40px -12px rgba(15, 23, 41, 0.16);
   --shadow-teal: 0 6px 18px -6px rgba(14, 124, 107, 0.40);
+  /* Coral counterparts to --shadow-teal, in the individual-side accent. Two
+     strengths because the final-CTA button (on a dark hero background) needs
+     a slightly stronger glow than the on-light-surface buttons. Kept as
+     tokens so a later coral retune only changes them here. */
+  --shadow-coral: 0 6px 18px -6px rgba(232, 106, 92, 0.45);
+  --shadow-coral-strong: 0 6px 18px -6px rgba(232, 106, 92, 0.55);
   --shadow-ink: 0 8px 24px -8px rgba(15, 23, 41, 0.40);
 
   /* Signature gradients — used sparingly on hero surfaces and primary CTAs. */
