@@ -161,7 +161,12 @@ function TopNav() {
           <a href="#pillars" onClick={() => setOpen(false)} className="block text-sm text-[var(--color-ink-2)]">Product</a>
           <a href="#how" onClick={() => setOpen(false)} className="block text-sm text-[var(--color-ink-2)]">How it works</a>
           <a href="#features" onClick={() => setOpen(false)} className="block text-sm text-[var(--color-ink-2)]">Features</a>
-          <a href="#individuals" onClick={() => setOpen(false)} className="block text-sm text-[var(--color-ink-2)]">For individuals</a>
+          {/* Coral dot mirrors the desktop nav — the audience signal has to be
+              present at the top of the page on mobile too. */}
+          <a href="#individuals" onClick={() => setOpen(false)} className="flex items-center gap-1.5 text-sm text-[var(--color-ink-2)]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--color-coral)' }} />
+            For individuals
+          </a>
           <a href="#pricing" onClick={() => setOpen(false)} className="block text-sm text-[var(--color-ink-2)]">Pricing</a>
           <div className="pt-3 border-t flex items-center gap-3" style={{ borderColor: 'var(--color-line)' }}>
             <Link to="/login" className="text-sm text-[var(--color-ink-2)]">Sign in</Link>
@@ -777,7 +782,8 @@ function IndividualBand() {
               className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white transition-all duration-150 active:translate-y-px"
               style={{
                 backgroundColor: 'var(--color-coral)',
-                boxShadow: '0 6px 18px -6px rgba(232,106,92,0.45)',
+                color: 'var(--color-ink)',
+                boxShadow: 'var(--shadow-coral)',
               }}
             >
               Start planning free
@@ -1079,10 +1085,11 @@ function FinalCTA() {
             </Link>
             <Link
               to="/start-free"
-              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white transition-all duration-150 active:translate-y-px"
+              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold transition-all duration-150 active:translate-y-px"
               style={{
                 backgroundColor: 'var(--color-coral)',
-                boxShadow: '0 6px 18px -6px rgba(232,106,92,0.55)',
+                color: 'var(--color-ink)',
+                boxShadow: 'var(--shadow-coral-strong)',
               }}
             >
               Plan for yourself, free
