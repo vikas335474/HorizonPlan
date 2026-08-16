@@ -66,8 +66,10 @@ function dueReviewClients(PDO $db, DateTimeImmutable $now): array
 /**
  * Plain-text review email. Links the client to their own self-service login
  * (client login already exists) rather than attaching a report — the report
- * PDF is a client-side/browser artefact, so the email points them at the live
- * plan instead. Kept simple and firm-neutral in wording.
+ * PDF (docs/10 P0-2) is generated client-side in the browser via jsPDF/
+ * html2canvas, so the server never holds a copy of the file to attach; the
+ * email points them at the live plan instead, where they can download their
+ * own PDF. Kept simple and firm-neutral in wording.
  *
  * @return array{subject:string, body:string}
  */

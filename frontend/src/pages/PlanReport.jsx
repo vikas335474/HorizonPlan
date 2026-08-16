@@ -2,7 +2,7 @@
 // Read-only; renders api.getProjection output plus the compliance
 // DisclosureBanner, laid out for print. Shared by advisor and client.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +37,9 @@ export default function PlanReport() {
   // the projection and soft-failing: a report must still print if progress
   // has never been captured (the common case for a new plan).
   const [progress, setProgress] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const reportRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +78,29 @@ export default function PlanReport() {
     return () => { cancelled = true; };
   }, [id]);
 
+  // "Download PDF" produces an actual saved file (jsPDF/html2canvas
+  // rasterise the same reportRef DOM the screen shows) rather than relying on
+  // the browser's own print-to-PDF driver — the latter is the "Print" button
+  // below, kept because it's still the faster path at a desk with a real
+  // printer. Both render identical content; neither has a second data source.
+  async function handleDownload() {
+    if (!reportRef.current || downloading) return;
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      // Dynamically imported: jsPDF + html2canvas are a non-trivial chunk
+      // (~180kB gzipped) that most page loads never need — only someone who
+      // actually clicks "Download PDF" should pay for fetching it.
+      const { downloadElementAsPdf } = await import('../lib/pdfExport');
+      const filename = goal ? `${goal.goal_label.replace(/[^\w\- ]+/g, '').trim() || 'plan-report'}` : 'plan-report';
+      await downloadElementAsPdf(reportRef.current, filename);
+    } catch (err) {
+      setDownloadError(err.message || 'Could not generate the PDF. Try Print / Save as PDF instead.');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const firmName = tenant?.whiteLabel?.company_name || tenant?.companyName || 'HorizonPlan';
   // Use the firm's own uploaded logo on the leave-behind when they've set one
   // (Settings → Firm branding); fall back to the HorizonPlan mark otherwise.
@@ -97,6 +123,14 @@ export default function PlanReport() {
               <ReplayYearSelect value={replayYear} onChange={setReplayYear} className="text-xs py-1.5" />
             )}
             <button
+              onClick={handleDownload}
+              disabled={downloading || !goal}
+              className="rounded-[var(--radius-ctrl)] px-3.5 py-1.5 text-sm font-medium disabled:opacity-50"
+              style={{ border: '1px solid var(--color-line-2)', color: 'var(--color-ink)' }}
+            >
+              {downloading ? 'Preparing PDF…' : 'Download PDF'}
+            </button>
+            <button
               onClick={() => window.print()}
               className="rounded-[var(--radius-ctrl)] px-3.5 py-1.5 text-sm font-medium text-white"
               style={{ background: 'var(--grad-ink, var(--color-ink))' }}
@@ -105,9 +139,14 @@ export default function PlanReport() {
             </button>
           </div>
         </div>
+        {downloadError && (
+          <div className="mx-auto max-w-3xl px-5 pb-2">
+            <p className="text-xs" style={{ color: 'var(--color-alert)' }}>{downloadError}</p>
+          </div>
+        )}
       </div>
 
-      <main className="report-sheet mx-auto max-w-3xl px-6 py-8">
+      <main ref={reportRef} className="report-sheet mx-auto max-w-3xl px-6 py-8">
         {loading && <Spinner label="Preparing report…" />}
         {error && (
           <p className="text-sm" style={{ color: 'var(--color-alert)' }}>{error}</p>
