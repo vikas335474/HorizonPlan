@@ -1,5 +1,5 @@
 # Credentials — never commit these
-api/db_config.php
+api/db_config.local.php
 .env
 .env.*
 # ...except the checked-in example/placeholder files documenting the shape.

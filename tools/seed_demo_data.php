@@ -29,12 +29,11 @@ if (PHP_SAPI !== 'cli') {
     exit("Forbidden: this tool runs from the command line only.\n");
 }
 
-$configPath = __DIR__ . '/../api/db_config.php';
-if (!is_file($configPath)) {
-    fwrite(STDERR, "FAIL: api/db_config.php not found.\n");
-    exit(2);
-}
-require_once $configPath;
+// api/db_config.php always exists now — it's a tracked loader, not a
+// git-ignored file a server setup step might have skipped. It owns the
+// "credentials genuinely missing" diagnostic itself (see its header); no
+// existence check is needed here anymore.
+require_once __DIR__ . '/../api/db_config.php';
 
 const DEMO_COMPANY_NAME = 'Nirvana Wealth Advisors (Demo)';
 const DEMO_PASSWORD = 'DemoPass@2026';
