@@ -28,8 +28,8 @@ Actions tab). It:
    history** (never force-pushing) so Hostinger's `git pull` always
    fast-forwards.
 
-`api/db_config.php` is explicitly stripped before publishing — the real
-credentials file lives only on the server (see below).
+`api/db_config.php` **is committed and does ship** — see "Database credentials"
+below for why that's correct, not a leak. It contains no secrets.
 
 ## One-time Hostinger setup (do this once)
 
@@ -40,17 +40,79 @@ credentials file lives only on the server (see below).
    - Branch: **`deploy`**  ← not `main`.
    - Directory: **`public_html`**  (leave blank if it defaults there).
 3. Click **Create**. Hostinger clones the `deploy` branch into `public_html`.
-4. **Create the credentials file once, on the server** (it is intentionally not
-   in Git). In hPanel → File Manager, copy `public_html/api/db_config.example.php`
-   to `public_html/api/db_config.php` and fill in the real DB host / name / user /
-   password. Every future deploy is a `git pull`, which only updates *tracked*
-   files, so this untracked file is never touched.
+4. **Set up the credentials file** — see "Database credentials" below. Do this
+   *before* step 5, or the first auto-deploy pull will find nothing to load and
+   every page will 500.
 5. **Enable Auto-Deployment** (toggle in the Git panel) so each push to `deploy`
    pulls automatically. Without it, click **Deploy** in the Git panel after a
    build finishes.
 
 After this, the flow is just: merge to `main` → Action builds → `deploy` updates
 → Hostinger pulls. Nothing to move by hand.
+
+## Database credentials
+
+**This is not a plain git-ignored file living on the server.** That was the
+original design, and it broke in production: Hostinger's Auto-Deployment does
+not do a plain `git pull` — it resets/cleans the working tree on every push
+(equivalent to `git clean -fd`), which wipes *any* untracked file inside
+`public_html`, credentials included, no matter what it's named or how it's
+permissioned. `chmod 600` does not help — permissions control who can *read* a
+file, not whether git treats it as disposable. This surfaced as the daily NAV
+sync cron suddenly failing with `FAIL: api/db_config.php not found` after a
+deploy that never touched that file directly.
+
+**The fix:** `api/db_config.php` is now a small, git-**tracked**, secret-free
+*loader* (full reasoning in its own header comment). It requires an absolute
+path **outside `public_html` entirely** — a location Hostinger's reset can
+never reach because it isn't inside the git-managed directory at all. Every
+`api/*.php` and `tools/*.php` file still requires the same relative path as
+before (`db_config.php`); only that file's *content* changed, from "the real
+secrets" to "a pointer to where the real secrets now live". Nothing on the
+server needs editing after a deploy — the loader's path is a constant, set once
+in a commit, and every future deploy carries it forward unchanged.
+
+**One-time server setup, over SSH** (Hostinger Premium includes SSH access;
+find it in hPanel → Advanced → SSH Access):
+
+```bash
+ssh yourusername@yourdomain.com
+
+# Find your real home directory — Hostinger's layout varies by account
+# (some are ~/public_html directly, others ~/domains/yourdomain.com/public_html)
+pwd
+find ~ -maxdepth 4 -iname "public_html" -type d
+
+# Create the credentials file OUTSIDE public_html — a sibling to it, or
+# anywhere else outside that tree. Example, given ~/domains/yourdomain.com/public_html:
+cd ~/domains/yourdomain.com
+cp public_html/api/db_config.example.php db_config.php
+nano db_config.php
+#   …fill in the real DB_HOST / DB_NAME / DB_USER / DB_PASS from
+#   hPanel → Databases → MySQL Databases. GOOGLE_CLIENT_ID may stay empty.
+
+chmod 600 db_config.php
+```
+
+Then edit `api/db_config.php`'s candidate list (the loader) to point at that
+exact absolute path, commit, and push — the loader ships the same value on
+every future deploy, so this is a one-time change to the *repo*, never to the
+server.
+
+**To move or rotate this file later:** edit the path in `api/db_config.php`,
+commit, push — never edit the path by hand on the server; the next deploy would
+silently revert it back to whatever's in git.
+
+**To verify it worked**, over SSH:
+
+```bash
+cd ~/domains/yourdomain.com/public_html
+php tools/mf_nav_sync.php
+```
+
+A real result (`MF NAV sync: done. ...`) confirms the loader found the file and
+connected. `FAIL: No database credentials file found. Checked: ...` lists every
+path it tried, in order — the fastest way to see exactly what's misconfigured.
 
 ## Database migrations
 

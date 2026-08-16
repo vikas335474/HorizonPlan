@@ -46,7 +46,8 @@ api/
     TenantScopedDb.php        the tenant-isolation data-access helper (see §3)
     PlanMath.php              pure projection arithmetic, no DB
     ...                       one class/module per concern (see §7)
-  db_config.php         git-ignored; DB creds + getPdo(). Copy from db_config.example.php
+  db_config.php         TRACKED loader (no creds) — resolves to db_config.local.php locally,
+                        or an external path outside public_html in production. See its header.
 frontend/src/
   lib/api.js            the ONLY place that talks to the backend
   context/AuthContext.jsx   session bootstrap + auth actions; useAuth() everywhere
@@ -484,8 +485,13 @@ always server-side** on each endpoint.
 mysql -e "CREATE DATABASE horizonplan_dev;"
 for f in sql/*.sql; do mysql horizonplan_dev < "$f"; done
 
-# 2. Backend config (git-ignored):
-cp api/db_config.example.php api/db_config.php
+# 2. Backend config. api/db_config.php is now a TRACKED loader (see its own
+#    header comment for why — Hostinger's deploy resets untracked files, so a
+#    real credentials file living there kept getting wiped on every deploy).
+#    For local dev, it checks api/db_config.local.php FIRST — that filename is
+#    git-ignored exactly like the old db_config.php was, so this step is
+#    otherwise unchanged:
+cp api/db_config.example.php api/db_config.local.php
 #    …edit DB_NAME/DB_USER/DB_PASS. GOOGLE_CLIENT_ID may stay empty (Sign-In 503s
 #    cleanly). APP_BASE_URL only matters for the plan-review email cron.
 

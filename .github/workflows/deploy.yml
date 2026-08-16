@@ -5,9 +5,12 @@
 # step on every release — see DEPLOY.md for the one-time Hostinger setup.
 #
 # The `deploy` branch is built ON TOP of its own history (never force-pushed),
-# so Hostinger's `git pull` always fast-forwards. api/db_config.php is never
-# committed here, so the real credentials file you create once on the server is
-# left untouched by every pull.
+# so Hostinger's `git pull` always fast-forwards. Hostinger's Auto Deployment
+# was found to do more than a plain pull, though — it resets/cleans the working
+# tree on every push, wiping any untracked file inside it. api/db_config.php IS
+# committed here as a result, but it holds no credentials: it's a loader that
+# points at an external, absolute path outside public_html where the real file
+# lives (see that file's own header, and DEPLOY.md "Database credentials").
 name: Build & publish deploy branch
 
 on:
@@ -85,8 +88,14 @@ jobs:
                 _site/tools/bootstrap_admin.php \
                 _site/tools/set_password.php \
                 _site/tools/check_login.php
-          # Belt-and-suspenders: real credentials must never reach the branch.
-          rm -f _site/api/db_config.php
+          # Belt-and-suspenders: api/db_config.php SHOULD ship now (it's a
+          # secret-free loader — see its own header), but it must never itself
+          # define real credentials again. Fail the build if it does, so a
+          # future edit can't accidentally revert this file to holding secrets.
+          if grep -qE "define\(\s*'DB_(HOST|NAME|USER|PASS)'" _site/api/db_config.php; then
+            echo "FAIL: api/db_config.php defines DB_* constants directly — it must stay a loader, not the real credentials file. See its own header comment."
+            exit 1
+          fi
           echo "Assembled tree:"
           ls -la _site
           test -f _site/index.html || { echo "index.html missing from build"; exit 1; }

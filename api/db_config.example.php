@@ -1,6 +1,16 @@
 <?php
-// Copy this file to db_config.php (git-ignored) and fill in real values.
-// Never commit db_config.php.
+// This is the template for the REAL credentials file — content unchanged, only
+// its filename/location depends on where you're setting it up:
+//
+//   LOCAL DEV: copy to api/db_config.local.php (git-ignored, sits next to
+//   api/db_config.php and is checked first — see that file's header).
+//
+//   PRODUCTION / STAGING (Hostinger): copy to the absolute path OUTSIDE
+//   public_html that api/db_config.php's loader points at. See DEPLOY.md
+//   "Database credentials" for why it must live outside the deployed tree and
+//   the exact SSH commands to set it up.
+//
+// Never commit the real, filled-in copy — only this placeholder ships in git.
 
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'horizonplan');
