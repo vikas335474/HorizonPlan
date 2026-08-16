@@ -227,6 +227,11 @@ export const api = {
   // enforced via requireFirmRole).
   getFirmAnalytics: () => request('firm_analytics.php'),
 
+  // Platform product analytics — onboarding funnel, activation, retention,
+  // feature adoption by tenant kind, tenant growth. super_admin-only,
+  // cross-tenant. NOT the same as getFirmAnalytics above (one firm's book).
+  getProductAnalytics: () => request('product_analytics.php'),
+
   // Advisor onboards a new client into their tenant.
   createClient: (email, temporaryPassword) =>
     request('clients_create.php', {
