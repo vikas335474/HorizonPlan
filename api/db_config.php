@@ -51,26 +51,18 @@ declare(strict_types=1);
  *
  * See DEPLOY.md "Database credentials" for the full setup story and the
  * SSH commands to create the external file at a new server.
+ *
+ * The actual candidate list lives in api/lib/DbConfigResolver.php, shared
+ * with every tests/*_db.php file's own pre-flight skip-check — see that
+ * file's header for why it must be the ONE place this list is defined.
  */
 
-$candidates = array_filter([
-    getenv('HORIZONPLAN_DB_CONFIG') ?: null,
-    __DIR__ . '/db_config.local.php',
-    // Production, confirmed over SSH (2026-08). EDIT via a commit, never on
-    // the server directly — see the header above for why.
-    '/home/u168175300/domains/the2ndinning.com/db_config.php',
-]);
+require_once __DIR__ . '/lib/DbConfigResolver.php';
 
-$resolved = null;
-foreach ($candidates as $path) {
-    if (is_file($path)) {
-        $resolved = $path;
-        break;
-    }
-}
+$resolved = resolveDbConfigPath();
 
 if ($resolved === null) {
-    $checked = implode("\n  - ", $candidates);
+    $checked = implode("\n  - ", dbConfigCandidates());
     $detail = "No database credentials file found. Checked:\n  - {$checked}\n"
         . "See DEPLOY.md \"Database credentials\" for setup.";
 

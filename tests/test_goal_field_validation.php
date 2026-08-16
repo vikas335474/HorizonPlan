@@ -111,12 +111,15 @@ echo "\nAll pure goal field validation tests passed.\n";
 
 // --- DB-integration section (self-skips without a real database) -----------
 
-$configPath = __DIR__ . '/../api/db_config.php';
-if (!is_file($configPath)) {
-    skip('api/db_config.php not present — no database to test the insert path against.');
+// api/db_config.php always exists now (it's a tracked loader — see its own
+// header); the real "is a dev DB configured" question is answered by the
+// shared resolver both it and this check use, so the two can't drift apart.
+require_once __DIR__ . '/../api/lib/DbConfigResolver.php';
+if (resolveDbConfigPath() === null) {
+    skip('no database credentials configured — no database to test the insert path against.');
 }
 
-require_once $configPath;
+require_once __DIR__ . '/../api/db_config.php';
 require_once __DIR__ . '/../api/lib/TenantScopedDb.php';
 
 try {

@@ -21,6 +21,21 @@
 -- missing ones in ASCENDING NUMERIC ORDER, one file at a time, checking each
 -- succeeds before starting the next.
 --
+-- *** RUN THIS FROM INSIDE THE TARGET DATABASE, NOT A SERVER-LEVEL SQL TAB. ***
+-- Every marker below filters on `TABLE_SCHEMA = DATABASE()`. If no database is
+-- selected in the SQL client this runs from (e.g. phpMyAdmin's top-level
+-- "SQL" tab, rather than the tab reached by clicking into the database itself
+-- in the sidebar first), DATABASE() returns NULL — and `TABLE_SCHEMA = NULL`
+-- is never true in SQL, for any row. Every single marker then reports MISSING
+-- at once, symmetrically, even against a fully-migrated database. This is not
+-- hypothetical: it happened on this project's own production database, and
+-- the tables were all provably there via a plain SHOW TABLES.
+--
+-- The first row below exists SOLELY to catch that failure mode by making it
+-- self-diagnosing: it always shows which database this actually ran against,
+-- right in the same result grid as everything else, so a wrong-context run
+-- can't be silently misread as "nothing is applied".
+--
 -- COVERS 024 THROUGH 043. This file used to cover only 033-035, which meant it
 -- could not answer the question it exists to answer for two thirds of the
 -- migrations that had shipped — a database missing 037 or 040 was reported as
@@ -34,6 +49,13 @@
 -- written at all (SQLSTATE[22001]) and the reference-costs cron fatals on every
 -- run, while the column itself looks perfectly present.
 
+SELECT '000_SANITY_CHECK                      (which database is this running against?)' AS migration,
+       COALESCE(
+           CONCAT('Running against: ', DATABASE()),
+           'NO DATABASE SELECTED — every row below is a false MISSING. Re-run this from inside the target database (click its name in phpMyAdmin''s sidebar first), not a server-level SQL tab.'
+       ) AS state
+
+UNION ALL
 SELECT '024_platform_settings_reset_cooldown  (platform_settings.last_reset_at)' AS migration,
        IF(COUNT(*) > 0, 'applied', 'MISSING')                                    AS state
   FROM information_schema.COLUMNS
