@@ -114,7 +114,12 @@ function TopNav() {
           <a href="#pillars" className={linkCls}>Product</a>
           <a href="#how" className={linkCls}>How it works</a>
           <a href="#features" className={linkCls}>Features</a>
-          <a href="#individuals" className={linkCls}>For individuals</a>
+          {/* Coral dot signals which audience this link's section belongs to,
+              matching the individual band's palette further down the page. */}
+          <a href="#individuals" className={`${linkCls} inline-flex items-center gap-1.5`}>
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--color-coral)' }} />
+            For individuals
+          </a>
           <a href="#pricing" className={linkCls}>Pricing</a>
         </nav>
 
@@ -698,34 +703,51 @@ function FeatureGrid() {
 }
 
 // ---------------------------------------------------------------------------
-// Individual band — the self-serve tier (docs/13). Distinct visual band
-// (deep-slate gradient) so it reads as a different room from the advisor
-// story above, without breaking the visual grammar of the page. The mock is
-// a compact, warm "personal plan summary" that matches PersonalPlanSummary.jsx.
+// Individual band — the self-serve tier (docs/13). This is the "for yourself"
+// side of the brand: warm coral surface, not the dark teal-hero the advisor
+// sections use. The visual split is deliberate — an advisor reading down the
+// page sees institutional-cool sections; a person planning for themselves
+// sees a warm, personal one; whichever audience the visitor is, the shift
+// tells them they've reached their part of the story without a subtitle
+// having to say so. The final CTA further down keeps the dark hero because
+// it addresses both audiences at once.
 // ---------------------------------------------------------------------------
 function IndividualBand() {
   return (
     <section id="individuals" className="relative overflow-hidden">
       <div
         className="absolute inset-0"
-        style={{ background: 'var(--grad-hero)' }}
+        style={{ background: 'var(--grad-warm)' }}
         aria-hidden="true"
       />
+      {/* A soft coral halo — same purpose as the teal glow in the hero, but
+          in the individual side's palette. Sits behind the content on the
+          left so it doesn't wash out the mock on the right. */}
       <div
-        className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full opacity-30"
-        style={{ background: 'radial-gradient(circle, rgba(63,214,189,0.4), transparent 65%)' }}
+        className="pointer-events-none absolute -top-16 -left-16 h-96 w-96 rounded-full opacity-60"
+        style={{ background: 'radial-gradient(circle, rgba(232,106,92,0.22), transparent 65%)' }}
         aria-hidden="true"
       />
       <div className="relative mx-auto max-w-[1200px] px-5 sm:px-8 py-24 sm:py-32 grid lg:grid-cols-[5fr_6fr] gap-14 items-center">
         <Reveal>
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.08em]" style={{ borderColor: 'rgba(255,255,255,0.14)', color: '#3FD6BD', backgroundColor: 'rgba(255,255,255,0.04)' }}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#3FD6BD' }} />
+          <p
+            className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.08em]"
+            style={{
+              borderColor: 'rgba(160,58,37,0.22)',
+              color: 'var(--color-coral-ink)',
+              backgroundColor: 'rgba(255,255,255,0.6)',
+            }}
+          >
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-coral)' }}
+            />
             Planning for yourself?
           </p>
-          <h2 className="text-[32px] sm:text-[44px] leading-[1.1] font-semibold tracking-[-0.02em] text-white">
+          <h2 className="text-[32px] sm:text-[44px] leading-[1.1] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
             Will the money last?
           </h2>
-          <p className="mt-5 text-[16px] sm:text-[18px] leading-[1.55]" style={{ color: 'rgba(255,255,255,0.72)' }}>
+          <p className="mt-5 text-[16px] sm:text-[18px] leading-[1.55] text-[var(--color-ink-2)]">
             You don't need an adviser to answer that. HorizonPlan's free-forever individual tier gives you the same engine — multi-goal, sequence-of-returns-aware, calibrated for Indian markets — in plain language. No jargon on screen, no upsell to a fund, no product recommendations.
           </p>
           <ul className="mt-7 space-y-3">
@@ -735,9 +757,15 @@ function IndividualBand() {
               'Plan together with your partner, each keeping your own plan',
               'Free forever. No card. No upsell.',
             ].map((b) => (
-              <li key={b} className="flex items-start gap-2.5 text-[14px]" style={{ color: 'rgba(255,255,255,0.85)' }}>
+              <li key={b} className="flex items-start gap-2.5 text-[14px] text-[var(--color-ink)]">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="mt-1 shrink-0" aria-hidden="true">
-                  <path d="M3 7.5l2.5 2.5L11 4" stroke="#3FD6BD" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M3 7.5l2.5 2.5L11 4"
+                    stroke="var(--color-coral)"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
                 {b}
               </li>
@@ -746,8 +774,11 @@ function IndividualBand() {
           <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <Link
               to="/start-free"
-              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold transition-all duration-150 active:translate-y-px"
-              style={{ backgroundColor: '#3FD6BD', color: 'var(--color-ink)', boxShadow: 'var(--shadow-md)' }}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white transition-all duration-150 active:translate-y-px"
+              style={{
+                backgroundColor: 'var(--color-coral)',
+                boxShadow: '0 6px 18px -6px rgba(232,106,92,0.45)',
+              }}
             >
               Start planning free
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -757,7 +788,11 @@ function IndividualBand() {
             <Link
               to="/login?for=individual"
               className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold transition-all duration-150"
-              style={{ border: '1px solid rgba(255,255,255,0.22)', color: '#fff', backgroundColor: 'rgba(255,255,255,0.04)' }}
+              style={{
+                border: '1px solid rgba(160,58,37,0.24)',
+                color: 'var(--color-coral-ink)',
+                backgroundColor: 'rgba(255,255,255,0.65)',
+              }}
             >
               Try the personal demo
             </Link>
@@ -774,7 +809,10 @@ function IndividualBand() {
 
 // A compact stylised "personal plan summary" — mirrors the shape of
 // PersonalPlanSummary.jsx (identity strip → countdown → readiness → one next
-// action) without ever presenting real data.
+// action) without ever presenting real data. Themed in the coral (individual-
+// side) palette because it renders inside the individual band; a real user
+// signing into the app still sees the teal-based PersonalPlanSummary until
+// the theme scope extends inside the app.
 function PersonalSummaryMock() {
   return (
     <div
@@ -787,7 +825,7 @@ function PersonalSummaryMock() {
       {/* Identity strip */}
       <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: 'var(--color-line)' }}>
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-semibold" style={{ backgroundColor: 'var(--color-teal-soft)', color: 'var(--color-teal-ink)' }}>PR</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-semibold" style={{ backgroundColor: 'var(--color-coral-soft)', color: 'var(--color-coral-ink)' }}>PR</span>
           <div>
             <p className="text-[14px] font-semibold text-[var(--color-ink)]">Priya Raman</p>
             <p className="text-[11px] text-[var(--color-ink-3)]">Age 38 · retiring at 60</p>
@@ -811,14 +849,14 @@ function PersonalSummaryMock() {
       </div>
 
       {/* Readiness + delta */}
-      <div className="mt-4 flex items-center justify-between rounded-[var(--radius-card)] p-4" style={{ backgroundColor: 'var(--color-teal-soft)' }}>
+      <div className="mt-4 flex items-center justify-between rounded-[var(--radius-card)] p-4" style={{ backgroundColor: 'var(--color-coral-soft)' }}>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.08em] font-semibold" style={{ color: 'var(--color-teal-ink)' }}>Readiness</p>
-          <p className="tnum text-[28px] font-semibold text-[var(--color-teal-ink)] mt-0.5">68 / 100</p>
+          <p className="text-[11px] uppercase tracking-[0.08em] font-semibold" style={{ color: 'var(--color-coral-ink)' }}>Readiness</p>
+          <p className="tnum text-[28px] font-semibold mt-0.5" style={{ color: 'var(--color-coral-ink)' }}>68 / 100</p>
         </div>
         <div className="text-right">
-          <p className="text-[12px] font-medium" style={{ color: 'var(--color-teal-ink)' }}>▲ 4 since June</p>
-          <p className="text-[10px] mt-1" style={{ color: 'var(--color-teal-ink)' }}>Progress logged monthly</p>
+          <p className="text-[12px] font-medium" style={{ color: 'var(--color-coral-ink)' }}>▲ 4 since June</p>
+          <p className="text-[10px] mt-1" style={{ color: 'var(--color-coral-ink)' }}>Progress logged monthly</p>
         </div>
       </div>
 
@@ -960,9 +998,16 @@ function PricingSection() {
           <Reveal delay={80}>
             <article
               className="rounded-[var(--radius-lg)] p-8 h-full flex flex-col border"
-              style={{ borderColor: 'var(--color-line)', backgroundColor: 'var(--color-surface)', boxShadow: 'var(--shadow-sm)' }}
+              style={{
+                borderColor: 'var(--color-line)',
+                backgroundColor: 'var(--color-surface)',
+                boxShadow: 'var(--shadow-sm)',
+                /* A slim coral top accent on the personal card so the two
+                   pricing cards read as two products, not one hierarchy. */
+                borderTop: '3px solid var(--color-coral)',
+              }}
             >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--color-teal-ink)]">For individuals</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.09em]" style={{ color: 'var(--color-coral-ink)' }}>For individuals</p>
               <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-[var(--color-ink)]">HorizonPlan Personal</h3>
               <p className="mt-2 text-[13px] text-[var(--color-ink-2)]">Plan for yourself. No adviser needed.</p>
               <div className="my-8">
@@ -979,7 +1024,7 @@ function PricingSection() {
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="mt-0.5 shrink-0" aria-hidden="true">
-                      <path d="M3 7.5l2.5 2.5L11 4" stroke="var(--color-teal)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M3 7.5l2.5 2.5L11 4" stroke="var(--color-coral)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     {f}
                   </li>
@@ -987,8 +1032,11 @@ function PricingSection() {
               </ul>
               <Link
                 to="/start-free"
-                className="mt-8 inline-flex items-center justify-center gap-2 rounded-full border px-6 py-3 text-[14px] font-semibold transition-all"
-                style={{ borderColor: 'var(--color-ink)', color: 'var(--color-ink)' }}
+                className="mt-8 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white transition-all duration-150 active:translate-y-px"
+                style={{
+                  backgroundColor: 'var(--color-coral)',
+                  boxShadow: '0 6px 18px -6px rgba(232,106,92,0.45)',
+                }}
               >
                 Start planning free
               </Link>
@@ -1031,8 +1079,11 @@ function FinalCTA() {
             </Link>
             <Link
               to="/start-free"
-              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold transition-all duration-150"
-              style={{ border: '1px solid rgba(255,255,255,0.28)', color: '#fff', backgroundColor: 'rgba(255,255,255,0.04)' }}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold text-white transition-all duration-150 active:translate-y-px"
+              style={{
+                backgroundColor: 'var(--color-coral)',
+                boxShadow: '0 6px 18px -6px rgba(232,106,92,0.55)',
+              }}
             >
               Plan for yourself, free
             </Link>

@@ -31,6 +31,21 @@
   --color-alert: #B44A38;
   --color-alert-soft: #F7E7E3;
 
+  /* Warm coral — the individual (self-serve) side of the brand. Deliberately
+     warmer and lighter than --color-alert (#B44A38, muted rust): --alert must
+     never read as "in the brand" and coral must never read as an error state.
+     Currently used ONLY on the public landing page's "for individuals" sections
+     to give the two audiences visually distinct territory; not yet applied
+     inside the authenticated app. */
+  --color-coral: #E86A5C;
+  --color-coral-soft: #FDECE6;
+  --color-coral-ink: #A03A25;
+
+  /* Warm-coral hero gradient — the individual band's replacement for
+     --grad-hero (which stays as the advisor-side dark hero). Reads as a
+     light, warm surface rather than an institutional dark one. */
+  --grad-warm: linear-gradient(150deg, #FEF3EE 0%, #FBE0D3 55%, #F5C4B0 130%);
+
   --radius-sm: 6px;
   --radius-ctrl: 8px;
   --radius-card: 14px;
