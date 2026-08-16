@@ -21,10 +21,12 @@ verifyAccess($db, 'super_admin');
 
 $rows = $db->query(
     "SELECT t.id, t.company_name, t.advisory_mode, t.white_label_settings, t.created_at,
+            p.code AS plan_code, p.name AS plan_name, p.max_advisors,
             SUM(u.role = 'advisor') AS advisor_count,
             SUM(u.role = 'client')  AS client_count
        FROM tenants t
        LEFT JOIN users u ON u.tenant_id = t.id
+       LEFT JOIN subscription_plans p ON p.id = t.plan_id
      GROUP BY t.id
      ORDER BY t.created_at DESC, t.id DESC"
 )->fetchAll();
@@ -45,6 +47,13 @@ $tenants = array_map(static function (array $t): array {
         'advisor_count' => (int) $t['advisor_count'],
         'client_count'  => (int) $t['client_count'],
         'created_at'    => $t['created_at'],
+        // Billing (docs/09 Session 8, sql/044) — null for a personal-kind
+        // tenant, which never has a plan_id.
+        'plan'          => $t['plan_code'] !== null ? [
+            'code'         => $t['plan_code'],
+            'name'         => $t['plan_name'],
+            'max_advisors' => $t['max_advisors'] !== null ? (int) $t['max_advisors'] : null,
+        ] : null,
     ];
 }, $rows);
 

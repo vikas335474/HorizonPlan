@@ -74,11 +74,18 @@ const PLATFORM_TENANT_NAME = 'HorizonPlan Platform (Demo)';
 
 // docs/09 Piece 3's table, verbatim. slug is used to build each firm's
 // account email domain (e.g. admin@nirvana.demo.horizonplan.in).
+// plan_code (docs/09 Session 8, sql/044): varied across the 4 firms so the
+// billing tab has something to demo. Every firm here gets the fixed 4-person
+// EMPLOYEE_ROSTER below regardless of tier, so 'starter' (max 3) is
+// deliberately never assigned here — a seeded firm already over its own cap
+// would read as a bug, not a demo. Growth/Unlimited both comfortably fit 4
+// advisors; a super_admin can downgrade a demo firm to Starter live from the
+// console to show the block-on-next-advisor story.
 const FIRMS = [
-    ['slug' => 'nirvana', 'name' => 'Nirvana Wealth Advisors',              'advisory_mode' => 'advisory',     'color' => '#0f766e'],
-    ['slug' => 'artha',   'name' => 'Artha Financial Advisors',             'advisory_mode' => 'advisory',     'color' => '#4f46e5'],
-    ['slug' => 'dhanvantri', 'name' => 'Dhanvantri MFD Services',           'advisory_mode' => 'distribution', 'color' => '#d97706'],
-    ['slug' => 'lakshmi', 'name' => 'Lakshmi Mutual Fund Distributors',     'advisory_mode' => 'distribution', 'color' => '#059669'],
+    ['slug' => 'nirvana', 'name' => 'Nirvana Wealth Advisors',              'advisory_mode' => 'advisory',     'color' => '#0f766e', 'plan_code' => 'unlimited'],
+    ['slug' => 'artha',   'name' => 'Artha Financial Advisors',             'advisory_mode' => 'advisory',     'color' => '#4f46e5', 'plan_code' => 'growth'],
+    ['slug' => 'dhanvantri', 'name' => 'Dhanvantri MFD Services',           'advisory_mode' => 'distribution', 'color' => '#d97706', 'plan_code' => 'growth'],
+    ['slug' => 'lakshmi', 'name' => 'Lakshmi Mutual Fund Distributors',     'advisory_mode' => 'distribution', 'color' => '#059669', 'plan_code' => 'unlimited'],
 ];
 
 // One retirement-goal parameter preset per readiness band, hand-verified via
@@ -437,12 +444,17 @@ function seedDemoDataFull(PDO $db): array
         }
 
         // ── Firm ────────────────────────────────────────────────────────────
+        $planId = $db->prepare("SELECT id FROM subscription_plans WHERE code = :code LIMIT 1");
+        $planId->execute([':code' => $firmDef['plan_code']]);
+        $planId = $planId->fetchColumn();
+
         $db->prepare(
-            "INSERT INTO tenants (company_name, advisory_mode, white_label_settings) VALUES (:name, :mode, :wl)"
+            "INSERT INTO tenants (company_name, advisory_mode, white_label_settings, plan_id) VALUES (:name, :mode, :wl, :plan_id)"
         )->execute([
             ':name' => $firmDef['name'],
             ':mode' => $firmDef['advisory_mode'],
             ':wl'   => json_encode(['company_name' => $firmDef['name'], 'primary_color' => $firmDef['color']]),
+            ':plan_id' => $planId ?: null,
         ]);
         $tenantId = (int) $db->lastInsertId();
 

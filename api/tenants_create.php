@@ -15,6 +15,7 @@ require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/Mailer.php';
 require_once __DIR__ . '/lib/InviteTokens.php';
+require_once __DIR__ . '/lib/PlanLimits.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -71,13 +72,25 @@ if ($advisor !== null) {
 
 $db->beginTransaction();
 try {
+    // docs/09 Session 8: a firm the super_admin onboards through this
+    // endpoint starts on the entry tier (Starter), not Unlimited — Unlimited is
+    // reserved for the pre-existing-tenant backfill (sql/044) so the plan
+    // gating this session builds is actually reachable to demo, rather than
+    // every newly onboarded firm silently landing on the top tier.
+    $starterPlanId = $db->query("SELECT id FROM subscription_plans WHERE code = 'starter' LIMIT 1")->fetchColumn();
+
     // tenants has no tenant_id column (it IS the tenant registry) — raw insert.
-    $ins = $db->prepare("INSERT INTO tenants (company_name, advisory_mode) VALUES (:name, :mode)");
-    $ins->execute([':name' => $companyName, ':mode' => $advisoryMode]);
+    $ins = $db->prepare("INSERT INTO tenants (company_name, advisory_mode, plan_id) VALUES (:name, :mode, :plan_id)");
+    $ins->execute([':name' => $companyName, ':mode' => $advisoryMode, ':plan_id' => $starterPlanId ?: null]);
     $tenantId = (int) $db->lastInsertId();
 
     $advisorId = null;
     if ($advisorEmail !== null) {
+        // Defensive, not reachable in practice — a brand-new tenant's first
+        // advisor always fits Starter's seat count — but kept so this path
+        // can never silently diverge from admin_advisor_create.php's gate.
+        assertAdvisorSeatAvailable($db, $tenantId);
+
         $scopedDb = new TenantScopedDb($db, $tenantId); // bound to the new tenant
         // An unusable, never-known password — the account is only reachable
         // by redeeming the invite token below (or a later real password
@@ -93,6 +106,19 @@ try {
     }
 
     $db->commit();
+} catch (PlanLimitExceededException $e) {
+    $db->rollBack();
+    http_response_code(403);
+    echo json_encode([
+        'status'        => 'error',
+        'error_code'    => 'plan_limit_reached',
+        'message'       => $e->getMessage(),
+        'plan_code'     => $e->planCode,
+        'plan_name'     => $e->planName,
+        'max_advisors'  => $e->maxAdvisors,
+        'current_count' => $e->currentCount,
+    ]);
+    exit();
 } catch (Throwable $e) {
     $db->rollBack();
     http_response_code(500);

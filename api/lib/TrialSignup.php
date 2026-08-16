@@ -29,11 +29,18 @@ function createTrialTenant(PDO $db, string $companyName, string $email, string $
 {
     $db->beginTransaction();
     try {
+        // docs/09 Session 8: a self-serve trial starts on the Starter plan —
+        // the same default tenants_create.php's super_admin path now uses for
+        // a newly onboarded firm (sql/044's decision record). A trial that
+        // hits its seat limit is exactly the gating story this billing
+        // groundwork exists to demo.
+        $starterPlanId = $db->query("SELECT id FROM subscription_plans WHERE code = 'starter' LIMIT 1")->fetchColumn();
+
         // tenants has no tenant_id column of its own (it IS the tenant
         // registry) — raw insert, same as tenants_create.php's super_admin path.
         $db->prepare(
-            "INSERT INTO tenants (company_name, advisory_mode, signup_source) VALUES (:name, 'distribution', 'trial_signup')"
-        )->execute([':name' => $companyName]);
+            "INSERT INTO tenants (company_name, advisory_mode, signup_source, plan_id) VALUES (:name, 'distribution', 'trial_signup', :plan_id)"
+        )->execute([':name' => $companyName, ':plan_id' => $starterPlanId ?: null]);
         $tenantId = (int) $db->lastInsertId();
 
         $scopedDb = new TenantScopedDb($db, $tenantId);
