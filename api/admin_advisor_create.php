@@ -11,6 +11,7 @@ require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/lib/TenantScopedDb.php';
 require_once __DIR__ . '/lib/Mailer.php';
 require_once __DIR__ . '/lib/InviteTokens.php';
+require_once __DIR__ . '/lib/PlanLimits.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -60,6 +61,24 @@ $existing->execute([':email' => $email]);
 if ($existing->fetch()) {
     http_response_code(409);
     echo json_encode(['status' => 'error', 'message' => 'A user with that email already exists.']);
+    exit();
+}
+
+// docs/09 Session 8: block before the insert, not after, so a rejected
+// request never creates a user row that then has to be rolled back/cleaned up.
+try {
+    assertAdvisorSeatAvailable($db, $tenantId);
+} catch (PlanLimitExceededException $e) {
+    http_response_code(403);
+    echo json_encode([
+        'status'        => 'error',
+        'error_code'    => 'plan_limit_reached',
+        'message'       => $e->getMessage(),
+        'plan_code'     => $e->planCode,
+        'plan_name'     => $e->planName,
+        'max_advisors'  => $e->maxAdvisors,
+        'current_count' => $e->currentCount,
+    ]);
     exit();
 }
 
