@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DemoTourProvider } from './context/DemoTourContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import PersonalSignup from './pages/PersonalSignup';
@@ -40,6 +41,23 @@ function Home() {
   return <Dashboard />;
 }
 
+// Root routing at "/" — a single decision point that keeps two audiences apart
+// without breaking either. An unauthenticated visitor sees the public marketing
+// Landing page (previously they got bounced to /login, which was fine for a
+// signed-up user returning but a dead end for anyone discovering the product
+// for the first time). An authenticated visitor still goes through the exact
+// same ProtectedRoute -> Home path as before — so MFA enrollment is still
+// gated, and the role split (advisor -> Dashboard, client -> /goals) is
+// unchanged. `loading` renders nothing rather than flashing the marketing page
+// while the /session.php probe is in flight; ProtectedRoute has its own
+// loading screen for the authenticated branch.
+function HomeOrLanding() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Landing />;
+  return <ProtectedRoute><Home /></ProtectedRoute>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -61,7 +79,7 @@ export default function App() {
               mechanism as password reset, different landing-page copy. */}
           <Route path="/accept-invite" element={<ResetPassword mode="invite" />} />
 
-          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/" element={<HomeOrLanding />} />
 
           {/* Advisor: drill into one client's goals */}
           <Route
