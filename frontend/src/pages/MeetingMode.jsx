@@ -3,7 +3,7 @@
 // the timeline slider scrubs the projection live. Shared by advisor and client
 // (a client can present their own goal).
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +32,16 @@ export default function MeetingMode() {
   const [replayProjection, setReplayProjection] = useState(null);
   const [step, setStep] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  // Offscreen (not display:none — html2canvas needs real layout) container
+  // holding every applicable slide stacked vertically, each with its own
+  // disclosure banner, mirroring the on-screen "one slide, one banner" rule.
+  // Kept permanently mounted alongside the live presentation so a click on
+  // "Download PDF" has something already laid out to capture — building it
+  // on demand would mean a second, momentary render pass with its own
+  // chance to disagree with what the advisor is looking at.
+  const summaryRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +111,20 @@ export default function MeetingMode() {
   const brandLogo = tenant?.whiteLabel?.logo_url || null;
   const currentSlide = slides[step];
 
+  async function handleDownload() {
+    if (!summaryRef.current || downloading) return;
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      const { downloadElementAsPdf } = await import('../lib/pdfExport');
+      await downloadElementAsPdf(summaryRef.current, `${goal.goal_label.replace(/[^\w\- ]+/g, '').trim() || 'meeting-summary'}-summary`);
+    } catch (err) {
+      setDownloadError(err.message || 'Could not generate the PDF.');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-canvas)' }}>
@@ -138,6 +162,14 @@ export default function MeetingMode() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="text-xs font-medium text-[var(--color-ink-3)] hover:text-[var(--color-ink)] transition-colors disabled:opacity-50"
+            title="Download a PDF summary of this meeting"
+          >
+            {downloading ? 'Preparing PDF…' : 'Download PDF'}
+          </button>
+          <button
             onClick={() => setNotesOpen((v) => !v)}
             className="text-xs font-medium text-[var(--color-ink-3)] hover:text-[var(--color-ink)] transition-colors"
             title="Speaking notes — only visible to you"
@@ -152,6 +184,12 @@ export default function MeetingMode() {
           </button>
         </div>
       </header>
+
+      {downloadError && (
+        <div className="px-6 py-2 text-xs" style={{ backgroundColor: 'var(--color-alert-soft)', color: 'var(--color-alert)' }}>
+          {downloadError}
+        </div>
+      )}
 
       {notesOpen && currentSlide && (
         <div className="px-6 py-2 text-xs" style={{ backgroundColor: 'var(--color-amber-soft)', color: 'var(--color-amber)' }}>
@@ -217,6 +255,74 @@ export default function MeetingMode() {
           Next →
         </button>
       </footer>
+
+      {/* Offscreen — not display:none, html2canvas needs it laid out and
+          painted. Every applicable slide, stacked, each with its own
+          disclosure banner (docs/02 §3.6): the PDF is a leave-behind, not a
+          transcript of a live presentation, so it shows the fixed set of
+          slides rather than "whatever step the advisor happened to stop on". */}
+      <div
+        ref={summaryRef}
+        className="bg-white"
+        style={{ position: 'fixed', left: -10000, top: 0, width: 800, padding: '32px 40px' }}
+        aria-hidden="true"
+      >
+        <header className="flex items-baseline justify-between border-b border-[var(--color-line-2)] pb-4">
+          <div className="flex items-center gap-2">
+            {brandLogo ? (
+              <img src={brandLogo} alt="" className="h-6 w-auto max-w-[150px] object-contain" />
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <line x1="2" y1="15" x2="20" y2="15" stroke="var(--color-line-2)" strokeWidth="1.5" />
+                <path d="M4 15 L11 6 L18 11" stroke="var(--color-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <circle cx="18" cy="11" r="2" fill="var(--color-amber)" />
+              </svg>
+            )}
+            <span className="text-sm font-semibold tracking-tight text-[var(--color-ink)]">{firmName}</span>
+          </div>
+          <span className="text-xs text-[var(--color-ink-3)]">Meeting summary — {goal.goal_label}</span>
+        </header>
+
+        <section className="mt-8">
+          <GoalSlide goal={goal} />
+          <div className="mt-6"><DisclosureBanner compact /></div>
+        </section>
+
+        <section className="mt-10">
+          <InflationSlide goal={goal} />
+          <div className="mt-6"><DisclosureBanner compact /></div>
+        </section>
+
+        {hasProjection && (
+          <section className="mt-10">
+            <SurvivalSlide projection={projection} />
+            <div className="mt-6"><DisclosureBanner compact /></div>
+          </section>
+        )}
+
+        {/* Replay is interactive on the live slide (pick a year); the PDF
+            only includes it if a year was actually picked during this
+            session — an unpicked "choose a year above" prompt is meaningless
+            in a static handout. */}
+        {hasProjection && replayYear && replayProjection && (
+          <section className="mt-10">
+            <ReplaySlide
+              projection={projection}
+              replayYear={replayYear}
+              onReplayYearChange={() => {}}
+              replayProjection={replayProjection}
+            />
+            <div className="mt-6"><DisclosureBanner compact /></div>
+          </section>
+        )}
+
+        {hasProjection && (
+          <section className="mt-10">
+            <ReadinessSlide projection={projection} />
+            <div className="mt-6"><DisclosureBanner compact /></div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
